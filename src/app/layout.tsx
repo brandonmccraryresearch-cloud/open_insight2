@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff2",
@@ -43,6 +44,7 @@ export default function RootLayout({
             {children}
           </main>
         </div>
+        <SpeedInsights />
       </body>
     </html>
   );
