@@ -10,7 +10,15 @@ function resolveDbPath(): string {
   if (process.env.VERCEL) {
     const tmpPath = "/tmp/open-insight.db";
     if (!existsSync(tmpPath) && existsSync(bundlePath)) {
-      copyFileSync(bundlePath, tmpPath);
+      try {
+        copyFileSync(bundlePath, tmpPath);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        // Ignore race where another invocation created the file first
+        if (code !== "EEXIST") {
+          throw error;
+        }
+      }
     }
     return tmpPath;
   }
