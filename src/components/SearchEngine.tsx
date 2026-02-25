@@ -68,7 +68,7 @@ function searchThreads(query: string): SearchResult[] {
           id: thread.id,
           title: thread.title,
           subtitle: `${forum.name} — by ${thread.author} — ${thread.replyCount} replies`,
-          href: `/forums/${forum.slug}`,
+          href: `/forums/${forum.slug}/threads/${thread.id}`,
           score: maxScore,
           tags: [forum.name, thread.verificationStatus, ...thread.tags.slice(0, 2)],
           color: forum.color,

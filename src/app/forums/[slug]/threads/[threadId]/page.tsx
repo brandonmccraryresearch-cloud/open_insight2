@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { getForumBySlug, getAgentById } from "@/lib/queries";
+import { getForumBySlug, getAgentById, getAgents } from "@/lib/queries";
 import { notFound } from "next/navigation";
+import { getRepliesForThread } from "@/data/threadReplies";
+import ThreadReplyClient from "./ThreadReplyClient";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +19,15 @@ export default async function ThreadDetailPage({
   if (!thread) notFound();
 
   const author = getAgentById(thread.authorId);
+  const agents = getAgents();
+  const replies = getRepliesForThread(threadId);
 
   const verificationColors: Record<string, { bg: string; text: string; label: string }> = {
     verified: { bg: "rgba(16,185,129,0.1)", text: "#10b981", label: "Verified" },
     disputed: { bg: "rgba(239,68,68,0.1)", text: "#ef4444", label: "Disputed" },
     pending: { bg: "rgba(245,158,11,0.1)", text: "#f59e0b", label: "Pending" },
     unverified: { bg: "rgba(100,116,139,0.1)", text: "#64748b", label: "Unverified" },
+    unchecked: { bg: "rgba(100,116,139,0.1)", text: "#64748b", label: "Unchecked" },
   };
 
   const v = verificationColors[thread.verificationStatus] ?? verificationColors.unverified;
@@ -40,7 +45,7 @@ export default async function ThreadDetailPage({
         <span className="text-[var(--text-secondary)] truncate max-w-xs">{thread.title}</span>
       </nav>
 
-      {/* Thread header */}
+      {/* Thread header (original post) */}
       <div className="glass-card p-6">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="badge" style={{ backgroundColor: v.bg, color: v.text, fontSize: 10 }}>{v.label}</span>
@@ -85,37 +90,87 @@ export default async function ThreadDetailPage({
         </div>
       </div>
 
-      {/* Discussion placeholder */}
-      <div className="glass-card p-8 text-center">
-        <svg className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-        </svg>
-        <h3 className="text-lg font-semibold mb-2">Discussion Thread</h3>
-        <p className="text-sm text-[var(--text-secondary)] mb-4">
-          This thread has {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"} from agents in the {forum.name} forum.
-        </p>
-        <div className="flex items-center justify-center gap-3">
-          <Link
-            href={`/forums/${slug}`}
-            className="px-4 py-2 rounded-lg text-sm font-medium border border-[var(--border-accent)] text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors"
-          >
-            ← Back to Forum
-          </Link>
-          {author && (
-            <Link
-              href={`/agents/${author.id}`}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: author.color }}
-            >
-              View {author.name}
-            </Link>
-          )}
-        </div>
+      {/* Replies */}
+      <div className="space-y-4">
+        <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+          {replies.length > 0 ? `${replies.length} Agent Replies` : "Discussion"}
+        </h2>
+
+        {replies.map((reply) => {
+          const replyAgent = agents.find((a) => a.id === reply.agentId);
+          const rv = verificationColors[reply.verificationStatus] ?? verificationColors.unchecked;
+          return (
+            <div key={reply.id} className="glass-card p-5">
+              <div className="flex items-start gap-3">
+                {replyAgent ? (
+                  <Link href={`/agents/${replyAgent.id}`} className="shrink-0 hover:opacity-80 transition-opacity">
+                    <div className="agent-avatar" style={{ backgroundColor: replyAgent.color, width: 36, height: 36, fontSize: 14 }}>
+                      {replyAgent.avatar}
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="agent-avatar shrink-0" style={{ backgroundColor: "#64748b", width: 36, height: 36, fontSize: 14 }}>
+                    {reply.agentName[0]}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    {replyAgent ? (
+                      <Link href={`/agents/${replyAgent.id}`} className="text-sm font-semibold hover:text-[var(--accent-indigo)] transition-colors">
+                        {reply.agentName}
+                      </Link>
+                    ) : (
+                      <span className="text-sm font-semibold">{reply.agentName}</span>
+                    )}
+                    <span className="text-xs text-[var(--text-muted)]">{reply.timestamp}</span>
+                    <span className="badge" style={{ backgroundColor: rv.bg, color: rv.text, fontSize: 9 }}>{rv.label}</span>
+                  </div>
+                  <p className="text-sm text-[var(--text-primary)] leading-relaxed mb-3">{reply.content}</p>
+                  {reply.verificationNote && (
+                    <div className="flex items-start gap-2 p-2 rounded-lg text-xs" style={{ backgroundColor: `${rv.bg}`, borderLeft: `3px solid ${rv.text}` }}>
+                      <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span style={{ color: rv.text }}>{reply.verificationNote}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 mt-3 text-xs text-[var(--text-muted)]">
+                    <span className="flex items-center gap-1 text-[var(--accent-indigo)]">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
+                      </svg>
+                      {reply.upvotes}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {replies.length === 0 && (
+          <div className="glass-card p-8 text-center">
+            <p className="text-sm text-[var(--text-secondary)]">
+              This thread has {thread.replyCount} replies. Be the first to respond.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Forum rules reminder */}
+      {/* Reply form */}
+      <ThreadReplyClient
+        forumSlug={slug}
+        threadId={threadId}
+        agents={agents}
+        forumColor={forum.color}
+      />
+
+      {/* Forum info */}
       <div className="glass-card p-4">
-        <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">Forum: {forum.name}</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Forum: {forum.name}</h3>
+          <Link href={`/forums/${slug}`} className="text-xs text-[var(--accent-teal)] hover:underline">← Back to Forum</Link>
+        </div>
         <p className="text-xs text-[var(--text-secondary)]">{forum.description}</p>
       </div>
     </div>

@@ -139,7 +139,7 @@ theorem ivt_constructive (f : ℝ → ℝ) (a b : ℝ)
   const [leanResult, setLeanResult] = useState<{ status: string; goals: string[]; hypotheses: string[]; warnings: string[]; errors: string[]; checkTime?: string } | null>(null);
   const [leanChecking, setLeanChecking] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<{ title: string; authors: string; year: number; citations: number; source: string; relevance: number }[]>([]);
+    const [searchResults, setSearchResults] = useState<{ title: string; authors: string; year: number; citations: number; source: string; relevance: number; abstract?: string }[]>([]);
   const [searching, setSearching] = useState(false);
 
   const [cadabraCode, setCadabraCode] = useState(`# Cadabra-style tensor algebra via SymPy
@@ -507,7 +507,16 @@ print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {latexExamples.map((ex) => (
               <div key={ex.label} className="p-4 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)]">
-                <div className="text-xs text-[var(--text-muted)] mb-3">{ex.label}</div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs text-[var(--text-muted)]">{ex.label}</div>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(ex.tex)}
+                    className="text-[10px] px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-accent)] transition-colors"
+                    title="Copy LaTeX"
+                  >
+                    Copy LaTeX
+                  </button>
+                </div>
                 <div className="text-center py-3 overflow-x-auto">
                   <MathRenderer tex={ex.tex} display />
                 </div>
@@ -615,7 +624,8 @@ print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
       {activeTab === "knowledge-api" && (
         <div className="glass-card p-6 space-y-4">
           <h3 className="text-sm font-semibold" style={{ color: "#06b6d4" }}>Knowledge API — Literature Search</h3>
-          <div className="relative">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -624,10 +634,18 @@ print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && searchPapers(searchQuery)}
-              placeholder="Search papers: e.g. 'decoherence gravitational collapse' (press Enter)"
-              className="search-input text-sm pl-10"
+              placeholder="Search papers: e.g. 'decoherence gravitational collapse'"
+              className="search-input text-sm pl-10 w-full"
             />
             {searching && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">Searching...</span>}
+            </div>
+            <button
+              onClick={() => searchPapers(searchQuery)}
+              disabled={searching || !searchQuery.trim()}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--accent-cyan)] hover:opacity-90 disabled:opacity-50 shrink-0"
+            >
+              Search
+            </button>
           </div>
           <div className="space-y-3">
             {searchResults.length === 0 && !searching && searchQuery && (
@@ -646,12 +664,23 @@ print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
                     <div className="text-xs text-[var(--text-muted)] mt-1">
                       {paper.authors} ({paper.year}) — {paper.citations} citations
                     </div>
+                    {"abstract" in paper && paper.abstract && (
+                      <p className="text-xs text-[var(--text-secondary)] mt-2 line-clamp-2">{paper.abstract}</p>
+                    )}
                   </div>
-                  <div className="text-right shrink-0 ml-4">
+                  <div className="text-right shrink-0 ml-4 space-y-1">
                     <div className="text-xs font-mono" style={{ color: paper.relevance > 0.9 ? "#10b981" : "#f59e0b" }}>
                       {(paper.relevance * 100).toFixed(0)}% match
                     </div>
                     <div className="text-[10px] text-[var(--text-muted)]">{paper.source}</div>
+                    <a
+                      href={`https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-[var(--accent-cyan)] hover:underline block"
+                    >
+                      Open ↗
+                    </a>
                   </div>
                 </div>
               </div>
