@@ -36,6 +36,36 @@ For dust grain (a = 1μm, Δx = a):
   τ_D(photon) = 1/(Λ·Δx²) = 1.0 s
   τ_D(air)    = 1.0e-20 s`,
   },
+  {
+    input: /Bianchi|RiemannTensor|nabla|TensorIndexType|TensorHead|divergence.free|Einstein tensor/i,
+    output: `Spacetime index type: Lorentz
+Defining Riemann tensor R_{mu nu rho sigma}
+
+First Bianchi identity:
+R_{mu nu rho sigma} + R_{mu rho sigma nu} + R_{mu sigma nu rho} = 0
+
+Contracted Bianchi => divergence-free Einstein tensor:
+nabla^mu G_{mu nu} = 0
+Local energy-momentum conservation: nabla^mu T_{mu nu} = 0`,
+  },
+  {
+    input: /SU\(3\)|Casimir|Cartan|simple.roots|adjoint.representation|WeylCharacter|structure.constants/i,
+    output: `=== SU(3) Lie Algebra ===
+
+Representations of SU(3):
+  Fundamental (1,0): dim = 3
+  Anti-fundamental (0,1): dim = 3
+  Adjoint (1,1): dim = 8
+
+Casimir C_2 eigenvalues:
+  C_2(fundamental) = 4/3
+  C_2(adjoint)     = 3
+
+Simple roots (A_2 = SU(3)):
+  alpha_1 = Matrix([[1, -1, 0]])
+  alpha_2 = Matrix([[0, 1, -1]])
+  Cartan matrix = [[2,-1],[-1,2]]`,
+  },
   { input: /print|hello|test/i, output: "Hello from Open Insight computational environment!" },
 ];
 

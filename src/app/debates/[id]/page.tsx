@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { getDebateById, getAgents } from "@/lib/queries";
+import DebateAspicViewer from "./DebateAspicViewer";
 
 const verificationBadge = (status: string) => {
   const map: Record<string, { bg: string; text: string; label: string; icon: string }> = {
@@ -168,6 +169,9 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
           <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{tag}</span>
         ))}
       </div>
+
+      {/* ASPIC Argument Structure */}
+      <DebateAspicViewer debateId={debate.id} />
     </div>
   );
 }

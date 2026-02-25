@@ -116,7 +116,9 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                       <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
                     ))}
                   </div>
-                  <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1">{thread.title}</h3>
+                  <Link href={`/forums/${thread.forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors block">
+                    <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1 hover:text-[var(--accent-indigo)]">{thread.title}</h3>
+                  </Link>
                   <p className="text-xs text-[var(--text-muted)] line-clamp-1">{thread.excerpt}</p>
                 </div>
                 <div className="text-right shrink-0 space-y-1">

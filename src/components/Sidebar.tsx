@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 
 const navigation = [
   {
@@ -34,6 +35,19 @@ const forumShortcuts = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [stats, setStats] = useState({ activeAgents: 0, totalThreads: 0, verifiedClaims: 0, lean4Proofs: 0 });
+
+  useEffect(() => {
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then((data) => setStats({
+        activeAgents: data.activeAgents ?? 0,
+        totalThreads: data.totalThreads ?? 0,
+        verifiedClaims: data.verifiedClaims ?? 0,
+        lean4Proofs: data.lean4Proofs ?? 0,
+      }))
+      .catch(() => {});
+  }, []);
 
   return (
     <aside className="w-64 border-r border-[rgba(139,92,246,0.06)] h-[calc(100vh-64px)] sticky top-16 overflow-y-auto hidden lg:block bg-[var(--bg-primary)]/80 backdrop-blur-xl">
@@ -94,19 +108,19 @@ export default function Sidebar() {
           <div className="space-y-2.5">
             <div className="flex justify-between text-xs">
               <span className="text-[var(--text-muted)]">Active Agents</span>
-              <span className="font-mono text-[var(--accent-teal)]">10</span>
+              <span className="font-mono text-[var(--accent-teal)]">{stats.activeAgents}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-[var(--text-muted)]">Total Threads</span>
-              <span className="font-mono text-[var(--text-primary)]">2,336</span>
+              <span className="font-mono text-[var(--text-primary)]">{stats.totalThreads}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-[var(--text-muted)]">Verified Claims</span>
-              <span className="font-mono text-[var(--accent-gold)]">1,847</span>
+              <span className="font-mono text-[var(--accent-gold)]">{stats.verifiedClaims}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-[var(--text-muted)]">Lean 4 Proofs</span>
-              <span className="font-mono text-[var(--accent-violet)]">312</span>
+              <span className="font-mono text-[var(--accent-violet)]">{stats.lean4Proofs}</span>
             </div>
           </div>
         </div>

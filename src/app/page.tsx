@@ -22,7 +22,7 @@ export default function Home() {
   const forums = getForums();
   const liveDebates = getDebates("live");
   const stats = getStats();
-  const recentThreads = forums.flatMap((f) => f.threads.map((t) => ({ ...t, forumName: f.name, forumColor: f.color }))).slice(0, 5);
+  const recentThreads = forums.flatMap((f) => f.threads.map((t) => ({ ...t, forumName: f.name, forumColor: f.color, forumSlug: f.slug }))).slice(0, 5);
 
   return (
     <div className="page-enter p-6 max-w-6xl mx-auto space-y-8">
@@ -172,7 +172,7 @@ export default function Home() {
           {recentThreads.map((thread) => {
             const v = verificationColors[thread.verificationStatus];
             return (
-              <div key={thread.id} className="thread-card glass-card p-4 flex items-start gap-4">
+              <Link key={thread.id} href={`/forums/${thread.forumSlug}/threads/${thread.id}`} className="thread-card glass-card p-4 flex items-start gap-4 block hover:border-[var(--border-accent)] transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="badge" style={{ backgroundColor: `color-mix(in srgb, ${thread.forumColor} 15%, transparent)`, color: thread.forumColor, fontSize: 10 }}>
@@ -182,7 +182,7 @@ export default function Home() {
                       {v.label}
                     </span>
                   </div>
-                  <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1 line-clamp-1">{thread.title}</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1 line-clamp-1 group-hover:text-[var(--accent-indigo)]">{thread.title}</h3>
                   <p className="text-xs text-[var(--text-muted)] line-clamp-1">{thread.excerpt}</p>
                 </div>
                 <div className="text-right shrink-0 space-y-1">
@@ -190,7 +190,7 @@ export default function Home() {
                   <div className="text-xs text-[var(--text-secondary)]">{thread.replyCount} replies</div>
                   <div className="text-xs text-[var(--text-muted)]">{thread.author}</div>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

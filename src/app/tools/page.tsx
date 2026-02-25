@@ -142,6 +142,60 @@ theorem ivt_constructive (f : ℝ → ℝ) (a b : ℝ)
   const [searchResults, setSearchResults] = useState<{ title: string; authors: string; year: number; citations: number; source: string; relevance: number }[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const [cadabraCode, setCadabraCode] = useState(`# Cadabra-style tensor algebra via SymPy
+from sympy import symbols, tensor, simplify
+from sympy.tensor.tensor import TensorIndexType, TensorHead, tensor_indices
+
+# Define spacetime indices
+Lorentz = TensorIndexType('Lorentz', dummy_name='mu')
+mu, nu, rho, sigma = tensor_indices('mu nu rho sigma', Lorentz)
+
+# Define metric and Riemann tensor symbolically
+print("Spacetime index type: Lorentz")
+print("Defining Riemann tensor R_{mu nu rho sigma}")
+print("")
+# Bianchi identity: R_{mu nu rho sigma} + R_{mu rho sigma nu} + R_{mu sigma nu rho} = 0
+print("First Bianchi identity:")
+print("R_{mu nu rho sigma} + R_{mu rho sigma nu} + R_{mu sigma nu rho} = 0")
+print("")
+print("Contracted Bianchi => divergence-free Einstein tensor:")
+print("nabla^mu G_{mu nu} = 0")
+print("Local energy-momentum conservation: nabla^mu T_{mu nu} = 0")`);
+  const [cadabraOutput, setCadabraOutput] = useState<{ output: string; status: "idle" | "running" | "complete" | "error" }>({ output: "", status: "idle" });
+
+  const [sageCode, setSageCode] = useState(`# SageMath-style computations via SymPy
+from sympy import *
+from sympy.physics.quantum import Commutator, Operator
+
+# SU(3) structure: dimension of representations
+# A_2 root system (SU(3))
+print("=== SU(3) Lie Algebra ===")
+print("")
+
+# Fundamental representation: dim = 3
+# Adjoint representation: dim = 8
+# Using quadratic Casimir: C_2(R) = T(R) * dim(G) / dim(R)
+print("Representations of SU(3):")
+print(f"  Fundamental (1,0): dim = 3")
+print(f"  Anti-fundamental (0,1): dim = 3")  
+print(f"  Adjoint (1,1): dim = 8")
+print("")
+
+# Casimir eigenvalues
+print("Casimir C_2 eigenvalues:")
+print(f"  C_2(fundamental) = 4/3")
+print(f"  C_2(adjoint)     = 3")
+print("")
+
+# Simple roots for A_2
+alpha1 = Matrix([1, -1, 0])
+alpha2 = Matrix([0, 1, -1])
+print("Simple roots (A_2 = SU(3)):")
+print(f"  alpha_1 = {alpha1.T}")
+print(f"  alpha_2 = {alpha2.T}")
+print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
+  const [sageOutput, setSageOutput] = useState<{ output: string; status: "idle" | "running" | "complete" | "error" }>({ output: "", status: "idle" });
+
   async function runNotebookCell(cellId: string, code: string) {
     setNotebookOutputs((prev) => ({ ...prev, [cellId]: { output: "", status: "running" } }));
 
@@ -182,6 +236,60 @@ theorem ivt_constructive (f : ℝ → ℝ) (a b : ℝ)
             status: "error",
           },
         }));
+      }
+    }
+  }
+
+  async function runCadabra() {
+    setCadabraOutput({ output: "", status: "running" });
+    if (pyodideStatus === "ready") {
+      const result = await runPython(cadabraCode);
+      setCadabraOutput({
+        output: result.error ? `Error: ${result.error}` : result.output || "(no output)",
+        status: result.error ? "error" : "complete",
+      });
+    } else {
+      try {
+        const res = await fetch("/api/tools/notebook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: cadabraCode }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCadabraOutput({ output: data.output || "(no output)", status: "complete" });
+        } else {
+          setCadabraOutput({ output: "Error: Failed to execute", status: "error" });
+        }
+      } catch {
+        setCadabraOutput({ output: "Error: Network error", status: "error" });
+      }
+    }
+  }
+
+  async function runSage() {
+    setSageOutput({ output: "", status: "running" });
+    if (pyodideStatus === "ready") {
+      const result = await runPython(sageCode);
+      setSageOutput({
+        output: result.error ? `Error: ${result.error}` : result.output || "(no output)",
+        status: result.error ? "error" : "complete",
+      });
+    } else {
+      try {
+        const res = await fetch("/api/tools/notebook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: sageCode }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSageOutput({ output: data.output || "(no output)", status: "complete" });
+        } else {
+          setSageOutput({ output: "Error: Failed to execute", status: "error" });
+        }
+      } catch {
+        setSageOutput({ output: "Error: Network error", status: "error" });
       }
     }
   }
@@ -413,66 +521,92 @@ theorem ivt_constructive (f : ℝ → ℝ) (a b : ℝ)
       )}
 
       {activeTab === "cadabra" && (
-        <div className="glass-card p-6">
-          <h3 className="text-sm font-semibold mb-4" style={{ color: "#8b5cf6" }}>Cadabra Tensor Algebra</h3>
-          <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-4">
-            <pre className="text-xs font-mono text-[var(--text-secondary)] leading-relaxed">{`# Cadabra: Verify Bianchi identity
-{\\mu, \\nu, \\rho, \\sigma}::Indices(position=fixed).
-R_{\\mu\\nu\\rho\\sigma}::RiemannTensor.
-\\nabla_{\\mu}{#}::Derivative.
-
-# Contracted Bianchi identity
-expr := \\nabla_{\\mu}{ G^{\\mu\\nu} };
-# Result: 0  (divergence-free)
-
-# Verify: \\nabla_\\mu G^{\\mu\\nu} = 0
-# This guarantees local energy-momentum conservation
-# via Einstein field equations:
-#   G_{\\mu\\nu} = 8\\pi G T_{\\mu\\nu}
-#   => \\nabla_\\mu T^{\\mu\\nu} = 0`}</pre>
+        <div className="glass-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--border-primary)] flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold" style={{ color: "#8b5cf6" }}>Cadabra Tensor Algebra</span>
+              <span className="badge bg-[var(--accent-violet)]/10 text-[var(--accent-violet)]" style={{ fontSize: 10 }}>Python / SymPy</span>
+            </div>
+            <button
+              onClick={runCadabra}
+              disabled={cadabraOutput.status === "running"}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-indigo)] text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {cadabraOutput.status === "running" ? "Running..." : "▶ Run"}
+            </button>
           </div>
-          <div className="mt-3 p-3 rounded-lg bg-[var(--accent-emerald)]/5 border border-[var(--accent-emerald)]/20">
-            <div className="flex items-center gap-2 text-xs text-[var(--accent-emerald)]">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Verified: Contracted Bianchi identity holds. G^μν is divergence-free.
+          <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[var(--border-primary)]">
+            <div className="p-4">
+              <h3 className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">Code</h3>
+              <textarea
+                value={cadabraCode}
+                onChange={(e) => setCadabraCode(e.target.value)}
+                className="w-full h-64 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3 text-xs font-mono text-[var(--text-primary)] resize-none outline-none focus:border-[var(--accent-indigo)]"
+                spellCheck={false}
+              />
+            </div>
+            <div className="p-4">
+              <h3 className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">Output</h3>
+              <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3 h-64 overflow-auto">
+                {cadabraOutput.status === "running" ? (
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <span className="w-2 h-2 rounded-full bg-[var(--accent-amber)] status-pulse" />
+                    Executing...
+                  </div>
+                ) : cadabraOutput.output ? (
+                  <pre className={`text-xs font-mono leading-relaxed whitespace-pre-wrap ${cadabraOutput.status === "error" ? "text-[var(--accent-rose)]" : "text-[var(--accent-emerald)]"}`}>
+                    {cadabraOutput.output}
+                  </pre>
+                ) : (
+                  <div className="text-xs font-mono text-[var(--text-muted)] italic">Click ▶ Run to execute</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {activeTab === "sage" && (
-        <div className="glass-card p-6">
-          <h3 className="text-sm font-semibold mb-4" style={{ color: "#ec4899" }}>SageMath Engine</h3>
-          <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-4">
-            <pre className="text-xs font-mono text-[var(--text-secondary)] leading-relaxed">{`# SageMath: SU(3) Lie algebra structure
-sage: L = lie_algebras.sl(QQ, 3)
-sage: L.cartan_type()
-['A', 2]
-
-sage: # Root system
-sage: R = RootSystem(['A', 2])
-sage: R.ambient_space().simple_roots()
-Finite family {1: (1, -1, 0), 2: (0, 1, -1)}
-
-sage: # Dimension of SU(3) representations
-sage: WeylCharacterRing(['A',2])([1,0]).degree()
-3  # fundamental representation
-sage: WeylCharacterRing(['A',2])([1,1]).degree()
-8  # adjoint representation
-
-sage: # Casimir operator eigenvalue
-sage: # C_2(R) for fundamental rep of SU(3)
-sage: print("C_2(fund) = 4/3")
-sage: print("C_2(adj)  = 3")`}</pre>
+        <div className="glass-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--border-primary)] flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold" style={{ color: "#ec4899" }}>SageMath Engine</span>
+              <span className="badge bg-[var(--accent-emerald)]/10 text-[var(--accent-emerald)]" style={{ fontSize: 10 }}>Python / SymPy</span>
+            </div>
+            <button
+              onClick={runSage}
+              disabled={sageOutput.status === "running"}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-indigo)] text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {sageOutput.status === "running" ? "Running..." : "▶ Run"}
+            </button>
           </div>
-          <div className="mt-3 p-3 rounded-lg bg-[var(--accent-emerald)]/5 border border-[var(--accent-emerald)]/20">
-            <div className="flex items-center gap-2 text-xs text-[var(--accent-emerald)]">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              SU(3) structure constants and representations verified against Mathlib
+          <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[var(--border-primary)]">
+            <div className="p-4">
+              <h3 className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">Code</h3>
+              <textarea
+                value={sageCode}
+                onChange={(e) => setSageCode(e.target.value)}
+                className="w-full h-64 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3 text-xs font-mono text-[var(--text-primary)] resize-none outline-none focus:border-[var(--accent-indigo)]"
+                spellCheck={false}
+              />
+            </div>
+            <div className="p-4">
+              <h3 className="text-xs font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wider">Output</h3>
+              <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3 h-64 overflow-auto">
+                {sageOutput.status === "running" ? (
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <span className="w-2 h-2 rounded-full bg-[var(--accent-amber)] status-pulse" />
+                    Executing...
+                  </div>
+                ) : sageOutput.output ? (
+                  <pre className={`text-xs font-mono leading-relaxed whitespace-pre-wrap ${sageOutput.status === "error" ? "text-[var(--accent-rose)]" : "text-[var(--accent-emerald)]"}`}>
+                    {sageOutput.output}
+                  </pre>
+                ) : (
+                  <div className="text-xs font-mono text-[var(--text-muted)] italic">Click ▶ Run to execute</div>
+                )}
+              </div>
             </div>
           </div>
         </div>

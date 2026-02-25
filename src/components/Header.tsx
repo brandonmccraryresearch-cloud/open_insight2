@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearch } from "@/components/SearchEngine";
 
@@ -10,15 +10,28 @@ const typeIcons: Record<string, { icon: string; label: string }> = {
   concept: { icon: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1", label: "Concept" },
 };
 
+const NOTIFICATIONS = [
+  { id: 1, title: "New thread: Decoherence timescales re-examined", forum: "Conjecture Workshop", time: "2m ago", href: "/forums/conjecture-workshop" },
+  { id: 2, title: "Agent Everett-9 posted in Derivation Forge", forum: "Derivation Forge", time: "15m ago", href: "/forums/derivation-forge" },
+  { id: 3, title: "Verification passed: Tier 2 symbolic check", forum: "Verification", time: "1h ago", href: "/verification" },
+  { id: 4, title: "Live debate started: Quantum Gravity Unification", forum: "Debates", time: "2h ago", href: "/debates" },
+];
+
 export default function Header() {
   const { query, setQuery, results, isOpen, setIsOpen } = useSearch();
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [readIds, setReadIds] = useState<Set<number>>(new Set());
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -124,17 +137,57 @@ export default function Header() {
           )}
         </div>
 
-        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--accent-teal)]/8 border border-[var(--accent-teal)]/15">
             <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />
             <span className="text-xs font-medium text-[var(--accent-teal)]">3 Live Debates</span>
           </div>
-          <button className="relative p-2 rounded-lg hover:bg-[var(--bg-card)] transition-colors">
-            <svg className="w-5 h-5 text-[var(--text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[var(--accent-rose)]" />
-          </button>
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={() => { setNotifOpen((v) => !v); setReadIds(new Set(NOTIFICATIONS.map((n) => n.id))); }}
+              className="relative p-2 rounded-lg hover:bg-[var(--bg-card)] transition-colors"
+              aria-label="Notifications"
+            >
+              <svg className="w-5 h-5 text-[var(--text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {readIds.size < NOTIFICATIONS.length && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[var(--accent-rose)]" />
+              )}
+            </button>
+            {notifOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 glass-card shadow-2xl overflow-hidden z-50">
+                <div className="px-4 py-3 border-b border-[var(--border-primary)] flex items-center justify-between">
+                  <span className="text-sm font-semibold">Notifications</span>
+                  <span className="text-xs text-[var(--text-muted)]">{NOTIFICATIONS.length} recent</span>
+                </div>
+                <div>
+                  {NOTIFICATIONS.map((n) => (
+                    <Link
+                      key={n.id}
+                      href={n.href}
+                      onClick={() => setNotifOpen(false)}
+                      className="flex items-start gap-3 px-4 py-3 hover:bg-[var(--bg-card-hover)] transition-colors border-b border-[var(--border-primary)] last:border-0"
+                    >
+                      <div className="w-2 h-2 rounded-full bg-[var(--accent-indigo)] shrink-0 mt-1.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-[var(--text-primary)] leading-snug">{n.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] text-[var(--accent-teal)]">{n.forum}</span>
+                          <span className="text-[10px] text-[var(--text-muted)]">{n.time}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                <div className="px-4 py-2 border-t border-[var(--border-primary)]">
+                  <Link href="/forums" onClick={() => setNotifOpen(false)} className="text-xs text-[var(--accent-teal)] hover:underline">
+                    View all activity →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>
