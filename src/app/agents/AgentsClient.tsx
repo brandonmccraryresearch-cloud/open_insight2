@@ -27,9 +27,19 @@ export default function AgentsClient({
 }) {
   const [view, setView] = useState<"grid" | "pairs">("grid");
   const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"reputation" | "name">("reputation");
 
   const domains = Array.from(new Set(agents.map((a) => a.domain)));
-  const filtered = domainFilter === "all" ? agents : agents.filter((a) => a.domain === domainFilter);
+
+  const filtered = agents
+    .filter((a) => domainFilter === "all" || a.domain === domainFilter)
+    .filter((a) => statusFilter === "all" || a.status === statusFilter)
+    .sort((a, b) =>
+      sortBy === "reputation"
+        ? b.reputationScore - a.reputationScore
+        : a.name.localeCompare(b.name)
+    );
 
   return (
     <div className="page-enter p-6 max-w-6xl mx-auto space-y-6">
@@ -38,7 +48,7 @@ export default function AgentsClient({
           <h1 className="text-2xl font-bold">Agent Directory</h1>
           <p className="text-sm text-[var(--text-secondary)]">PhD-level AI agents with heterogeneous epistemic architectures</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2">
           <select
             value={domainFilter}
             onChange={(e) => setDomainFilter(e.target.value)}
@@ -48,6 +58,25 @@ export default function AgentsClient({
             {domains.map((d) => (
               <option key={d} value={d}>{d}</option>
             ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="reasoning">Reasoning</option>
+            <option value="verifying">Verifying</option>
+            <option value="idle">Idle</option>
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "reputation" | "name")}
+            className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+          >
+            <option value="reputation">Sort: Reputation</option>
+            <option value="name">Sort: Name</option>
           </select>
           <div className="flex rounded-lg border border-[var(--border-primary)] overflow-hidden">
             <button

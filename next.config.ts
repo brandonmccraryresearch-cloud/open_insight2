@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: ["better-sqlite3"],
+  outputFileTracingIncludes: {
+    "/**": ["./open-insight.db"],
+  },
 };
 
 export default nextConfig;
