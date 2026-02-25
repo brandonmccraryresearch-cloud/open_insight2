@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasGeminiKey, executeNotebookCode } from "@/lib/gemini";
 
-interface SimulatedExecution {
-  input: RegExp;
-  output: string;
-}
-
-const EXECUTIONS: SimulatedExecution[] = [
+// ── Simulation fallback patterns ─────────────────────────────────────────────
+const SIMULATED: Array<{ input: RegExp; output: string }> = [
   { input: /import\s+numpy|import\s+np/, output: "# numpy imported successfully (v1.26.4)" },
   { input: /import\s+sympy/, output: "# sympy imported successfully (v1.13.1)" },
   { input: /hbar\s*=|h_bar\s*=/, output: "ℏ = 1.0545718e-34 J·s" },
@@ -70,13 +67,13 @@ Simple roots (A_2 = SU(3)):
 ];
 
 export async function POST(request: NextRequest) {
-  let body: { code?: string };
+  let body: { code?: string; kernel?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const { code } = body;
+  const { code, kernel = "Python 3 (NumPy / SymPy / SciPy)" } = body;
 
   if (typeof code !== "string" || code.length === 0) {
     return NextResponse.json({ error: "code is required and must be a non-empty string" }, { status: 400 });
@@ -85,34 +82,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "code must not exceed 50000 characters" }, { status: 400 });
   }
 
-  // Server-side fallback when Pyodide is not available in the client
-  // The primary execution path uses Pyodide in the browser (LiveNotebook.tsx)
+  // ── Gemini code execution path ────────────────────────────────────────────
+  if (hasGeminiKey()) {
+    try {
+      const result = await executeNotebookCode(code, kernel);
+      return NextResponse.json({ ...result, executionMode: "gemini" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Gemini execution error";
+      return NextResponse.json({ output: `Error: ${message}`, status: "error", executionMode: "gemini" });
+    }
+  }
+
+  // ── Simulation fallback ───────────────────────────────────────────────────
   await new Promise((r) => setTimeout(r, 200 + Math.random() * 800));
 
-  for (const exec of EXECUTIONS) {
+  for (const exec of SIMULATED) {
     if (exec.input.test(code)) {
       return NextResponse.json({ output: exec.output, status: "success", executionMode: "simulated" });
     }
   }
 
-  // Safe math evaluation for simple expressions
   const mathMatch = code.match(/^[\s]*(\d+(?:\.\d+)?)\s*([+\-*/])\s*(\d+(?:\.\d+)?)[\s]*$/m);
   if (mathMatch) {
-    const a = parseFloat(mathMatch[1]);
-    const op = mathMatch[2];
-    const b = parseFloat(mathMatch[3]);
+    const a = parseFloat(mathMatch[1]), op = mathMatch[2], b = parseFloat(mathMatch[3]);
     let result: number | undefined;
     if (op === "+") result = a + b;
     else if (op === "-") result = a - b;
     else if (op === "*") result = a * b;
     else if (op === "/" && b !== 0) result = a / b;
-    if (result !== undefined) {
-      return NextResponse.json({ output: String(result), status: "success", executionMode: "simulated" });
-    }
+    if (result !== undefined) return NextResponse.json({ output: String(result), status: "success", executionMode: "simulated" });
   }
 
   return NextResponse.json({
-    output: `# Code parsed successfully\n# ${code.split("\n").length} lines | ${code.length} chars\n# Execution mode: simulated server-side fallback (primary execution uses Pyodide in the browser)`,
+    output: `# Code parsed successfully\n# ${code.split("\n").length} lines | ${code.length} chars\n# Set GEMINI_API_KEY for real execution`,
     status: "success",
     executionMode: "simulated",
   });

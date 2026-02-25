@@ -57,23 +57,29 @@ Rules:
 - Keep each phase to 2-4 paragraphs maximum`;
 }
 
-const MODEL = "gemini-2.5-pro-preview-05-06";
+const MODEL = "gemini-3.1-pro-preview";
+
+/** Shared tool + thinking config matching the provided sample exactly */
+const BASE_CONFIG = {
+  topP: 1,
+  thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+  mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
+  tools: [
+    { urlContext: {} },
+    { codeExecution: {} },
+    { googleSearch: {} },
+  ],
+};
 
 export async function streamAgentReasoning(agentId: string, prompt: string) {
   const agent = getAgentById(agentId);
-  if (!agent) {
-    throw new Error(`Agent not found: ${agentId}`);
-  }
-  const systemPrompt = buildSystemPrompt(agent);
+  if (!agent) throw new Error(`Agent not found: ${agentId}`);
 
   return getGenAI().models.generateContentStream({
     model: MODEL,
     config: {
-      systemInstruction: systemPrompt,
-      tools: [{ codeExecution: {} }, { googleSearch: {} }],
-      thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      topP: 1,
-      mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
+      ...BASE_CONFIG,
+      systemInstruction: buildSystemPrompt(agent),
     },
     contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
@@ -108,23 +114,25 @@ Be accurate and rigorous. Failed claims must have confidence < 60.`;
   const stream = await getGenAI().models.generateContentStream({
     model: MODEL,
     config: {
-      systemInstruction: systemPrompt,
-      tools: [{ codeExecution: {} }],
+      ...BASE_CONFIG,
       thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      systemInstruction: systemPrompt,
     },
     contents: [{ role: "user", parts: [{ text: `Verify this claim: ${claim}` }] }],
   });
 
   let full = "";
   for await (const chunk of stream) {
-    const text = chunk.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
-    if (text) {
-      full += text;
-      yield `data: ${JSON.stringify({ status: "running", details: text.slice(0, 80) })}\n\n`;
+    const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+    for (const part of parts as Array<{ text?: string; executableCode?: unknown; codeExecutionResult?: { output?: string } }>) {
+      const text = part.text ?? part.codeExecutionResult?.output ?? "";
+      if (text) {
+        full += text;
+        yield `data: ${JSON.stringify({ status: "running", details: text.slice(0, 80) })}\n\n`;
+      }
     }
   }
 
-  // Parse final result
   const match = full.match(/\{[\s\S]*"passed"[\s\S]*\}/);
   if (match) {
     try {
@@ -140,28 +148,29 @@ Be accurate and rigorous. Failed claims must have confidence < 60.`;
   yield "data: [DONE]\n\n";
 }
 
-/** Run Python/math code with Gemini code execution and return output */
+/** Run code with Gemini code execution and return all output parts */
 export async function executeNotebookCode(code: string, kernel: string): Promise<{ output: string; status: string }> {
-  const systemPrompt = `You are a ${kernel} computational kernel. Execute the provided code and return ONLY the printed output, exactly as it would appear in a Jupyter notebook. Include numerical results, printed strings, and any warnings. Do not add commentary.`;
+  const systemPrompt = `You are a ${kernel} computational kernel. Execute the provided code using the code execution tool and return results exactly as they would appear in a Jupyter notebook. Include numerical results, printed strings, and any warnings. Do not add commentary outside of the code execution output.`;
 
   const response = await getGenAI().models.generateContent({
     model: MODEL,
     config: {
-      systemInstruction: systemPrompt,
-      tools: [{ codeExecution: {} }],
+      ...BASE_CONFIG,
       thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      systemInstruction: systemPrompt,
     },
     contents: [{ role: "user", parts: [{ text: code }] }],
   });
 
-  // Extract code execution output
   const parts = response.candidates?.[0]?.content?.parts ?? [];
   const execOutputs: string[] = [];
   const textOutputs: string[] = [];
 
-  for (const part of parts as Array<{ text?: string; executableCode?: unknown; codeExecutionResult?: { output?: string } }>) {
+  for (const part of parts as Array<{ text?: string; executableCode?: { code?: string }; codeExecutionResult?: { output?: string } }>) {
     if (part.codeExecutionResult?.output) {
       execOutputs.push(part.codeExecutionResult.output);
+    } else if (part.executableCode?.code) {
+      // skip — this is the code Gemini is running, not the output
     } else if (part.text) {
       textOutputs.push(part.text);
     }
@@ -180,83 +189,72 @@ export async function generateThreadReply(
 ): Promise<{ content: string; verificationNote?: string }> {
   const agent = getAgentById(agentId);
   const persona = buildAgentPersona(agent);
-
-  const context = previousReplies
-    .map((r) => `${r.agentName}: ${r.content}`)
-    .join("\n\n");
+  const context = previousReplies.map((r) => `${r.agentName}: ${r.content}`).join("\n\n");
 
   const systemPrompt = `${persona}
 
 You are posting a reply in an academic forum thread. Be rigorous, cite formulas using $LaTeX$, and stay in character.
-Respond with a JSON object:
-{"content": "your reply text (2-4 paragraphs, markdown, LaTeX allowed)", "verificationNote": "optional: a one-sentence verification claim you make"}`;
+Respond with a JSON object on a single line:
+{"content": "your reply text (2-4 paragraphs, markdown, LaTeX allowed)", "verificationNote": "optional short verification claim"}`;
 
   const response = await getGenAI().models.generateContent({
     model: MODEL,
     config: {
-      systemInstruction: systemPrompt,
-      tools: [{ codeExecution: {} }],
+      ...BASE_CONFIG,
       thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+      systemInstruction: systemPrompt,
     },
     contents: [{
       role: "user",
-      parts: [{
-        text: `Thread: "${threadTitle}"\n\nOriginal post: ${threadExcerpt}\n\n${context ? `Previous replies:\n${context}\n\n` : ""}Please add your response to this thread.`,
-      }],
+      parts: [{ text: `Thread: "${threadTitle}"\n\nOriginal post: ${threadExcerpt}\n\n${context ? `Previous replies:\n${context}\n\n` : ""}Please add your response.` }],
     }],
   });
 
-  const text = response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
+  const text = response.candidates?.[0]?.content?.parts
+    ?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
   const match = text.match(/\{[\s\S]*"content"[\s\S]*\}/);
   if (match) {
-    try {
-      return JSON.parse(match[0]) as { content: string; verificationNote?: string };
-    } catch { /* fall through */ }
+    try { return JSON.parse(match[0]) as { content: string; verificationNote?: string }; }
+    catch { /* fall through */ }
   }
   return { content: text || "Unable to generate reply." };
 }
 
 /** Generate the next debate message for a live debate */
 export async function generateDebateMessage(
-  debateId: string,
   agentId: string,
   topic: string,
   previousMessages: Array<{ agentName: string; content: string }>,
 ): Promise<{ content: string; verificationDetails?: string }> {
   const agent = getAgentById(agentId);
   const persona = buildAgentPersona(agent);
-
-  const history = previousMessages
-    .map((m) => `${m.agentName}: ${m.content}`)
-    .join("\n\n---\n\n");
+  const history = previousMessages.map((m) => `${m.agentName}: ${m.content}`).join("\n\n---\n\n");
 
   const systemPrompt = `${persona}
 
-You are participating in a structured academic debate. Respond to the previous arguments, defend your position, and advance the discussion. Use LaTeX ($...$) for equations. Be pointed and rigorous — this is adversarial discourse.
-Respond with a JSON object:
+You are participating in a structured academic debate. Respond to the previous arguments with rigour. Use $LaTeX$ for equations.
+Respond with a JSON object on a single line:
 {"content": "your debate contribution (3-5 paragraphs)", "verificationDetails": "optional: claim you consider verified and how"}`;
 
   const response = await getGenAI().models.generateContent({
     model: MODEL,
     config: {
-      systemInstruction: systemPrompt,
-      tools: [{ codeExecution: {} }, { googleSearch: {} }],
+      ...BASE_CONFIG,
       thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+      systemInstruction: systemPrompt,
     },
     contents: [{
       role: "user",
-      parts: [{
-        text: `Debate topic: "${topic}"\n\nDebate history:\n${history}\n\nPlease contribute your next argument.`,
-      }],
+      parts: [{ text: `Debate topic: "${topic}"\n\nHistory:\n${history}\n\nContribute your next argument.` }],
     }],
   });
 
-  const text = response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
+  const text = response.candidates?.[0]?.content?.parts
+    ?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
   const match = text.match(/\{[\s\S]*"content"[\s\S]*\}/);
   if (match) {
-    try {
-      return JSON.parse(match[0]) as { content: string; verificationDetails?: string };
-    } catch { /* fall through */ }
+    try { return JSON.parse(match[0]) as { content: string; verificationDetails?: string }; }
+    catch { /* fall through */ }
   }
   return { content: text || "Unable to generate debate message." };
 }

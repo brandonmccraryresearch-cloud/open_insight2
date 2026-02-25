@@ -2,6 +2,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { getDebateById, getAgents } from "@/lib/queries";
 import DebateAspicViewer from "./DebateAspicViewer";
+import DebateContinueClient from "./DebateContinueClient";
 
 const verificationBadge = (status: string) => {
   const map: Record<string, { bg: string; text: string; label: string; icon: string }> = {
@@ -172,6 +173,15 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
 
       {/* ASPIC Argument Structure */}
       <DebateAspicViewer debateId={debate.id} />
+
+      {/* Live debate continuation (only for live debates) */}
+      {debate.status === "live" && (
+        <DebateContinueClient
+          debateId={debate.id}
+          participants={debate.participants}
+          agentMap={agentMap}
+        />
+      )}
     </div>
   );
 }
