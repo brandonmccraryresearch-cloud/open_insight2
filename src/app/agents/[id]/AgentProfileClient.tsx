@@ -109,56 +109,60 @@ export default function AgentProfileClient({
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") {
-            setIsReasoning(false);
-            return;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.error) {
-              setReasoningError(parsed.error);
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") {
               setIsReasoning(false);
               return;
             }
-            if (parsed.text) {
-              rawBufferRef.current += parsed.text;
-              const full = rawBufferRef.current;
-              // Try to extract complete JSON lines
-              const jsonLines = full.split("\n");
-              for (const jl of jsonLines) {
-                const trimmed = jl.trim();
-                if (!trimmed.startsWith("{")) continue;
-                try {
-                  const obj = JSON.parse(trimmed);
-                  if (obj.phase) {
-                    setPhases((prev) => {
-                      const exists = prev.find((p) => p.phase === obj.phase);
-                      if (exists) return prev;
-                      return [...prev, { phase: obj.phase, content: obj.content, tool: obj.tool }];
-                    });
-                  } else if (obj.final) {
-                    setFinalAnswer({ answer: obj.answer, confidence: obj.confidence, verificationMethod: obj.verificationMethod });
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.error) {
+                setReasoningError(parsed.error);
+                setIsReasoning(false);
+                return;
+              }
+              if (parsed.text) {
+                rawBufferRef.current += parsed.text;
+                const full = rawBufferRef.current;
+                // Try to extract complete JSON lines
+                const jsonLines = full.split("\n");
+                for (const jl of jsonLines) {
+                  const trimmed = jl.trim();
+                  if (!trimmed.startsWith("{")) continue;
+                  try {
+                    const obj = JSON.parse(trimmed);
+                    if (obj.phase) {
+                      setPhases((prev) => {
+                        const exists = prev.find((p) => p.phase === obj.phase);
+                        if (exists) return prev;
+                        return [...prev, { phase: obj.phase, content: obj.content, tool: obj.tool }];
+                      });
+                    } else if (obj.final) {
+                      setFinalAnswer({ answer: obj.answer, confidence: obj.confidence, verificationMethod: obj.verificationMethod });
+                    }
+                  } catch {
+                    // partial JSON, skip
                   }
-                } catch {
-                  // partial JSON, skip
                 }
               }
+            } catch {
+              // not JSON
             }
-          } catch {
-            // not JSON
           }
         }
+      } finally {
+        reader.releaseLock();
       }
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
