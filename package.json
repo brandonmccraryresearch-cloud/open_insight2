@@ -6,7 +6,7 @@
     "dev": "next dev --hostname localhost",
     "dev:network": "next dev --hostname 0.0.0.0",
     "build": "next build",
-    "vercel-build": "next build",
+    "vercel-build": "drizzle-kit push && tsx src/db/seed.ts && next build",
     "start": "next start",
     "lint": "eslint",
     "db:push": "drizzle-kit push",
