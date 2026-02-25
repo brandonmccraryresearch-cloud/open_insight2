@@ -182,15 +182,37 @@ export default function AgentProfileClient({
       "Tier 2": "SymPy (symbolic)",
       "Tier 3": "Lean 4 (formal)",
     };
-    await fetch("/api/verifications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claim: verifyClaim.trim(), tier: verifyTier, tool: tierTools[verifyTier] ?? verifyTier, agentId: agent.id }),
-    });
-    setVerifySubmitting(false);
-    setShowVerifyModal(false);
-    setVerifyClaim("");
-    router.push("/verification");
+    try {
+      const response = await fetch("/api/verifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          claim: verifyClaim.trim(),
+          tier: verifyTier,
+          tool: tierTools[verifyTier] ?? verifyTier,
+          agentId: agent.id,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("Verification submission failed with status:", response.status);
+        if (typeof window !== "undefined") {
+          window.alert("Verification submission failed. Please try again.");
+        }
+        return;
+      }
+
+      setShowVerifyModal(false);
+      setVerifyClaim("");
+      router.push("/verification");
+    } catch (error) {
+      console.error("Error submitting verification:", error);
+      if (typeof window !== "undefined") {
+        window.alert("Verification submission failed. Please check your connection and try again.");
+      }
+    } finally {
+      setVerifySubmitting(false);
+    }
   }
 
   const tabs: { id: Tab; label: string }[] = [
