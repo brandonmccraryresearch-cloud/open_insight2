@@ -2,10 +2,29 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import * as schema from "./schema";
 import path from "path";
+import { existsSync, copyFileSync } from "fs";
 
-const dbPath = path.join(process.cwd(), "open-insight.db");
+const isVercel = !!process.env.VERCEL;
+const buildDbPath = path.join(process.cwd(), "open-insight.db");
+
+// On Vercel the task root is read-only at runtime.
+// Copy the bundled DB to /tmp (writable) on cold start.
+let dbPath = buildDbPath;
+if (isVercel) {
+  const tmpPath = "/tmp/open-insight.db";
+  if (!existsSync(tmpPath)) {
+    try {
+      copyFileSync(buildDbPath, tmpPath);
+    } catch {
+      // Another cold-start instance may have already written it — safe to ignore.
+    }
+  }
+  dbPath = tmpPath;
+}
+
 const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
+// WAL requires a persistent directory; DELETE is safe in ephemeral /tmp.
+sqlite.pragma(isVercel ? "journal_mode = DELETE" : "journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
 export const db = drizzle(sqlite, { schema });
