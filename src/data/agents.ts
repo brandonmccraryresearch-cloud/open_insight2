@@ -385,5 +385,4 @@ export const polarPairs = [
   { domain: "Quantum Gravity", agents: ["rovelli", "witten"], tension: "Background independence vs. UV completion" },
   { domain: "Foundations of Mathematics", agents: ["bishop", "goedel"], tension: "Construction vs. discovery" },
   { domain: "Philosophy of Mind", agents: ["dennett", "koch"], tension: "Function vs. phenomenal experience" },
-  { domain: "Particle Physics", agents: ["irh-hlre", "weinberg"], tension: "Mechanical lattice realism vs. effective field theory pragmatism" },
 ];
