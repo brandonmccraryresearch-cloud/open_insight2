@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
-import { writeFile, unlink, mkdir, rm } from "fs/promises";
+import { writeFile, unlink, mkdir, rm, access } from "fs/promises";
 import { join } from "path";
-import { tmpdir } from "os";
+import { tmpdir, homedir } from "os";
 import { randomUUID } from "crypto";
 import { verifyLean4WithGemini, hasGeminiKey } from "@/lib/gemini";
 
@@ -17,11 +17,48 @@ export interface Lean4Result {
   mathlibVersion?: string;
 }
 
+/**
+ * Resolve the lean4 binary path. Checks, in order:
+ * 1. LEAN4_PATH environment variable (explicit override)
+ * 2. ~/.elan/bin/lean (elan-managed installation)
+ * 3. "lean" on system PATH (bare binary)
+ */
+let cachedLeanBin: string | null = null;
+
+async function fileExists(p: string): Promise<boolean> {
+  try { await access(p); return true; } catch { return false; }
+}
+
+async function resolveLeanBinary(): Promise<string> {
+  if (cachedLeanBin) return cachedLeanBin;
+
+  // 1. Explicit override
+  if (process.env.LEAN4_PATH) {
+    const p = process.env.LEAN4_PATH;
+    if (await fileExists(p)) {
+      cachedLeanBin = p;
+      return p;
+    }
+  }
+
+  // 2. elan-managed installation
+  const elanPath = join(homedir(), ".elan", "bin", "lean");
+  if (await fileExists(elanPath)) {
+    cachedLeanBin = elanPath;
+    return elanPath;
+  }
+
+  // 3. System PATH
+  cachedLeanBin = "lean";
+  return "lean";
+}
+
 function runLean(
   filePath: string,
+  leanBin: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve) => {
-    execFile("lean", [filePath], { timeout: 30000 }, (error, stdout, stderr) => {
+    execFile(leanBin, [filePath], { timeout: 30000 }, (error, stdout, stderr) => {
       let exitCode = 0;
       if (error) {
         const errWithStatus = error as NodeJS.ErrnoException & { status?: number; code?: number | string };
@@ -38,9 +75,10 @@ function runLean(
   });
 }
 
-export function checkLeanAvailable(): Promise<boolean> {
+export async function checkLeanAvailable(): Promise<boolean> {
+  const leanBin = await resolveLeanBinary();
   return new Promise((resolve) => {
-    execFile("lean", ["--version"], { timeout: 5000 }, (error) => {
+    execFile(leanBin, ["--version"], { timeout: 5000 }, (error) => {
       resolve(!error);
     });
   });
@@ -58,6 +96,7 @@ export async function runLean4Check(code: string): Promise<Lean4Result> {
   const leanAvailable = await checkLeanAvailable();
 
   if (leanAvailable) {
+    const leanBin = await resolveLeanBinary();
     const workDir = join(tmpdir(), `lean4-${randomUUID()}`);
     const filePath = join(workDir, "check.lean");
 
@@ -65,7 +104,7 @@ export async function runLean4Check(code: string): Promise<Lean4Result> {
       await mkdir(workDir, { recursive: true });
       await writeFile(filePath, code, "utf-8");
 
-      const result = await runLean(filePath);
+      const result = await runLean(filePath, leanBin);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
       const warnings: string[] = [];

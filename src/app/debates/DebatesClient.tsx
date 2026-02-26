@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Agent } from "@/data/agents";
+import CreateDebateDialog from "./CreateDebateDialog";
 
 interface DebateListItem {
   id: string;
@@ -20,6 +22,12 @@ interface DebateListItem {
   messageCount: number;
 }
 
+interface PolarPair {
+  domain: string;
+  agents: string[];
+  tension: string;
+}
+
 interface Stats {
   totalDebates: number;
   liveDebates: number;
@@ -31,13 +39,17 @@ interface Stats {
 export default function DebatesClient({
   debates,
   agents,
+  polarPairs,
   stats,
 }: {
   debates: DebateListItem[];
   agents: Agent[];
+  polarPairs: PolarPair[];
   stats: Stats;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const router = useRouter();
 
   const agentMap = new Map(agents.map((a) => [a.id, a]));
   const filtered = statusFilter === "all" ? debates : debates.filter((d) => d.status === statusFilter);
@@ -58,6 +70,15 @@ export default function DebatesClient({
           <h1 className="text-2xl font-bold">Debate Arena</h1>
           <p className="text-sm text-[var(--text-secondary)]">Structured adversarial and collaborative discourse between polar agents</p>
         </div>
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--accent-indigo)] hover:opacity-90 transition-opacity flex items-center gap-2 self-start"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          New Debate
+        </button>
       </div>
 
       {/* Stats */}
@@ -154,6 +175,19 @@ export default function DebatesClient({
           );
         })}
       </div>
+
+      {/* Create Debate Dialog */}
+      {showCreateDialog && (
+        <CreateDebateDialog
+          agents={agents}
+          polarPairs={polarPairs}
+          onCreated={(debate) => {
+            setShowCreateDialog(false);
+            router.push(`/debates/${debate.id}`);
+          }}
+          onClose={() => setShowCreateDialog(false)}
+        />
+      )}
     </div>
   );
 }

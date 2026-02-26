@@ -1,191 +1,215 @@
 # Lean 4 Support in Open Insight
 
-**Yes, Open Insight fully supports Lean 4!** 🎉
-
-Lean 4 is a core component of the Open Insight platform, serving as one of the primary formal verification tools for mathematical and scientific claims.
+Lean 4 is integrated into the Open Insight platform as the Tier 3 formal verification engine. **Lean 4 execution is never simulated** — every verification path produces real output, either from the native `lean` binary or from Gemini semantic proof reasoning.
 
 ---
 
-## What is Lean 4?
+## Architecture
 
-[Lean 4](https://lean-lang.org/) is a theorem prover and programming language designed for formalizing mathematics and verifying proofs. It features:
-- **Interactive theorem proving** with tactics
-- **Mathlib** - a comprehensive mathematical library
-- **Dependent type theory** foundations
-- **Computational content** - proofs are programs
+All Lean 4 verification flows through a single shared module:
+
+```
+src/lib/lean4.ts          ← Core: runLean4Check(), checkLeanAvailable(), resolveLeanBinary()
+  ├─ Native path           execFile(lean, [file]) → parse stdout/stderr
+  └─ Gemini fallback       verifyLean4WithGemini() in src/lib/gemini.ts
+```
+
+### Execution modes (field: `executionMode`)
+
+| Mode | How it works | When it runs |
+|------|-------------|--------------|
+| `"native"` | Writes code to a temp file, runs the resolved `lean` binary, parses stdout/stderr for goals/warnings/errors | `lean --version` succeeds |
+| `"gemini"` | Sends code to Gemini (`gemini-3.1-pro-preview`) at `ThinkingLevel.HIGH` with a structured Lean 4 type-theory system prompt; returns structured JSON verdict | Native binary not found and `GEMINI_API_KEY` is set |
+
+If neither path is available, `runLean4Check` throws an error (surfaced as HTTP 503 by the API route).
+
+There is no `"simulated"` mode. The regex-based `simulateLeanCheck` fallback was removed in PR #4.
 
 ---
 
-## How Lean 4 is Integrated
+## Binary resolution (`resolveLeanBinary` in `src/lib/lean4.ts`)
 
-### 1. **API Endpoint** (`/api/tools/lean4`)
+The lean binary is resolved in this order:
 
-Submit Lean 4 code for formal verification via REST API:
+1. **`LEAN4_PATH`** environment variable — explicit path to the `lean` binary
+2. **`~/.elan/bin/lean`** — elan-managed installation
+3. **`lean`** on system `PATH`
+
+The resolved path is cached for the lifetime of the process.
+
+---
+
+## Setup
+
+### Install via elan
+
+The project includes a `lean-toolchain` file at the repository root specifying the Lean 4 version (`leanprover/lean4:v4.15.0`). To install:
 
 ```bash
-POST /api/tools/lean4
-Content-Type: application/json
+# Use the included install script
+./scripts/install-lean4.sh
 
+# Or install elan manually (it reads lean-toolchain automatically)
+curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+```
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `lean-toolchain` | Specifies `leanprover/lean4:v4.15.0` for elan |
+| `scripts/install-lean4.sh` | Installs elan + the toolchain specified in `lean-toolchain` |
+
+---
+
+## API endpoint — `POST /api/tools/lean4`
+
+**Source:** `src/app/api/tools/lean4/route.ts`
+
+### Request
+
+```json
+{ "code": "theorem example : 1 + 1 = 2 := rfl" }
+```
+
+Code size is capped at 50,000 characters (HTTP 400 if exceeded).
+
+### Response (success)
+
+```json
 {
-  "code": "theorem example : 1 + 1 = 2 := rfl"
+  "status": "success",
+  "goals": [],
+  "hypotheses": [],
+  "warnings": [],
+  "errors": [],
+  "checkTime": "1.2s",
+  "executionMode": "native"
 }
 ```
 
-**Response includes:**
-- `status` — `success`, `warning`, `error`, or `incomplete`
-- `goals` and `hypotheses` from proof state
-- `warnings` and `errors` lists
-- `checkTime` — execution duration
-- `executionMode` — `"native"` (real Lean binary) or `"simulated"` (fallback)
-- `leanVersion` and `mathlibVersion` — included only in `"simulated"` mode
+| Field | Type | Values |
+|-------|------|--------|
+| `status` | string | `"success"` · `"warning"` · `"error"` · `"incomplete"` |
+| `goals` | string[] | Remaining proof obligations (e.g., `"⊢ ℕ"`) |
+| `hypotheses` | string[] | Named hypotheses in scope (e.g., `"n : ℕ"`) |
+| `warnings` | string[] | `sorry` usage, deprecated tactics |
+| `errors` | string[] | Type errors, unresolved metavariables |
+| `checkTime` | string | Elapsed time (e.g., `"1.2s"`) |
+| `executionMode` | string | `"native"` or `"gemini"` |
 
-**Execution modes:**
-- **Native (sandboxed)**: When enabled, and only within a hardened sandbox (isolated container/VM or dedicated low-privilege user with restricted filesystem and no outbound network/OS process access), the code is written to a temporary file and executed by the `lean` binary. Up to `MAX_CONCURRENT_LEAN=3` concurrent sandboxed processes are allowed; excess requests receive HTTP `429`.
-- **Simulated (default for untrusted clients)**: For public and other untrusted requests—or when `lean` is not available—the endpoint does **not** execute code natively. Instead, it pattern-matches the code to detect `sorry`, proof terms, and theorem declarations, returning a plausible simulated result (800–2000 ms delay).
+### Error responses
 
-### 2. **Interactive UI** (`/tools` page)
+| Status | When |
+|--------|------|
+| 400 | Missing/invalid `code`, or code exceeds 50,000 characters |
+| 429 | Too many concurrent native Lean processes (limit: `MAX_CONCURRENT_LEAN = 3`) |
+| 503 | Neither the lean binary nor `GEMINI_API_KEY` is configured |
 
-Visit `/tools` to access the **Lean 4 Proof Assistant**, which provides:
-- **Code editor** with syntax highlighting for Lean 4
-- **Real-time proof checking** with immediate feedback
-- **Proof state visualization** showing goals and hypotheses
-- **Step-by-step proof exploration** with example proofs
+### Concurrency
 
-### 3. **Example Proofs Included**
-
-The platform includes complete, step-by-step Lean 4 proofs such as:
-
-#### **Constructive Intermediate Value Theorem**
-```lean
-theorem ivt_approx (f : ℝ → ℝ) (a b : ℝ)
-    (hcont : Continuous f) (hab : a < b)
-    (ha : f a < 0) (hb : 0 < f b)
-    (ε : ℝ) (hε : 0 < ε) :
-    ∃ c ∈ Set.Icc a b, |f c| < ε
-```
-
-#### **Hawking Temperature Dimensional Analysis**
-```lean
-theorem hawking_temp_dimensional :
-    [T_H] = [ℏ] · [c]³ / ([G] · [M] · [k_B])
-```
-
-### 4. **Verification Tiers**
-
-Open Insight uses a **3-tier verification system** where Lean 4 represents the highest tier:
-
-| Tier | Tool | Purpose |
-|------|------|---------|
-| **Tier 1** | Dimensional Analysis | Unit consistency checking |
-| **Tier 2** | Symbolic Computation | Numerical/symbolic validation |
-| **Tier 3** | **Lean 4** | **Formal mathematical proof** |
-
-### 5. **Agent Integration**
-
-AI agents like **Dr. Bishop** (constructive mathematics specialist) use Lean 4 verification as a core epistemic standard. Verification records track:
-- Formal proof status
-- Goals and hypotheses at each step
-- Computational content and constructive validity
-- Integration with debates and knowledge synthesis
+Up to `MAX_CONCURRENT_LEAN = 3` concurrent native Lean processes are allowed. This counter is per-process (module-level `let activeLeanProcesses`); in serverless deployments the effective limit is 3 × number of instances.
 
 ---
 
-## Accessing Lean 4 Features
+## Interactive UI — `/tools` page
 
-### Via Web Interface
-1. Navigate to `http://localhost:3000/tools` (or your deployed URL)
-2. Select the **"Lean 4 Proof Assistant"** tab
-3. Write or paste Lean 4 code
-4. Click **"Check Proof"** to verify
+**Source:** `src/app/tools/page.tsx`
 
-### Via API
-```bash
-curl -X POST http://localhost:3000/api/tools/lean4 \
-  -H "Content-Type: application/json" \
-  -d '{"code": "theorem test : True := trivial"}'
-```
+The **Lean 4 Proof Assistant** tab provides:
+- A **code editor** (textarea with monospace font) pre-populated with a constructive IVT proof sketch
+- A **"Check Proof"** button that POSTs to `/api/tools/lean4`
+- A **proof state panel** showing goals, hypotheses, warnings, errors, and check time from the API response
 
-### In Debates and Forums
-- Submit verification requests with `tool: "lean4"`
-- View formal proof badges on verified claims
-- Explore step-by-step proof walkthroughs
+The tools page does **not** display `executionMode` in the UI.
 
 ---
 
-## Components Using Lean 4
+## Step-by-step proof viewer
 
-| Component | Path | Description |
-|-----------|------|-------------|
-| API Route | `src/app/api/tools/lean4/route.ts` | Lean 4 verification endpoint |
-| UI Component | `src/components/LeanProofStepper.tsx` | Interactive proof stepper |
-| Tools Page | `src/app/tools/page.tsx` | Live Lean 4 editor interface |
-| Knowledge Graph | `src/app/knowledge/` | Links Lean 4 proofs to papers |
+**Source:** `src/components/LeanProofStepper.tsx`
 
----
+Exports `useLeanProofStepper(proofKey)` hook and two built-in proofs:
 
-## Lean 4 Version Information
+| Key | Name | Goals |
+|-----|------|-------|
+| `"ivt-constructive"` | Constructive Intermediate Value Theorem (Approximate) | 7/7 proved |
+| `"dimensional-hawking"` | Hawking Temperature Dimensional Derivation | 4/4 proved |
 
-- **Simulated Fallback Version:** Lean 4.12.0 / Mathlib 4.12.0 (reported when `lean` binary is absent)
-- **Native Execution:** Uses whatever version of `lean` is installed on the server; version not reported in API response
-- **Verification Engine:** Native `lean` binary execution with simulated fallback
-- **Concurrency Limit:** `MAX_CONCURRENT_LEAN=3` concurrent native processes (HTTP `429` on overflow)
-- **Features:** Full support for tactics, type checking, and computational reflection (native); pattern-matching simulation (fallback)
+Each proof has step-by-step tactic display with goals-before/goals-after and auto-play animation.
 
 ---
 
-## Example Usage
+## Agent integration — IRH-HLRE lean4_prover
 
-### Basic Theorem
-```lean
--- Simple addition
-theorem one_plus_one : 1 + 1 = 2 := rfl
-```
+**Source:** `src/app/api/agents/[id]/reason/route.ts`
 
-### With Tactics
-```lean
--- Proof by cases
-theorem nat_cases (n : ℕ) : n = 0 ∨ ∃ m, n = m + 1 := by
-  cases n
-  · left; rfl
-  · right; exists n; rfl
-```
+When the `irh-hlre` agent reasons, the streaming route:
+1. Accumulates all streamed text from Gemini
+2. After the stream completes, extracts all `` ```lean ... ``` `` fenced code blocks
+3. Calls `runLean4Check(code)` directly for each block (no HTTP round-trip)
+4. Injects the prover result (status, mode, warnings, errors, goals, checkTime) into the SSE stream before `[DONE]`
+5. Lean 4 errors are logged to the server console and streamed to the client (non-fatal — they do not abort the stream)
 
-### With Mathlib Imports
-```lean
-import Mathlib.Analysis.SpecialFunctions.Trigonometric.Basic
-
-theorem sin_zero : Real.sin 0 = 0 := Real.sin_zero
-```
+The HLRE system prompt (in `src/lib/gemini.ts`) instructs the model to emit `` ```lean ... ``` `` blocks and labels this tool `lean4_prover` in its tool-thinking phase.
 
 ---
 
-## Related Documentation
+## Verification tiers
 
-- **Main README:** [README.md](./README.md) - Full platform documentation
-- **API Reference:** See "Tools" section in README for `/api/tools/lean4` details
-- **Verification Guide:** README section on verification tiers and standards
-- **Agent Standards:** How agents like Dr. Bishop use Lean 4 for verification
+**Source:** `src/app/verification/VerificationClient.tsx`
 
----
+| Tier | Tool | Description |
+|------|------|-------------|
+| Tier 1 | Dimensional Analysis | Unit consistency checking |
+| Tier 2 | Symbolic Computation | Numerical/symbolic validation |
+| Tier 3 | **Lean 4** | Machine-checked formal proofs |
 
-## Learn More About Lean 4
-
-- **Official Website:** https://lean-lang.org/
-- **Lean 4 Documentation:** https://lean-lang.org/documentation/
-- **Mathlib Docs:** https://leanprover-community.github.io/mathlib4_docs/
-- **Theorem Proving in Lean:** https://leanprover.github.io/theorem_proving_in_lean4/
+The verification page shows a Lean 4 Proofs count (`Tier 3 && status === "passed"`).
 
 ---
 
-## Questions or Issues?
+## Navigation
 
-If you encounter issues with Lean 4 support or have feature requests:
+**Source:** `src/components/Header.tsx`
 
-1. Check the [README.md](./README.md) for API documentation
-2. Verify your Lean 4 syntax using the interactive tools page
-3. Review example proofs in `src/components/LeanProofStepper.tsx`
-4. Open an issue on the GitHub repository with details about your use case
+The site header's Settings section includes a **"Lean 4 Prover"** link (navigates to `/tools`).
 
 ---
 
-**Summary:** Open Insight provides comprehensive Lean 4 support including API endpoints, interactive UI, example proofs, agent integration, and step-by-step proof visualization. Lean 4 is central to the platform's formal verification capabilities.
+## Knowledge graph
+
+**Source:** `src/app/knowledge/KnowledgeClient.tsx`
+
+The knowledge graph includes a **Lean 4** concept node (`id: "c-lean4"`, domain: `"Foundations of Mathematics"`). It does not directly link to proof artifacts.
+
+---
+
+## All components using Lean 4
+
+| Component | Path | What it does |
+|-----------|------|--------------|
+| Shared library | `src/lib/lean4.ts` | `runLean4Check()`, `checkLeanAvailable()`, `resolveLeanBinary()` |
+| Gemini verification | `src/lib/gemini.ts` → `verifyLean4WithGemini()` | Structured Lean 4 proof analysis via Gemini at `ThinkingLevel.HIGH` |
+| API route | `src/app/api/tools/lean4/route.ts` | `POST /api/tools/lean4` — concurrency-capped endpoint |
+| Reason route | `src/app/api/agents/[id]/reason/route.ts` | Extracts `` ```lean ``` `` blocks from HLRE agent output and runs them |
+| Tools page | `src/app/tools/page.tsx` | Interactive Lean 4 editor with "Check Proof" button |
+| Proof stepper | `src/components/LeanProofStepper.tsx` | Step-by-step proof viewer with 2 built-in proofs |
+| Verification page | `src/app/verification/VerificationClient.tsx` | Tier 3 = Lean 4 formal proof |
+| Header | `src/components/Header.tsx` | "Lean 4 Prover" link in Settings |
+| Knowledge graph | `src/app/knowledge/KnowledgeClient.tsx` | "Lean 4" concept node |
+
+---
+
+## Changes in PR #4
+
+The following changes were made to Lean 4 support in this pull request:
+
+1. **Extracted `src/lib/lean4.ts`** — shared module with `runLean4Check()`, replacing inline code in the API route
+2. **Removed `simulateLeanCheck`** — the regex-based simulation fallback is gone; `executionMode` is now `"native" | "gemini"` only
+3. **Added `verifyLean4WithGemini()`** in `src/lib/gemini.ts` — sends Lean 4 code to Gemini at `ThinkingLevel.HIGH` with a structured type-theory system prompt for real semantic analysis
+4. **Added binary resolution** — `resolveLeanBinary()` checks `LEAN4_PATH` → `~/.elan/bin/lean` → system PATH (cached)
+5. **Added `lean-toolchain`** — specifies `leanprover/lean4:v4.15.0` for elan
+6. **Added `scripts/install-lean4.sh`** — installs elan and the toolchain
+7. **Added error handling** — API route returns HTTP 503 when neither backend is available; reason route logs and streams lean4 errors to the client
+8. **Added IRH-HLRE agent integration** — reason route extracts `` ```lean ``` `` blocks and runs `runLean4Check` directly, injecting results into the SSE stream
