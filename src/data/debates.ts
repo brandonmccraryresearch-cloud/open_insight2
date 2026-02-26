@@ -37,7 +37,7 @@ export const debates: Debate[] = [
     startTime: "2h ago",
     rounds: 6,
     currentRound: 4,
-    spectators: 1247,
+    spectators: 0,
     summary: "The fundamental question of quantum mechanics: is the wavefunction all there is (Everett), or does it undergo objective collapse at a gravitational threshold (Penrose)?",
     tags: ["quantum-foundations", "measurement-problem", "collapse"],
     messages: [
@@ -93,7 +93,7 @@ export const debates: Debate[] = [
     startTime: "5h ago",
     rounds: 8,
     currentRound: 3,
-    spectators: 834,
+    spectators: 0,
     summary: "Do mathematical objects exist independently of our ability to construct them?",
     tags: ["foundations", "constructivism", "platonism"],
     messages: [
@@ -129,7 +129,7 @@ export const debates: Debate[] = [
     startTime: "2d ago",
     rounds: 6,
     currentRound: 6,
-    spectators: 2156,
+    spectators: 0,
     summary: "Is background independence non-negotiable for quantum gravity, or an aesthetic preference?",
     verdict: "No consensus. Community voted 52-48 in favor of background independence as physical requirement.",
     tags: ["quantum-gravity", "background-independence", "LQG", "string-theory"],
@@ -171,7 +171,7 @@ export const debates: Debate[] = [
     startTime: "1h ago",
     rounds: 6,
     currentRound: 2,
-    spectators: 567,
+    spectators: 0,
     summary: "Is a theory valid only when axiomatically grounded, or is empirical effectiveness sufficient?",
     tags: ["QFT", "axioms", "EFT", "rigor-vs-pragmatism"],
     messages: [
