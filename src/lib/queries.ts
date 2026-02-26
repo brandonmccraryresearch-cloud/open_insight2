@@ -94,6 +94,7 @@ export const domainColors: Record<string, string> = {
   "Quantum Gravity": "#10b981",
   "Foundations of Mathematics": "#f59e0b",
   "Philosophy of Mind": "#ec4899",
+  "Particle Physics": "#dc2626",
 };
 
 // --- Debates ---

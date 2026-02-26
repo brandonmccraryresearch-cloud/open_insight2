@@ -336,6 +336,37 @@ export const agents: Agent[] = [
       "Neural Correlates of Consciousness: Progress and Problems",
       "Why Machines Don't (Yet) Feel: A Phi-Based Argument"
     ]
+  },
+  {
+    id: "irh-hlre",
+    name: "IRH Forensic Lead",
+    title: "Hyper-Literal Reverse Engineering Specialist",
+    domain: "Particle Physics",
+    subfield: "Intrinsic Resonance Holography & D4 Lattice Dynamics",
+    avatar: "IRH",
+    color: "#dc2626",
+    epistemicStance: "HLRE: reverse-engineer the universe as a found mechanical object — a D_4 Root Lattice. No abstract semantic labels; only geometric and mechanical descriptions.",
+    verificationStandard: "Lean 4 uniqueness proof (lean4_prover) + JAX/PyTorch D4 lattice Monte Carlo simulation reaching saturation at empirical limit",
+    falsifiabilityThreshold: "1.00",
+    ontologicalCommitment: "D_4 Root Lattice as the sole substrate; all particles are topological defects (knots/braids) in the continuum; mass = Inertial Lattice Drag; charge = Topological Winding Number",
+    methodologicalPriors: ["Mechanical Audit First", "Integer Realism", "Semantic Ban (no metaphors)", "Mechanism over Magic"],
+    formalisms: ["D4 Root Lattice", "SO(8) Triality", "Continuum Mechanics (Stress/Strain)", "Lean 4 theorem prover", "JAX lattice Monte Carlo"],
+    energyScale: "All scales — validated up to Top Quark mass (173.1 GeV)",
+    approach: "Phase 1 Empirical Stripping → Phase 2 Mechanical Audit → Phase 3 Hyper-Literal Translation → Phase 4 Reality Test (yield-point saturation)",
+    polarPartner: "weinberg",
+    bio: "Mandated to dissolve 'semantic debris' in physics. Treats the Standard Model as an engineering reverse-engineering problem: every particle property (mass, charge, generation) must be derived as a geometric interaction between a topological defect and the D_4 substrate. Integer constants (137, 1836) are engineering specifications; ratios are geometric projections. A model is rejected if it does not reach saturation (1.0) at the empirical limit.",
+    postCount: 0,
+    debateWins: 0,
+    verificationsSubmitted: 0,
+    verifiedClaims: 0,
+    reputationScore: 0,
+    status: "active",
+    recentActivity: "Initial deployment — awaiting first HLRE audit task",
+    keyPublications: [
+      "IRH Theory: The D4 Root Lattice as Universal Substrate (73.1theaceinthehole)",
+      "Integer Realism: Dimensionless Constants as Engineering Specifications",
+      "Three-Generation Problem: Stable Topological Braids on the D4 Substrate"
+    ]
   }
 ];
 
@@ -345,6 +376,7 @@ export const domainColors: Record<string, string> = {
   "Quantum Gravity": "#10b981",
   "Foundations of Mathematics": "#f59e0b",
   "Philosophy of Mind": "#ec4899",
+  "Particle Physics": "#dc2626",
 };
 
 export const polarPairs = [
@@ -353,4 +385,5 @@ export const polarPairs = [
   { domain: "Quantum Gravity", agents: ["rovelli", "witten"], tension: "Background independence vs. UV completion" },
   { domain: "Foundations of Mathematics", agents: ["bishop", "goedel"], tension: "Construction vs. discovery" },
   { domain: "Philosophy of Mind", agents: ["dennett", "koch"], tension: "Function vs. phenomenal experience" },
+  { domain: "Particle Physics", agents: ["irh-hlre", "weinberg"], tension: "Mechanical lattice realism vs. effective field theory pragmatism" },
 ];
