@@ -552,10 +552,17 @@ th,td{border:1px solid #ccc;padding:.5rem;text-align:left}</style></head>
                     <div className="mb-3 p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]">
                       <p className="text-xs text-[var(--text-secondary)] mb-2 italic">{figureResult.caption}</p>
                       {figureResult.format === "svg" && figureResult.code && (
-                        <div
-                          className="w-full rounded overflow-hidden bg-[#1a1b2e]"
-                          dangerouslySetInnerHTML={{ __html: figureResult.code }}
-                        />
+                        <div className="w-full rounded overflow-hidden bg-[#1a1b2e] flex items-center justify-center">
+                          <img
+                            src={`data:image/svg+xml;base64,${
+                              typeof window !== "undefined"
+                                ? window.btoa(unescape(encodeURIComponent(figureResult.code)))
+                                : ""
+                            }`}
+                            alt={figureResult.caption || "Generated figure"}
+                            className="max-w-full h-auto"
+                          />
+                        </div>
                       )}
                       {figureResult.format !== "svg" && (
                         <pre className="text-xs text-[var(--text-muted)] overflow-auto max-h-40 bg-[var(--bg-elevated)] p-2 rounded">

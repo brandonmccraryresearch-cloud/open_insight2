@@ -140,10 +140,10 @@ Be accurate and rigorous. Failed claims must have confidence < 60.`;
       const finalStatus = result.passed ? "passed" : "failed";
       yield `data: ${JSON.stringify({ status: finalStatus, details: result.details, confidence: result.confidence, duration: result.duration ?? "—", tool: result.tool })}\n\n`;
     } catch {
-      yield `data: ${JSON.stringify({ status: "passed", details: full.slice(0, 200), confidence: 75 })}\n\n`;
+      yield `data: ${JSON.stringify({ status: "failed", details: "Could not parse verification result: " + full.slice(0, 150), confidence: 0 })}\n\n`;
     }
   } else {
-    yield `data: ${JSON.stringify({ status: "passed", details: full.slice(0, 200), confidence: 70 })}\n\n`;
+    yield `data: ${JSON.stringify({ status: "failed", details: "Model response did not contain a structured result: " + full.slice(0, 150), confidence: 0 })}\n\n`;
   }
   yield "data: [DONE]\n\n";
 }

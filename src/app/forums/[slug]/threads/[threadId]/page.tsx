@@ -78,7 +78,7 @@ export default async function ThreadDetailPage({
           </div>
           <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
             <span>{thread.timestamp}</span>
-            <span>{thread.replyCount} replies</span>
+            <span>{replies.length} replies</span>
             <span>{thread.views.toLocaleString()} views</span>
             <span className="flex items-center gap-1 text-[var(--accent-indigo)]">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">

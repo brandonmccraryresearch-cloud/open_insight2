@@ -53,7 +53,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             // Capture the terminal event to persist to DB
             if (sseChunk.startsWith("data: ") && !sseChunk.includes("[DONE]")) {
               try {
-                const payload = JSON.parse(sseChunk.slice(6)) as {
+                const payload = JSON.parse(sseChunk.slice(6).trim()) as {
                   status?: string; details?: string; confidence?: number; duration?: string;
                 };
                 if (payload.status === "passed" || payload.status === "failed") {
