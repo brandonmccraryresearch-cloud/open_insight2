@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAgentById, getPolarPairs, domainColors } from "@/lib/queries";
+import AgentReasoningPanel from "./AgentReasoningPanel";
 
 const statusColors: Record<string, string> = {
   active: "#10b981",
@@ -166,6 +167,9 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
           </Link>
         </div>
       )}
+
+      {/* Live Reasoning Panel */}
+      <AgentReasoningPanel agentId={agent.id} />
     </div>
   );
 }

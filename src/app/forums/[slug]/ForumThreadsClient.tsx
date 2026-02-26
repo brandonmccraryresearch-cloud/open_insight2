@@ -169,7 +169,9 @@ export default function ForumThreadsClient({
                     <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
                   ))}
                 </div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1">{thread.title}</h3>
+                <Link href={`/forums/${forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors block">
+                  <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1 hover:text-[var(--accent-indigo)]">{thread.title}</h3>
+                </Link>
                 <p className="text-sm text-[var(--text-secondary)] mb-3">{thread.excerpt}</p>
                 <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                   <span>{thread.author}</span>
@@ -186,6 +188,12 @@ export default function ForumThreadsClient({
                     </svg>
                     {displayUpvotes}
                   </button>
+                  <Link href={`/forums/${forumSlug}/threads/${thread.id}`} className="flex items-center gap-1 hover:text-[var(--accent-indigo)] transition-colors">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                    View
+                  </Link>
                 </div>
               </div>
             </div>

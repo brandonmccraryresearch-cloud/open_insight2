@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { hasGeminiKey, streamVerificationEval } from "@/lib/gemini";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,7 +15,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     });
   }
 
-  // If already completed, return the final state immediately
+  // Already completed — stream the final state immediately
   if (verification.status === "passed" || verification.status === "failed") {
     const encoder = new TextEncoder();
     const body = new ReadableStream({
@@ -29,45 +30,90 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     });
   }
 
-  // Simulate a verification pipeline with status transitions
   const encoder = new TextEncoder();
+
+  // ── Gemini path ───────────────────────────────────────────────────────────
+  if (hasGeminiKey()) {
+    db.update(schema.verifications)
+      .set({ status: "running", details: "Running...", timestamp: "running..." })
+      .where(eq(schema.verifications.id, id))
+      .run();
+
+    const body = new ReadableStream({
+      async start(controller) {
+        let finalStatus = "passed";
+        let finalDetails = "";
+        let finalConfidence: number | null = null;
+        let finalDuration = "—";
+
+        try {
+          for await (const sseChunk of streamVerificationEval(verification.claim, verification.tier, verification.agentId)) {
+            controller.enqueue(encoder.encode(sseChunk));
+
+            // Capture the terminal event to persist to DB
+            if (sseChunk.startsWith("data: ") && !sseChunk.includes("[DONE]")) {
+              try {
+                const payload = JSON.parse(sseChunk.slice(6).trim()) as {
+                  status?: string; details?: string; confidence?: number; duration?: string;
+                };
+                if (payload.status === "passed" || payload.status === "failed") {
+                  finalStatus = payload.status;
+                  finalDetails = payload.details ?? "";
+                  finalConfidence = payload.confidence ?? null;
+                  finalDuration = payload.duration ?? "—";
+                }
+              } catch { /* ignore parse errors */ }
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Gemini error";
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "failed", details: msg, confidence: 0 })}\n\n`));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          finalStatus = "failed";
+          finalDetails = msg;
+        }
+
+        db.update(schema.verifications)
+          .set({ status: finalStatus, details: finalDetails, confidence: finalConfidence, duration: finalDuration, timestamp: "just now" })
+          .where(eq(schema.verifications.id, id))
+          .run();
+
+        controller.close();
+      },
+    });
+
+    return new Response(body, {
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    });
+  }
+
+  // ── Simulation fallback (no API key) ─────────────────────────────────────
   const tier = verification.tier;
   const body = new ReadableStream({
     async start(controller) {
-      // Transition: queued → running
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: `Starting ${tier} verification...`, confidence: null })}\n\n`));
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: `Starting ${tier} verification...` })}\n\n`));
       db.update(schema.verifications).set({ status: "running", details: `Running ${tier} verification...`, timestamp: "running..." }).where(eq(schema.verifications.id, id)).run();
 
       await delay(tier === "Tier 1" ? 500 : tier === "Tier 2" ? 1500 : 4000);
 
-      // Progress updates
       if (tier === "Tier 2" || tier === "Tier 3") {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: "Parsing claim structure...", confidence: null })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: "Parsing claim structure..." })}\n\n`));
         await delay(1000);
       }
       if (tier === "Tier 3") {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: "Compiling formal proof...", confidence: null })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: "Compiling formal proof..." })}\n\n`));
         await delay(2000);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: "Checking proof term against axioms...", confidence: null })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: "Checking proof term against axioms..." })}\n\n`));
         await delay(1500);
       }
 
-      // Final result (simulate pass/fail based on tier)
-      const passed = Math.random() > 0.2; // 80% pass rate
+      const passed = Math.random() > 0.2;
       const confidence = passed ? (tier === "Tier 3" ? 100 : tier === "Tier 2" ? 90 + Math.floor(Math.random() * 8) : 99) : 30 + Math.floor(Math.random() * 20);
       const finalStatus = passed ? "passed" : "failed";
       const duration = tier === "Tier 1" ? "<10ms" : tier === "Tier 2" ? `${500 + Math.floor(Math.random() * 500)}ms` : `${3 + Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}s`;
-      const details = passed
-        ? `${tier} verification completed successfully. Claim is consistent.`
-        : `${tier} verification failed. Claim could not be confirmed.`;
+      const details = passed ? `${tier} verification completed successfully.` : `${tier} verification failed.`;
 
-      db.update(schema.verifications).set({
-        status: finalStatus,
-        details,
-        confidence,
-        duration,
-        timestamp: "just now",
-      }).where(eq(schema.verifications.id, id)).run();
+      db.update(schema.verifications).set({ status: finalStatus, details, confidence, duration, timestamp: "just now" }).where(eq(schema.verifications.id, id)).run();
 
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: finalStatus, details, confidence, duration })}\n\n`));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));

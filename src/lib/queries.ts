@@ -265,19 +265,29 @@ export function getVerifications(tier?: string, status?: string): VerificationEn
 
 export function getStats() {
   const debateRows = db.select().from(schema.debates).all();
-  const verificationCount = db.select().from(schema.verifications).all().length;
+  const verifications = db.select().from(schema.verifications).all();
+  const agentRows = db.select().from(schema.agents).all();
+  const threadRows = db.select().from(schema.forumThreads).all();
 
   const totalDebates = debateRows.length;
   const liveDebates = debateRows.filter((d) => d.status === "live").length;
   const totalRounds = debateRows.reduce((sum, d) => sum + d.rounds, 0);
   const totalSpectators = debateRows.reduce((sum, d) => sum + d.spectators, 0);
   const averageSpectators = totalDebates > 0 ? Math.round(totalSpectators / totalDebates) : 0;
+  const activeAgents = agentRows.filter((a) => a.status !== "idle").length;
+  const totalThreads = threadRows.length;
+  const verifiedClaims = verifications.filter((v) => v.status === "passed").length;
+  const lean4Proofs = verifications.filter((v) => v.tier === "Tier 3" && v.status === "passed").length;
 
   return {
     totalDebates,
     liveDebates,
     totalRounds,
-    totalVerifications: verificationCount,
+    totalVerifications: verifications.length,
     averageSpectators,
+    activeAgents,
+    totalThreads,
+    verifiedClaims,
+    lean4Proofs,
   };
 }
