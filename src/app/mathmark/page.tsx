@@ -82,7 +82,8 @@ export default function MathMarkPage() {
     requestAnimationFrame(() => {
       ta.focus();
       const cursorPos = start + prefix.length + before.length;
-      ta.setSelectionRange(cursorPos, cursorPos + (selected.length || 4));
+      const defaultPlaceholderLen = "text".length;
+      ta.setSelectionRange(cursorPos, cursorPos + (selected.length || defaultPlaceholderLen));
     });
   }, [content]);
 
@@ -158,6 +159,7 @@ th,td{border:1px solid #ccc;padding:.5rem;text-align:left}</style></head>
   };
 
   const applyChange = (change: AnalysisChange) => {
+    // Replace only the first occurrence to avoid unintended edits elsewhere
     if (content.includes(change.originalText)) {
       setContent(content.replace(change.originalText, change.replacementText));
     }
@@ -450,9 +452,10 @@ th,td{border:1px solid #ccc;padding:.5rem;text-align:left}</style></head>
         .mm-preview hr { border: none; border-top: 1px solid var(--border-primary); margin: 1.5rem 0; }
         .mm-preview img { max-width: 100%; border-radius: 8px; }
         @media print {
-          body > *:not(main) { display: none !important; }
-          main > * { display: none !important; }
-          #mm-preview { display: block !important; color: #000; }
+          body > header, body > div > aside, body > div > nav { display: none !important; }
+          [class*="border-"], [class*="bg-card"] { border: none !important; background: transparent !important; }
+          #mm-preview { display: block !important; color: #000; max-width: 100%; }
+          #mm-preview * { color: #000 !important; }
         }
       `}</style>
     </div>
