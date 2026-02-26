@@ -16,7 +16,7 @@ export default function CreateDebateDialog({
 }: {
   agents: Agent[];
   polarPairs: PolarPair[];
-  onCreated: (debate: { id: string }) => void;
+  onCreated: (debate: { id: string; title: string; domain: string; format: string; participants: string[]; rounds: number; summary?: string }) => void;
   onClose: () => void;
 }) {
   const [agent1Id, setAgent1Id] = useState(agents[0]?.id ?? "");
@@ -70,7 +70,7 @@ export default function CreateDebateDialog({
         const data = await res.json() as { error?: string };
         throw new Error(data.error ?? "Failed to create debate");
       }
-      const data = await res.json() as { id: string };
+      const data = await res.json() as { id: string; title: string; domain: string; format: string; participants: string[]; rounds: number; summary?: string };
       onCreated(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");

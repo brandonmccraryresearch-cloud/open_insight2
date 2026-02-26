@@ -37,7 +37,7 @@ interface Stats {
 }
 
 export default function DebatesClient({
-  debates,
+  debates: initialDebates,
   agents,
   polarPairs,
   stats,
@@ -49,8 +49,10 @@ export default function DebatesClient({
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [localDebates, setLocalDebates] = useState<DebateListItem[]>([]);
   const router = useRouter();
 
+  const debates = [...localDebates.filter((ld) => !initialDebates.some((d) => d.id === ld.id)), ...initialDebates];
   const agentMap = new Map(agents.map((a) => [a.id, a]));
   const filtered = statusFilter === "all" ? debates : debates.filter((d) => d.status === statusFilter);
 
@@ -183,7 +185,24 @@ export default function DebatesClient({
           polarPairs={polarPairs}
           onCreated={(debate) => {
             setShowCreateDialog(false);
-            router.push(`/debates/${debate.id}`);
+            // Add the new debate to client-side state so it appears immediately
+            // in the list — avoids "not found" from cross-instance SQLite on Vercel
+            setLocalDebates((prev) => [{
+              id: debate.id,
+              title: debate.title,
+              domain: debate.domain,
+              status: "live" as const,
+              format: debate.format,
+              participants: debate.participants,
+              startTime: "just now",
+              rounds: debate.rounds,
+              currentRound: 0,
+              spectators: 0,
+              summary: debate.summary ?? "",
+              tags: [],
+              messageCount: 0,
+            }, ...prev]);
+            router.refresh();
           }}
           onClose={() => setShowCreateDialog(false)}
         />

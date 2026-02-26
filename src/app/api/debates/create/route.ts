@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
     agent1: { id: agent1.id, name: agent1.name, avatar: agent1.avatar, color: agent1.color },
     agent2: { id: agent2.id, name: agent2.name, avatar: agent2.avatar, color: agent2.color },
     rounds,
+    summary: debateSummary,
     tension: pair?.tension,
   }, { status: 201 });
 }
