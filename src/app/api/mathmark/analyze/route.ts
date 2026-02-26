@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, MediaResolution, ThinkingLevel } from "@google/genai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -58,8 +58,11 @@ Document:
 ${content}`;
 
     const response = await genai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.1-pro-preview",
       config: {
+        topP: 1,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+        mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
         systemInstruction:
           "You are a document analysis assistant. Return ONLY valid JSON, no markdown fences or extra text.",
       },

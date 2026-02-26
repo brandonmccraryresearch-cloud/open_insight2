@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, MediaResolution, ThinkingLevel } from "@google/genai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,8 +29,13 @@ export async function POST(req: NextRequest) {
     ];
 
     const response = await genai.models.generateContent({
-      model: "gemini-2.0-flash",
-      config: { systemInstruction: systemPrompt },
+      model: "gemini-3.1-pro-preview",
+      config: {
+        topP: 1,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
+        systemInstruction: systemPrompt,
+      },
       contents,
     });
 

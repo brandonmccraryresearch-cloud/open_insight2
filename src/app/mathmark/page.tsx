@@ -14,6 +14,9 @@ interface AnalysisChange { description: string; originalText: string; replacemen
 interface AnalysisSection { id: string; title: string; summary: string; changes: AnalysisChange[] }
 interface DetectSegment { text: string; score: number; explanation: string; suggestion: string }
 interface DetectResult { score: number; verdict: string; segments: DetectSegment[] }
+interface HumanizeChange { original: string; replacement: string; reason: string }
+interface HumanizeResult { rewritten: string; changes: HumanizeChange[] }
+interface FigureResult { code: string; format: string; caption: string; markdown: string }
 
 /* ─── Toolbar Items ─── */
 type InsertFn = (before: string, after?: string, block?: boolean) => void;
@@ -48,7 +51,7 @@ export default function MathMarkPage() {
   const [content, setContent] = useState(INITIAL_CONTENT);
   const [title, setTitle] = useState("Untitled Document");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<"chat" | "analyze" | "detect">("chat");
+  const [sidebarTab, setSidebarTab] = useState<"chat" | "analyze" | "detect" | "humanize" | "figures">("chat");
 
   // Chat
   const [chatHistory, setChatHistory] = useState<ChatMsg[]>([]);
@@ -62,6 +65,16 @@ export default function MathMarkPage() {
   // Detect
   const [detectResult, setDetectResult] = useState<DetectResult | null>(null);
   const [detectLoading, setDetectLoading] = useState(false);
+
+  // Humanize
+  const [humanizeResult, setHumanizeResult] = useState<HumanizeResult | null>(null);
+  const [humanizeLoading, setHumanizeLoading] = useState(false);
+
+  // Figures
+  const [figureDesc, setFigureDesc] = useState("");
+  const [figureFormat, setFigureFormat] = useState<"svg" | "matplotlib" | "tikz">("svg");
+  const [figureResult, setFigureResult] = useState<FigureResult | null>(null);
+  const [figureLoading, setFigureLoading] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -185,6 +198,61 @@ th,td{border:1px solid #ccc;padding:.5rem;text-align:left}</style></head>
 
   const scoreColor = (s: number) => s >= 70 ? "#10b981" : s >= 40 ? "#eab308" : "#ef4444";
 
+  /* ─── AI Humanize ─── */
+  const runHumanize = async () => {
+    setHumanizeLoading(true);
+    try {
+      const res = await fetch("/api/mathmark/humanize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          segments: detectResult?.segments ?? [],
+        }),
+      });
+      const data = await res.json();
+      setHumanizeResult(data);
+    } catch {
+      setHumanizeResult(null);
+    } finally {
+      setHumanizeLoading(false);
+    }
+  };
+
+  const applyHumanized = () => {
+    if (humanizeResult?.rewritten) {
+      setContent(humanizeResult.rewritten);
+      setHumanizeResult(null);
+    }
+  };
+
+  /* ─── AI Figure Generation ─── */
+  const generateFigure = async () => {
+    if (!figureDesc.trim()) return;
+    setFigureLoading(true);
+    try {
+      const res = await fetch("/api/mathmark/figure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: figureDesc, format: figureFormat }),
+      });
+      const data = await res.json();
+      setFigureResult(data);
+    } catch {
+      setFigureResult(null);
+    } finally {
+      setFigureLoading(false);
+    }
+  };
+
+  const insertFigure = () => {
+    if (figureResult?.markdown) {
+      setContent(prev => prev + "\n\n" + figureResult.markdown + "\n");
+      setFigureDesc("");
+      setFigureResult(null);
+    }
+  };
+
   /* ─── Render ─── */
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] bg-[var(--bg-primary)]">
@@ -272,7 +340,7 @@ th,td{border:1px solid #ccc;padding:.5rem;text-align:left}</style></head>
           <div className="w-80 shrink-0 flex flex-col border-l border-[var(--border-primary)] bg-[var(--bg-card)]">
             {/* Tabs */}
             <div className="flex border-b border-[var(--border-primary)]">
-              {(["chat", "analyze", "detect"] as const).map(tab => (
+              {(["chat", "analyze", "detect", "humanize", "figures"] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setSidebarTab(tab)}
@@ -282,7 +350,7 @@ th,td{border:1px solid #ccc;padding:.5rem;text-align:left}</style></head>
                       : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                   }`}
                 >
-                  {tab}
+                  {tab === "humanize" ? "✍ Humanize" : tab === "figures" ? "📊 Figures" : tab}
                 </button>
               ))}
             </div>
@@ -401,6 +469,106 @@ th,td{border:1px solid #ccc;padding:.5rem;text-align:left}</style></head>
                         )}
                       </div>
                     ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Humanize Tab */}
+            {sidebarTab === "humanize" && (
+              <div className="flex-1 overflow-auto p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-3">
+                  Rewrite your document to sound more natural and human. Run Detection first for best results — flagged passages will be targeted.
+                </p>
+                <button
+                  onClick={runHumanize}
+                  disabled={humanizeLoading}
+                  className="mm-btn w-full mb-3 justify-center"
+                >
+                  {humanizeLoading ? "Rewriting…" : "✍ Humanize Document"}
+                </button>
+                {humanizeResult && (
+                  <>
+                    <button
+                      onClick={applyHumanized}
+                      className="mm-btn w-full mb-3 justify-center !border-[var(--accent-teal)] !text-[var(--accent-teal)]"
+                    >
+                      ✅ Apply Rewritten Version
+                    </button>
+                    <h4 className="text-xs font-semibold text-[var(--accent-gold)] mb-2">Changes Made:</h4>
+                    {humanizeResult.changes.map((c, i) => (
+                      <div key={i} className="mb-3 p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-xs">
+                        <div className="mb-1">
+                          <span className="text-[#ef4444] line-through">{c.original}</span>
+                        </div>
+                        <div className="mb-1">
+                          <span className="text-[#10b981]">{c.replacement}</span>
+                        </div>
+                        <p className="text-[var(--text-muted)] italic">{c.reason}</p>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Figures Tab */}
+            {sidebarTab === "figures" && (
+              <div className="flex-1 overflow-auto p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-3">
+                  Describe a figure and the AI will generate it. Supports SVG, matplotlib, and TikZ.
+                </p>
+                <textarea
+                  value={figureDesc}
+                  onChange={e => setFigureDesc(e.target.value)}
+                  placeholder="e.g. Plot of sin(x) and cos(x) from 0 to 2π with labeled axes"
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-md text-xs bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-teal)] mb-2 resize-none"
+                />
+                <div className="flex gap-1 mb-3">
+                  {(["svg", "matplotlib", "tikz"] as const).map(fmt => (
+                    <button
+                      key={fmt}
+                      onClick={() => setFigureFormat(fmt)}
+                      className={`flex-1 py-1.5 text-xs rounded-md transition-colors ${
+                        figureFormat === fmt
+                          ? "bg-[var(--accent-teal)] text-[#0a0f1a] font-medium"
+                          : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                      }`}
+                    >
+                      {fmt === "svg" ? "SVG" : fmt === "matplotlib" ? "Matplotlib" : "TikZ"}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={generateFigure}
+                  disabled={figureLoading || !figureDesc.trim()}
+                  className="mm-btn w-full mb-3 justify-center"
+                >
+                  {figureLoading ? "Generating…" : "📊 Generate Figure"}
+                </button>
+                {figureResult && (
+                  <>
+                    <div className="mb-3 p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]">
+                      <p className="text-xs text-[var(--text-secondary)] mb-2 italic">{figureResult.caption}</p>
+                      {figureResult.format === "svg" && figureResult.code && (
+                        <div
+                          className="w-full rounded overflow-hidden bg-[#1a1b2e]"
+                          dangerouslySetInnerHTML={{ __html: figureResult.code }}
+                        />
+                      )}
+                      {figureResult.format !== "svg" && (
+                        <pre className="text-xs text-[var(--text-muted)] overflow-auto max-h-40 bg-[var(--bg-elevated)] p-2 rounded">
+                          {figureResult.code}
+                        </pre>
+                      )}
+                    </div>
+                    <button
+                      onClick={insertFigure}
+                      className="mm-btn w-full justify-center !border-[var(--accent-teal)] !text-[var(--accent-teal)]"
+                    >
+                      ⬇ Insert into Document
+                    </button>
                   </>
                 )}
               </div>
