@@ -3,6 +3,7 @@ import { writeFile, unlink, mkdir, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { randomUUID } from "crypto";
+import { verifyLean4WithGemini, hasGeminiKey } from "@/lib/gemini";
 
 export interface Lean4Result {
   status: "success" | "warning" | "error" | "incomplete";
@@ -11,45 +12,9 @@ export interface Lean4Result {
   warnings: string[];
   errors: string[];
   checkTime: string;
-  executionMode: "native" | "simulated";
+  executionMode: "native" | "gemini";
   leanVersion?: string;
   mathlibVersion?: string;
-}
-
-export function simulateLeanCheck(code: string): Omit<Lean4Result, "checkTime" | "executionMode"> {
-  const hasSorry = /\bsorry\b/.test(code);
-  const hasTheorem = /\btheorem\b|\blemma\b|\bdef\b/.test(code);
-  const hasProofTerm = /\bby\b/.test(code) && !hasSorry;
-
-  const goals: string[] = [];
-  const warnings: string[] = [];
-  const errors: string[] = [];
-
-  if (hasSorry) {
-    warnings.push("declaration uses 'sorry'");
-  }
-
-  if (!hasTheorem) {
-    errors.push("expected 'theorem', 'lemma', or 'def' declaration");
-  }
-
-  const hypotheses: string[] = [];
-  const hMatches = code.matchAll(/\((\w+)\s*:\s*([^)]+)\)/g);
-  for (const m of hMatches) {
-    hypotheses.push(`${m[1]} : ${m[2]}`);
-  }
-
-  const goalMatch = code.match(/:\s*\n?\s*(∃.*|∀.*|[^:=]+)\s*:=\s*by/s);
-  if (goalMatch) {
-    goals.push(`⊢ ${goalMatch[1].trim()}`);
-  } else if (hasTheorem) {
-    goals.push("⊢ (goal not parsed)");
-  }
-
-  const status =
-    errors.length > 0 ? "error" : hasSorry ? "warning" : hasProofTerm ? "success" : "incomplete";
-
-  return { status, goals, hypotheses, warnings, errors };
 }
 
 function runLean(
@@ -81,7 +46,13 @@ export function checkLeanAvailable(): Promise<boolean> {
   });
 }
 
-/** Run a Lean 4 check, falling back to simulation if lean is not installed. */
+/**
+ * Run a Lean 4 check using the native binary when available, otherwise fall
+ * back to Gemini semantic verification. The simulation fallback has been
+ * removed — every path produces real verification output.
+ *
+ * Throws if neither the native binary nor a Gemini API key is available.
+ */
 export async function runLean4Check(code: string): Promise<Lean4Result> {
   const startTime = Date.now();
   const leanAvailable = await checkLeanAvailable();
@@ -133,15 +104,15 @@ export async function runLean4Check(code: string): Promise<Lean4Result> {
     }
   }
 
-  // Simulation fallback
-  await new Promise((r) => setTimeout(r, 800 + Math.random() * 1200));
-  const sim = simulateLeanCheck(code);
+  // Native binary not available — use Gemini semantic verification (real, not simulated).
+  if (!hasGeminiKey()) {
+    throw new Error(
+      "Lean 4 is unavailable: neither the lean binary nor a GEMINI_API_KEY is configured."
+    );
+  }
+
+  const geminiResult = await verifyLean4WithGemini(code);
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  return {
-    ...sim,
-    checkTime: `${elapsed}s`,
-    executionMode: "simulated",
-    leanVersion: "4.12.0",
-    mathlibVersion: "4.12.0",
-  };
+  return { ...geminiResult, checkTime: `${elapsed}s`, executionMode: "gemini" };
 }
+

@@ -55,8 +55,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 (result.goals.length ? ` | goals: ${result.goals.join("; ")}` : "") +
                 ` | checkTime=${result.checkTime}`;
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: summary })}\n\n`));
-            } catch {
-              // non-fatal: lean4 tool error does not abort the stream
+            } catch (leanErr: unknown) {
+              // Non-fatal: lean4 tool error does not abort the stream
+              const leanMsg = leanErr instanceof Error ? leanErr.message : "lean4_prover error";
+              console.error("[irh-hlre lean4_prover]", leanMsg);
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ text: `\n[lean4_prover] error: ${leanMsg}` })}\n\n`)
+              );
             }
           }
         }

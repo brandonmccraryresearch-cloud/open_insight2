@@ -40,12 +40,20 @@ export async function POST(request: NextRequest) {
     try {
       const result = await runLean4Check(code);
       return NextResponse.json(result);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Lean 4 verification failed";
+      return NextResponse.json({ error: message }, { status: 503 });
     } finally {
       activeLeanProcesses--;
     }
   }
 
-  const result = await runLean4Check(code);
-  return NextResponse.json(result);
+  try {
+    const result = await runLean4Check(code);
+    return NextResponse.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Lean 4 verification failed";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }
 

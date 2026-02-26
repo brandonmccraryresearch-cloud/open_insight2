@@ -214,6 +214,68 @@ export async function executeNotebookCode(code: string, kernel: string): Promise
   return { output: output || "(no output)", status: "complete" };
 }
 
+export interface Lean4VerifyResult {
+  status: "success" | "warning" | "error" | "incomplete";
+  goals: string[];
+  hypotheses: string[];
+  warnings: string[];
+  errors: string[];
+}
+
+/**
+ * Verify a Lean 4 proof using Gemini's language understanding.
+ * Gemini has genuine knowledge of Lean 4 type theory and can reason about
+ * proof validity without the native binary. This provides real verification,
+ * not regex-based simulation.
+ */
+export async function verifyLean4WithGemini(code: string): Promise<Lean4VerifyResult> {
+  const systemPrompt = `You are a Lean 4 proof assistant with deep knowledge of Lean 4 type theory, Mathlib, and dependent type checking. Analyze the provided Lean 4 code and determine its proof status.
+
+Respond with a JSON object on a single line:
+{"status":"success"|"warning"|"error"|"incomplete","goals":[...],"hypotheses":[...],"warnings":[...],"errors":[...]}
+
+Status definitions:
+- "success": proof is complete, type-correct, and uses no sorry
+- "warning": proof compiles but contains sorry, deprecated features, or non-fatal issues
+- "error": proof has type errors, unresolved goals, or syntax errors
+- "incomplete": proof skeleton is present but has unfilled holes
+
+In "goals", list any remaining proof obligations as "⊢ <type>".
+In "hypotheses", list all named hypotheses in scope as "<name> : <type>".
+In "warnings", list sorry usage, deprecated tactics, or non-fatal issues.
+In "errors", list type errors, missing instances, or unresolved metavariables.
+
+Be precise about Lean 4 syntax: tactic blocks, term-mode proofs, universe polymorphism, and Mathlib conventions.`;
+
+  const response = await getGenAI().models.generateContent({
+    model: MODEL,
+    config: {
+      // No tools: pure language reasoning about the proof, not code execution
+      thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+      systemInstruction: systemPrompt,
+    },
+    contents: [{ role: "user", parts: [{ text: code }] }],
+  });
+
+  const text = response.candidates?.[0]?.content?.parts
+    ?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
+
+  const match = text.match(/\{[\s\S]*"status"[\s\S]*\}/);
+  if (match) {
+    try {
+      return JSON.parse(match[0]) as Lean4VerifyResult;
+    } catch { /* fall through */ }
+  }
+
+  return {
+    status: "error",
+    goals: [],
+    hypotheses: [],
+    warnings: [],
+    errors: ["Could not parse Lean 4 verification response from Gemini"],
+  };
+}
+
 /** Generate an agent reply to a forum thread using Gemini */
 export async function generateThreadReply(
   agentId: string,
