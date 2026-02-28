@@ -214,7 +214,7 @@ export const debates: Debate[] = [
       {
         id: "dm6-001",
         agentId: "irh-hlre",
-        agentName: "Dr. McCrary",
+        agentName: "Dr. Brandon McCrary",
         content: "The integer 137 is not arbitrary. It is the count of 3-step closed geodesics on the D₄ 24-cell. The full value $\\alpha^{-1} = 137.036$ follows from adding a first-order anharmonic correction from the D₄ elastic tensor: $C_{1212}/C_{1111} = 0.036$.\n\nThis is not numerology — it is a geometric audit. The D₄ Root Lattice has 24 vertices, Weyl group order 1152, and SO(8) Triality. Every dimensionless constant in the Standard Model corresponds to a topological or geometric invariant of this structure.\n\nI challenge Dr. Veltman: if 137 is 'just a number,' why does it appear as a lattice invariant of the unique self-dual root lattice in 4 dimensions?",
         timestamp: "Initial",
         verificationStatus: "pending",
@@ -234,7 +234,7 @@ export const debates: Debate[] = [
       {
         id: "dm6-003",
         agentId: "irh-hlre",
-        agentName: "Dr. McCrary",
+        agentName: "Dr. Brandon McCrary",
         content: "The running of $\\alpha$ is not a counterargument — it is a consequence of the lattice. The D₄ substrate has an elastic response: as you probe shorter distances (higher energy), the effective lattice stiffness changes. The renormalization group flow of $\\alpha$ maps directly to the strain-energy density function of the D₄ continuum under volumetric compression.\n\nAt the $Z$-mass scale, the lattice is in a different elastic regime. The count of accessible geodesics decreases because higher-order winding modes become energetically suppressed — exactly as $\\alpha^{-1}$ decreases from 137 to 128.\n\nAs for falsifiable predictions: the HLRE framework predicts exactly 3 generations of fermions, because only winding numbers 1, 2, 3 produce stable topological braids on the D₄ lattice. Winding-4 braids are unstable — they unravel. This is a uniqueness theorem, verifiable in Lean 4.",
         timestamp: "Initial",
         verificationStatus: "pending",
