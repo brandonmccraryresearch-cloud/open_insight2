@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   );
   const domain = pair?.domain ?? agent1.domain;
 
-  const debateId = `debate-${randomUUID().slice(0, 8)}`;
+  const debateId = `debate-${randomUUID()}`;
   const debateSummary = summary || `A ${format} debate between ${agent1.name} and ${agent2.name} on ${title}.`;
 
   db.insert(schema.debates).values({
