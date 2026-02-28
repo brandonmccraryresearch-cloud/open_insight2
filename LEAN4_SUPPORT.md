@@ -205,7 +205,7 @@ The knowledge graph includes a **Lean 4** concept node (`id: "c-lean4"`, domain:
 
 The native Lean 4 execution path writes user-supplied code to a temporary file and runs the `lean` binary on it. While Lean 4 code is not a general-purpose scripting language, the following risks should be considered for production deployments:
 
-- **`import` statements**: Lean 4 code can use `import` to access files readable by the process. The execution environment should restrict filesystem access.
+- **`import` statements**: Lean 4 code can use `import` to access Lean source files readable by the process. A malicious user could craft imports to probe the local filesystem for Lean modules or, if the working directory contains sensitive files, potentially read them via error messages.
 - **Resource exhaustion**: A malicious proof can consume unbounded CPU or memory. The current 30-second `execFile` timeout (`src/lib/lean4.ts`) limits CPU time but does not cap memory usage.
 - **Recommended mitigations** for production:
   - Run the `lean` binary inside a sandboxed container (e.g., Docker, gVisor) or chroot with minimal filesystem permissions
