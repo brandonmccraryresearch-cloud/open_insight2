@@ -201,6 +201,22 @@ The knowledge graph includes a **Lean 4** concept node (`id: "c-lean4"`, domain:
 
 ---
 
+## Security considerations
+
+The native Lean 4 execution path writes user-supplied code to a temporary file and runs the `lean` binary on it. While Lean 4 code is not a general-purpose scripting language, the following risks should be considered for production deployments:
+
+- **`import` statements**: Lean 4 code can use `import` to access files readable by the process. The execution environment should restrict filesystem access.
+- **Resource exhaustion**: A malicious proof can consume unbounded CPU or memory. The current 30-second `execFile` timeout (`src/lib/lean4.ts`) limits CPU time but does not cap memory usage.
+- **Recommended mitigations** for production:
+  - Run the `lean` binary inside a sandboxed container (e.g., Docker, gVisor) or chroot with minimal filesystem permissions
+  - Restrict outbound network access
+  - Apply memory limits via cgroups or container resource constraints
+  - Use a dedicated unprivileged user for the Lean process
+
+The Gemini fallback path (`verifyLean4WithGemini`) sends code to the Gemini API and does not execute anything locally, so it carries no local execution risk.
+
+---
+
 ## Changes in PR #4
 
 The following changes were made to Lean 4 support in this pull request:
