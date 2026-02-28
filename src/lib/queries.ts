@@ -303,26 +303,29 @@ export function getHeaderData() {
   const forumRows = db.select().from(schema.forums).all();
   const verifications = db.select().from(schema.verifications).all();
 
-  const liveDebates = debateRows.filter((d) => d.status === "live").length;
+  const liveDebateRows = debateRows.filter((d) => d.status === "live");
+  const liveDebates = liveDebateRows.length;
 
   // Build notifications from real platform data (most recent threads, debates, verifications)
   const notifications: { id: number; title: string; forum: string; time: string; href: string }[] = [];
   let notifId = 0;
 
   // Recent live debates
-  for (const d of debateRows.filter((d) => d.status === "live").slice(0, 2)) {
+  for (const d of liveDebateRows.slice(0, 2)) {
     notifications.push({
       id: ++notifId,
       title: `Live debate: ${d.title.length > 50 ? d.title.slice(0, 50) + "…" : d.title}`,
       forum: "Debates",
-      time: d.startTime || "Active",
+      time: d.startTime || "Recent",
       href: `/debates/${d.id}`,
     });
   }
 
-  // Recent forum threads (pick the first 2 most recent)
-  const recentThreads = threadRows.slice(0, 2);
-  for (const t of recentThreads) {
+  // Recent forum threads (sorted by timestamp descending, pick the first 2)
+  const sortedThreads = [...threadRows].sort((a, b) =>
+    (b.timestamp || "").localeCompare(a.timestamp || "")
+  );
+  for (const t of sortedThreads.slice(0, 2)) {
     const forum = forumRows.find((f) => f.slug === t.forumSlug);
     notifications.push({
       id: ++notifId,
