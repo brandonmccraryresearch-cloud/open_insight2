@@ -269,7 +269,7 @@ export async function GET() {
     addAction("haag", haagAgent.name, "inspect", "verification records", "success",
       `Reviewing ${verifications.length} verification entries for completeness.`);
     for (const v of verifications) {
-      if (!v.confidence && v.confidence !== 0) {
+      if (!v.confidence && v.confidence !== 0 && v.status !== "running" && v.status !== "queued") {
         addFinding("haag", haagAgent.name, "warning", "placeholder",
           `Verification: ${v.claim.slice(0, 60)}...`,
           `src/data/verifications.ts (verification: ${v.id})`,
