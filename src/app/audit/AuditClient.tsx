@@ -75,6 +75,12 @@ export default function AuditClient() {
   const [sessionLog, setSessionLog] = useState<string[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const auditIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Streaming actions state (real-time feed)
+  const [streamActions, setStreamActions] = useState<AgentAction[]>([]);
+  const [streamFindings, setStreamFindings] = useState<AuditFinding[]>([]);
+  const [streaming, setStreaming] = useState(false);
 
   const addLog = useCallback((msg: string) => {
     const ts = new Date().toLocaleTimeString();
@@ -98,22 +104,110 @@ export default function AuditClient() {
     }
   }
 
+  /** Stream audit events via SSE for real-time agent activity display */
+  async function runStreamAudit() {
+    setStreaming(true);
+    setStreamActions([]);
+    setStreamFindings([]);
+    setError(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch("/api/audit/stream", { signal: controller.signal });
+      if (!res.body) throw new Error("No stream body");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (payload === "[DONE]") break;
+          try {
+            const event = JSON.parse(payload) as {
+              type: string;
+              agentId: string;
+              agentName: string;
+              action?: string;
+              target?: string;
+              status?: string;
+              detail?: string;
+              severity?: string;
+              category?: string;
+              element?: string;
+              location?: string;
+              description?: string;
+              recommendation?: string;
+              findingId?: string;
+            };
+            if (event.type === "action" || event.type === "session_start" || event.type === "session_end") {
+              setStreamActions((prev) => [...prev, {
+                agentId: event.agentId,
+                agentName: event.agentName,
+                action: event.action ?? event.type,
+                target: event.target ?? "",
+                status: (event.status as AgentAction["status"]) ?? "success",
+                detail: event.detail ?? "",
+              }]);
+              addLog(`${event.agentName} → ${event.action ?? event.type}${event.target ? ` on ${event.target}` : ""}`);
+            } else if (event.type === "finding") {
+              setStreamFindings((prev) => [...prev, {
+                id: event.findingId ?? `f-${prev.length}`,
+                agentId: event.agentId,
+                agentName: event.agentName,
+                severity: (event.severity as AuditFinding["severity"]) ?? "info",
+                category: (event.category as AuditFinding["category"]) ?? "error",
+                element: event.element ?? "",
+                location: event.location ?? "",
+                description: event.description ?? "",
+                recommendation: event.recommendation ?? "",
+              }]);
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        setError(err instanceof Error ? err.message : "Stream error");
+      }
+    }
+    setStreaming(false);
+
+    // Build final report from streamed data
+    setReport((prev) => {
+      const actions = [...(prev?.actions ?? [])];
+      const findings = [...(prev?.findings ?? [])];
+      // Merge stream data
+      setStreamActions((sa) => { actions.push(...sa); return sa; });
+      setStreamFindings((sf) => { findings.push(...sf); return sf; });
+      return null; // will be set below
+    });
+  }
+
   function startAutonomousMode() {
     setAutonomousActive(true);
     setTimeRemaining(selectedDuration);
     setCycleCount(0);
     setSessionLog([]);
     addLog(`Autonomous Agent Mode activated — ${PRESET_DURATIONS.find((d) => d.seconds === selectedDuration)?.label} session`);
-    addLog("All agents operating as their PhD-level personas: reasoning, debating, verifying, navigating — full autonomy, no restrictions.");
+    addLog("All agents operating as their PhD-level personas — each starting a characteristic research task…");
 
-    // Run initial audit immediately
-    addLog("Cycle 1: Agents engaging platform features and reporting errors...");
-    runAudit().then((data) => {
-      if (data) {
-        setCycleCount(1);
-        addLog(`Cycle 1 complete: ${data.summary.actionsAttempted} actions taken, ${data.summary.total} error reports filed (${data.summary.critical} critical)`);
-        addLog(`Active agents: ${data.agentParticipants.join(", ")}`);
-      }
+    // Run initial streaming audit
+    addLog("Session starting: agents initializing with random opening tasks…");
+    runStreamAudit().then(() => {
+      setCycleCount(1);
+      addLog("Initial session complete — switching to periodic cycle mode.");
+      // Also get the snapshot report for the summary cards
+      runAudit().then((data) => {
+        if (data) {
+          addLog(`Snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} findings (${data.summary.critical} critical)`);
+          addLog(`Active agents: ${data.agentParticipants.join(", ")}`);
+        }
+      });
     });
   }
 
@@ -124,6 +218,8 @@ export default function AuditClient() {
     if (auditIntervalRef.current) clearInterval(auditIntervalRef.current);
     intervalRef.current = null;
     auditIntervalRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     addLog("Autonomous Mode ended. Final report ready for export.");
   }
 
@@ -310,6 +406,11 @@ export default function AuditClient() {
               Active — {formatTime(timeRemaining)} remaining
             </span>
           )}
+          {streaming && (
+            <span className="badge bg-[var(--accent-gold)]/10 text-[var(--accent-gold)]">
+              Streaming…
+            </span>
+          )}
         </div>
         <p className="text-xs text-[var(--text-muted)] mb-4">
           Each PhD-level agent operates as its defined persona — attempting reasoning, debates, verification,
@@ -382,6 +483,37 @@ export default function AuditClient() {
                 ))}
               </div>
             )}
+            {/* Real-time Agent Stream */}
+            {streamActions.length > 0 && (
+              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-60 overflow-y-auto border border-[var(--border-primary)]">
+                <div className="flex items-center gap-2 mb-2">
+                  {streaming && <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />}
+                  <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    Live Agent Activity ({streamActions.length} actions, {streamFindings.length} findings)
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {streamActions.map((a, i) => {
+                    const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
+                    const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
+                    return (
+                      <div key={i} className="flex items-start gap-1.5 text-[11px] animate-[fadeIn_0.3s_ease-in]">
+                        <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
+                        <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                        <span className="text-[var(--text-muted)]">→</span>
+                        <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
+                      </div>
+                    );
+                  })}
+                  {streaming && (
+                    <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
+                      Agents working…
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -392,7 +524,7 @@ export default function AuditClient() {
         </div>
       )}
 
-      {!report && !loading && !autonomousActive && (
+      {!report && !loading && !autonomousActive && !streaming && streamActions.length === 0 && (
         <div className="glass-card p-12 text-center">
           <svg className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -402,12 +534,83 @@ export default function AuditClient() {
             PhD-level agents operate as their defined personas — reasoning, debating, verifying, and navigating the platform.
             When they encounter non-functional, mock, emulated, or broken elements, they file error reports automatically.
           </p>
-          <button
-            onClick={runAudit}
-            className="px-6 py-3 rounded-lg text-sm font-medium text-white bg-[var(--accent-indigo)] hover:opacity-90 transition-opacity"
-          >
-            Start Audit
-          </button>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={runStreamAudit}
+              className="px-6 py-3 rounded-lg text-sm font-medium text-white bg-[var(--accent-teal)] hover:opacity-90 transition-opacity flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Start Live Audit
+            </button>
+            <button
+              onClick={runAudit}
+              className="px-6 py-3 rounded-lg text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-elevated)] hover:bg-[var(--bg-card-hover)] transition-colors"
+            >
+              Snapshot Audit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone streaming display (when not in autonomous mode) */}
+      {!autonomousActive && (streaming || (!report && streamActions.length > 0)) && (
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            {streaming && <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />}
+            <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+              Live Agent Activity Stream ({streamActions.length} actions, {streamFindings.length} findings)
+            </h3>
+          </div>
+          <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-80 overflow-y-auto border border-[var(--border-primary)] space-y-1.5">
+            {streamActions.map((a, i) => {
+              const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
+              const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
+              return (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
+                  <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                  <span className="text-[var(--text-muted)]">→</span>
+                  <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
+                </div>
+              );
+            })}
+            {streaming && (
+              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
+                Agents working…
+              </div>
+            )}
+          </div>
+          {!streaming && streamFindings.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {streamFindings.map((finding) => {
+                const style = severityStyles[finding.severity];
+                return (
+                  <div key={finding.id} className="flex items-start gap-2 text-xs p-2 rounded-lg" style={{ backgroundColor: style.bg }}>
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: style.text }} />
+                    <div>
+                      <span className="font-medium" style={{ color: style.text }}>{finding.element}</span>
+                      <span className="text-[var(--text-muted)]"> — {finding.description}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {!streaming && (
+            <div className="mt-3">
+              <button
+                onClick={runAudit}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-[var(--accent-indigo)] hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {loading ? "Loading full report…" : "Load Full Report"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

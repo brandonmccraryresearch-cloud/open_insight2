@@ -1,8 +1,8 @@
 "use client";
-import { useState, useRef } from "react";
-import { REASONING_CHAINS } from "@/components/AgentReasoning";
+import { useState, useRef, useEffect } from "react";
 import MathRenderer from "@/components/MathRenderer";
 import ReactMarkdown from "react-markdown";
+import type { AgentThought } from "@/components/AgentReasoning";
 
 const phaseColors: Record<string, { color: string; label: string; icon: string }> = {
   decomposition: { color: "#06b6d4", label: "Decomposition", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
@@ -36,7 +36,14 @@ function renderContent(text: string) {
 }
 
 export default function AgentReasoningPanel({ agentId }: { agentId: string }) {
-  const availableChains = Object.entries(REASONING_CHAINS)
+  const [chains, setChains] = useState<Record<string, AgentThought>>({});
+
+  // Lazy-load reasoning chains only when this panel mounts
+  useEffect(() => {
+    import("@/data/reasoningChains").then((mod) => setChains(mod.REASONING_CHAINS));
+  }, []);
+
+  const availableChains = Object.entries(chains)
     .filter(([, chain]) => chain.agentId === agentId)
     .map(([key, chain]) => ({ key, prompt: chain.prompt }));
 
