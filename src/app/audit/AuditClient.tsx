@@ -1,12 +1,21 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 
+interface AgentAction {
+  agentId: string;
+  agentName: string;
+  action: string;
+  target: string;
+  status: "success" | "failed" | "blocked";
+  detail: string;
+}
+
 interface AuditFinding {
   id: string;
   agentId: string;
   agentName: string;
   severity: "critical" | "warning" | "info";
-  category: "mock-data" | "non-functional" | "placeholder" | "inconsistency" | "error";
+  category: "mock-data" | "non-functional" | "placeholder" | "inconsistency" | "error" | "emulation";
   element: string;
   location: string;
   description: string;
@@ -15,12 +24,16 @@ interface AuditFinding {
 
 interface AuditReport {
   timestamp: string;
+  actions: AgentAction[];
   findings: AuditFinding[];
   summary: {
     total: number;
     critical: number;
     warnings: number;
     info: number;
+    actionsAttempted: number;
+    actionsSucceeded: number;
+    actionsFailed: number;
   };
   agentParticipants: string[];
 }
@@ -37,6 +50,7 @@ const categoryLabels: Record<string, string> = {
   placeholder: "Placeholder",
   inconsistency: "Inconsistency",
   error: "Error",
+  emulation: "Emulation",
 };
 
 const PRESET_DURATIONS = [
@@ -90,15 +104,15 @@ export default function AuditClient() {
     setCycleCount(0);
     setSessionLog([]);
     addLog(`Autonomous Agent Mode activated — ${PRESET_DURATIONS.find((d) => d.seconds === selectedDuration)?.label} session`);
-    addLog("All agents granted full autonomy: debates, audits, verifications, reasoning — no restrictions.");
+    addLog("All agents operating as their PhD-level personas: reasoning, debating, verifying, navigating — full autonomy, no restrictions.");
 
     // Run initial audit immediately
-    addLog("Cycle 1: Running platform-wide agent audit...");
+    addLog("Cycle 1: Agents engaging platform features and reporting errors...");
     runAudit().then((data) => {
       if (data) {
         setCycleCount(1);
-        addLog(`Audit complete: ${data.summary.total} findings (${data.summary.critical} critical, ${data.summary.warnings} warnings, ${data.summary.info} info)`);
-        addLog(`Participating agents: ${data.agentParticipants.join(", ")}`);
+        addLog(`Cycle 1 complete: ${data.summary.actionsAttempted} actions taken, ${data.summary.total} error reports filed (${data.summary.critical} critical)`);
+        addLog(`Active agents: ${data.agentParticipants.join(", ")}`);
       }
     });
   }
@@ -140,10 +154,10 @@ export default function AuditClient() {
     auditIntervalRef.current = setInterval(() => {
       setCycleCount((prev) => {
         const next = prev + 1;
-        addLog(`Cycle ${next}: Re-running agent audit...`);
+        addLog(`Cycle ${next}: Agents re-engaging platform features...`);
         runAudit().then((data) => {
           if (data) {
-            addLog(`Cycle ${next} complete: ${data.summary.total} findings`);
+            addLog(`Cycle ${next} complete: ${data.summary.actionsAttempted} actions, ${data.summary.total} error reports`);
           }
         });
         return next;
@@ -172,7 +186,14 @@ export default function AuditClient() {
       `**Mode:** ${mode}${cycleCount > 0 ? ` (${cycleCount} cycle${cycleCount !== 1 ? "s" : ""})` : ""}`,
       `**Participating Agents:** ${report.agentParticipants.join(", ")}`,
       ``,
-      `### Summary`,
+      `### Agent Activity Summary`,
+      `| Metric | Count |`,
+      `|--------|-------|`,
+      `| Actions Attempted | ${report.summary.actionsAttempted} |`,
+      `| ✅ Succeeded | ${report.summary.actionsSucceeded} |`,
+      `| ❌ Failed/Blocked | ${report.summary.actionsFailed} |`,
+      ``,
+      `### Error Report Summary`,
       `| Severity | Count |`,
       `|----------|-------|`,
       `| 🔴 Critical | ${report.summary.critical} |`,
@@ -180,9 +201,18 @@ export default function AuditClient() {
       `| 🔵 Info | ${report.summary.info} |`,
       `| **Total** | **${report.summary.total}** |`,
       ``,
-      `### Findings`,
+      `### Agent Actions`,
       ``,
     ];
+
+    for (const a of report.actions) {
+      const icon = a.status === "success" ? "✅" : a.status === "blocked" ? "🚫" : "❌";
+      lines.push(`- ${icon} **${a.agentName}** → \`${a.action}\` on \`${a.target}\`: ${a.detail}`);
+    }
+    lines.push(``);
+
+    lines.push(`### Error Reports (Findings)`);
+    lines.push(``);
 
     for (const f of report.findings) {
       const icon = f.severity === "critical" ? "🔴" : f.severity === "warning" ? "🟡" : "🔵";
@@ -282,9 +312,10 @@ export default function AuditClient() {
           )}
         </div>
         <p className="text-xs text-[var(--text-muted)] mb-4">
-          Agents operate with full autonomy — auditing the platform for mock data, non-functional elements,
-          placeholder content, and errors. They run periodic inspections and compile all findings into
-          a session report that can be exported as a comment for fixing.
+          Each PhD-level agent operates as its defined persona — attempting reasoning, debates, verification,
+          forum participation, and tool usage across the platform. When they encounter non-functional elements,
+          mock data, emulated tools, or errors, they file reports. Session results are compiled into a
+          Markdown comment for fixing.
         </p>
         {!autonomousActive ? (
           <div className="flex items-center gap-3 flex-wrap">
@@ -366,10 +397,10 @@ export default function AuditClient() {
           <svg className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Agent Platform Audit</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Autonomous Agent Session</h2>
           <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto mb-6">
-            Run a single audit or activate Full Autonomous Mode to let agents operate continuously
-            for a preset duration — inspecting, auditing, and reporting with no restrictions.
+            PhD-level agents operate as their defined personas — reasoning, debating, verifying, and navigating the platform.
+            When they encounter non-functional, mock, emulated, or broken elements, they file error reports automatically.
           </p>
           <button
             onClick={runAudit}
@@ -383,12 +414,13 @@ export default function AuditClient() {
       {report && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             {[
-              { label: "Total Findings", value: report.summary.total, color: "var(--text-primary)" },
+              { label: "Actions Taken", value: report.summary.actionsAttempted, color: "var(--accent-teal)" },
+              { label: "Succeeded", value: report.summary.actionsSucceeded, color: "#10b981" },
+              { label: "Failed/Blocked", value: report.summary.actionsFailed, color: "#ef4444" },
+              { label: "Error Reports", value: report.summary.total, color: "#f59e0b" },
               { label: "Critical", value: report.summary.critical, color: "#ef4444" },
-              { label: "Warnings", value: report.summary.warnings, color: "#f59e0b" },
-              { label: "Info", value: report.summary.info, color: "#6366f1" },
             ].map((s) => (
               <div key={s.label} className="glass-card p-4 text-center">
                 <div className="text-xl font-bold font-mono" style={{ color: s.color }}>
@@ -399,10 +431,10 @@ export default function AuditClient() {
             ))}
           </div>
 
-          {/* Agent Participants */}
+          {/* Active Agents */}
           <div className="glass-card p-4">
             <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              Auditing Agents
+              Active Agents (PhD-Level Personas)
             </h3>
             <div className="flex flex-wrap gap-2">
               {report.agentParticipants.map((name) => (
@@ -410,6 +442,29 @@ export default function AuditClient() {
                   {name}
                 </span>
               ))}
+            </div>
+          </div>
+
+          {/* Agent Activity Log */}
+          <div className="glass-card p-4">
+            <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
+              Agent Activity Log
+            </h3>
+            <div className="space-y-1.5">
+              {report.actions.map((a, i) => {
+                const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
+                const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
+                return (
+                  <div key={i} className="flex items-start gap-2 text-xs">
+                    <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
+                    <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                    <span className="text-[var(--text-muted)]">→</span>
+                    <span className="text-[var(--text-secondary)] font-mono">{a.action}</span>
+                    <span className="text-[var(--text-muted)]">on</span>
+                    <code className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-elevated)] px-1 py-0.5 rounded">{a.target}</code>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
