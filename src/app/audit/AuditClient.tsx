@@ -176,16 +176,6 @@ export default function AuditClient() {
       }
     }
     setStreaming(false);
-
-    // Build final report from streamed data
-    setReport((prev) => {
-      const actions = [...(prev?.actions ?? [])];
-      const findings = [...(prev?.findings ?? [])];
-      // Merge stream data
-      setStreamActions((sa) => { actions.push(...sa); return sa; });
-      setStreamFindings((sf) => { findings.push(...sf); return sf; });
-      return null; // will be set below
-    });
   }
 
   function startAutonomousMode() {

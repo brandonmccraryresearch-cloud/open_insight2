@@ -95,6 +95,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Timing constants for the real-time feel (milliseconds)
+const MIN_STAGGER_MS = 200;
+const MAX_STAGGER_MS = 600;
+const PHASE_PAUSE_MS = 300;
+const ACTION_PAUSE_MS = 200;
+const FINDING_PAUSE_MS = 150;
+
 export async function GET() {
   const encoder = new TextEncoder();
   const agents = getAgents();
@@ -116,7 +123,7 @@ export async function GET() {
 
       // ─── Phase 0: Session start ───
       send({ type: "session_start", agentId: "system", agentName: "System", detail: "Autonomous agent session starting — all agents initializing…" });
-      await sleep(300);
+      await sleep(PHASE_PAUSE_MS);
 
       // ─── Phase 1: Each agent starts with a random characteristic task ───
       const agentOrder = shuffle(agents.filter((a) => AGENT_OPENING_TASKS[a.id]));
@@ -133,8 +140,7 @@ export async function GET() {
           status: "success",
           detail: task.detail,
         });
-        // Stagger actions to create real-time feel (200-600ms between agents)
-        await sleep(200 + Math.random() * 400);
+        await sleep(MIN_STAGGER_MS + Math.random() * (MAX_STAGGER_MS - MIN_STAGGER_MS));
       }
 
       // ─── Phase 2: Tool availability checks ───
