@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Invalid format. Must be one of: ${validFormats.join(", ")}` }, { status: 400 });
   }
 
+  if (typeof rounds !== "number" || !Number.isInteger(rounds)) {
+    return NextResponse.json({ error: "rounds must be an integer" }, { status: 400 });
+  }
   if (rounds < 1 || rounds > 20) {
     return NextResponse.json({ error: "rounds must be between 1 and 20" }, { status: 400 });
   }
@@ -71,21 +74,25 @@ export async function POST(request: NextRequest) {
   const debateId = `debate-${randomUUID()}`;
   const debateSummary = summary || `A ${format} debate between ${agent1.name} and ${agent2.name} on ${title}.`;
 
-  db.insert(schema.debates).values({
-    id: debateId,
-    title: title.trim(),
-    domain,
-    status: "live",
-    format,
-    participants: JSON.stringify([agent1Id, agent2Id]),
-    startTime: "just now",
-    rounds,
-    currentRound: 0,
-    spectators: 0,
-    summary: debateSummary,
-    verdict: null,
-    tags: JSON.stringify(tags),
-  }).run();
+  try {
+    db.insert(schema.debates).values({
+      id: debateId,
+      title: title.trim(),
+      domain,
+      status: "live",
+      format,
+      participants: JSON.stringify([agent1Id, agent2Id]),
+      startTime: "just now",
+      rounds,
+      currentRound: 0,
+      spectators: 0,
+      summary: debateSummary,
+      verdict: null,
+      tags: JSON.stringify(tags),
+    }).run();
+  } catch {
+    return NextResponse.json({ error: "Failed to create debate." }, { status: 500 });
+  }
 
   return NextResponse.json({
     id: debateId,

@@ -84,9 +84,12 @@ export default function CreateDebateDialog({
       <div
         className="glass-card w-full max-w-lg p-6 space-y-5"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-debate-dialog-title"
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">New Debate</h2>
+          <h2 id="create-debate-dialog-title" className="text-lg font-bold">New Debate</h2>
           <button onClick={onClose} aria-label="Close dialog" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

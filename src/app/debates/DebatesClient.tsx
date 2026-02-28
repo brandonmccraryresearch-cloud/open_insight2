@@ -52,7 +52,8 @@ export default function DebatesClient({
   const [localDebates, setLocalDebates] = useState<DebateListItem[]>([]);
   const router = useRouter();
 
-  const debates = [...localDebates.filter((ld) => !initialDebates.some((d) => d.id === ld.id)), ...initialDebates];
+  const initialDebateIds = new Set(initialDebates.map((d) => d.id));
+  const debates = [...localDebates.filter((ld) => !initialDebateIds.has(ld.id)), ...initialDebates];
   const agentMap = new Map(agents.map((a) => [a.id, a]));
   const filtered = statusFilter === "all" ? debates : debates.filter((d) => d.status === statusFilter);
 

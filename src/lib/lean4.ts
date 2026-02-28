@@ -48,17 +48,17 @@ async function resolveLeanBinary(): Promise<string> {
     return elanPath;
   }
 
-  // 3. System PATH
-  cachedLeanBin = "lean";
+  // 3. System PATH — don't cache until proven runnable
   return "lean";
 }
 
 function runLean(
   filePath: string,
   leanBin: string,
+  workDir: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve) => {
-    execFile(leanBin, [filePath], { timeout: 30000 }, (error, stdout, stderr) => {
+    execFile(leanBin, [filePath], { timeout: 30000, cwd: workDir }, (error, stdout, stderr) => {
       let exitCode = 0;
       if (error) {
         const errWithStatus = error as NodeJS.ErrnoException & { status?: number; code?: number | string };
@@ -79,6 +79,10 @@ export async function checkLeanAvailable(): Promise<boolean> {
   const leanBin = await resolveLeanBinary();
   return new Promise((resolve) => {
     execFile(leanBin, ["--version"], { timeout: 5000 }, (error) => {
+      if (!error && !cachedLeanBin) {
+        // Cache the bare "lean" path only after confirming it works
+        cachedLeanBin = leanBin;
+      }
       resolve(!error);
     });
   });
@@ -104,7 +108,7 @@ export async function runLean4Check(code: string): Promise<Lean4Result> {
       await mkdir(workDir, { recursive: true });
       await writeFile(filePath, code, "utf-8");
 
-      const result = await runLean(filePath, leanBin);
+      const result = await runLean(filePath, leanBin, workDir);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
       const warnings: string[] = [];
