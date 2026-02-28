@@ -42,7 +42,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // HLRE post-processing: extract ```lean blocks and run through the
         // internal lean4_prover, injecting results before [DONE].
         if (accumulatedText) {
-          const lean4Blocks = [...accumulatedText.value.matchAll(/```lean([\s\S]*?)```/g)];
+          // Match fenced Lean blocks that start at the beginning of a line:
+          // ```lean
+          // <code>
+          // ```
+          const lean4Blocks = [
+            ...accumulatedText.value.matchAll(/^```lean[^\n]*\n([\s\S]*?)^```/gm),
+          ];
           for (const match of lean4Blocks) {
             const code = match[1].trim();
             if (!code) continue;
