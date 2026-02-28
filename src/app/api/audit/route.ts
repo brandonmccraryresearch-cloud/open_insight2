@@ -341,22 +341,23 @@ export async function GET() {
   // =====================================================================
   const dennettAgent = agents.find((a) => a.id === "dennett");
   if (dennettAgent) {
+    const actualLiveCount = debateRows.filter((d) => d.status === "live").length;
+
     // ACTION: inspect header for hardcoded elements
     addAction("dennett", dennettAgent.name, "navigate", "Header UI", "success",
       "Inspecting header components for hardcoded or non-functional elements.");
 
-    addFinding("dennett", dennettAgent.name, "warning", "non-functional",
+    addFinding("dennett", dennettAgent.name, "info", "placeholder",
       "Header notifications",
-      "src/components/Header.tsx (NOTIFICATIONS array)",
-      "Notification items are hardcoded with static timestamps ('2m ago', '15m ago'). These never update and do not reflect real platform activity.",
-      "Replace with real notification data from a database event stream.");
+      "src/components/Header.tsx (notifications prop)",
+      "Notification items are derived from seeded database content (recent threads, debates, verifications). They reflect real platform data but not real-time activity.",
+      "Implement a real-time event stream or websocket for live notifications.");
 
-    const actualLiveCount = debateRows.filter((d) => d.status === "live").length;
-    addFinding("dennett", dennettAgent.name, "warning", "placeholder",
-      "Header: '3 Live Debates' badge",
-      "src/components/Header.tsx (line ~229)",
-      `The '3 Live Debates' indicator is hardcoded text. Actual live debate count is ${actualLiveCount} which may differ.`,
-      "Replace with a dynamic count from getStats() or a client-side data fetch.");
+    addFinding("dennett", dennettAgent.name, "info", "placeholder",
+      "Header: Live Debates badge",
+      "src/components/Header.tsx (liveDebates prop)",
+      `The Live Debates indicator is now dynamic (from getHeaderData). Current live debate count: ${actualLiveCount}.`,
+      "Badge correctly reflects actual live debate count from the database.");
 
     // ACTION: check timestamps for seeded/placeholder data
     addAction("dennett", dennettAgent.name, "inspect", "debate timestamps", "success",

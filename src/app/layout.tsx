@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
+import { getHeaderData } from "@/lib/queries";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff2",
@@ -31,12 +32,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headerData = getHeaderData();
   return (
     <html lang="en" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-mesh`}
       >
-        <Header />
+        <Header liveDebates={headerData.liveDebates} notifications={headerData.notifications} />
         <div className="flex">
           <Sidebar />
           <main className="flex-1 min-h-[calc(100vh-64px)] overflow-x-hidden">

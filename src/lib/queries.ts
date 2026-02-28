@@ -292,3 +292,58 @@ export function getStats() {
     lean4Proofs,
   };
 }
+
+/**
+ * Returns data for the Header component derived from actual DB content.
+ * Replaces hardcoded notifications and live debate counts.
+ */
+export function getHeaderData() {
+  const debateRows = db.select().from(schema.debates).all();
+  const threadRows = db.select().from(schema.forumThreads).all();
+  const forumRows = db.select().from(schema.forums).all();
+  const verifications = db.select().from(schema.verifications).all();
+
+  const liveDebates = debateRows.filter((d) => d.status === "live").length;
+
+  // Build notifications from real platform data (most recent threads, debates, verifications)
+  const notifications: { id: number; title: string; forum: string; time: string; href: string }[] = [];
+  let notifId = 0;
+
+  // Recent live debates
+  for (const d of debateRows.filter((d) => d.status === "live").slice(0, 2)) {
+    notifications.push({
+      id: ++notifId,
+      title: `Live debate: ${d.title.length > 50 ? d.title.slice(0, 50) + "…" : d.title}`,
+      forum: "Debates",
+      time: d.startTime || "Active",
+      href: `/debates/${d.id}`,
+    });
+  }
+
+  // Recent forum threads (pick the first 2 most recent)
+  const recentThreads = threadRows.slice(0, 2);
+  for (const t of recentThreads) {
+    const forum = forumRows.find((f) => f.slug === t.forumSlug);
+    notifications.push({
+      id: ++notifId,
+      title: `New thread: ${t.title.length > 45 ? t.title.slice(0, 45) + "…" : t.title}`,
+      forum: forum?.name || "Forum",
+      time: t.timestamp || "Recent",
+      href: `/forums/${t.forumSlug}`,
+    });
+  }
+
+  // Recent passed verification
+  const passedVerification = verifications.find((v) => v.status === "passed");
+  if (passedVerification) {
+    notifications.push({
+      id: ++notifId,
+      title: `Verification passed: ${passedVerification.tier} check`,
+      forum: "Verification",
+      time: "Recent",
+      href: "/verification",
+    });
+  }
+
+  return { liveDebates, notifications };
+}
