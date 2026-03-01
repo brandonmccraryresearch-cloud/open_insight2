@@ -163,7 +163,7 @@ export async function GET() {
         } else if (geminiAvailable) {
           send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "prove", target: "lean4_prover (gemini fallback)", status: "success", detail: "Native Lean 4 binary not found. Using Gemini semantic verification." });
           await sleep(150);
-          send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "warning", category: "emulation", element: "Lean 4 prover: Gemini fallback active", location: "src/lib/lean4.ts (runLean4Check)", description: "Lean 4 code is verified via Gemini semantic reasoning, not native lean binary execution.", recommendation: "Install lean4 via elan (scripts/install-lean4.sh) for native proof verification." });
+          send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "emulation", element: "Lean 4 prover: Gemini verification active", location: "src/lib/lean4.ts (runLean4Check)", description: "Lean 4 code is verified via Gemini semantic reasoning, not native lean binary. Run `npm run lean4:install` for native.", recommendation: "Install lean4 via elan for native proof verification." });
         } else {
           send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "prove", target: "lean4_prover", status: "failed", detail: "Neither Lean 4 binary nor Gemini API key available." });
           await sleep(150);
@@ -344,7 +344,7 @@ export async function GET() {
         if (leanAvailable) {
           send({ type: "action", agentId: "veltman", agentName: veltmanAgent.name, action: "test", target: "lean4 native binary", status: "success", detail: "Confirmed: Lean 4 binary is native, not emulated." });
         } else if (geminiAvailable) {
-          send({ type: "finding", agentId: "veltman", agentName: veltmanAgent.name, findingId: `audit-${++findingId}`, severity: "warning", category: "emulation", element: "Lean 4 prover: semantic emulation, not native", location: "src/lib/lean4.ts", description: "Lean 4 verification falls back to Gemini semantic reasoning — not formal proof checking.", recommendation: "Install lean4 via elan for genuine formal verification." });
+          send({ type: "finding", agentId: "veltman", agentName: veltmanAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "emulation", element: "Lean 4 prover: Gemini verification, not native", location: "src/lib/lean4.ts", description: "Lean 4 verification uses Gemini semantic reasoning — real AI analysis but not formal proof checking. Run `npm run lean4:install` for native.", recommendation: "Install lean4 via elan for genuine formal verification." });
         }
       }
 

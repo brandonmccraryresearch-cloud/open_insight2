@@ -48,7 +48,14 @@ async function resolveLeanBinary(): Promise<string> {
     return elanPath;
   }
 
-  // 3. System PATH — don't cache until proven runnable
+  // 3. Project-local lean4 binary (installed during build)
+  const projectLocal = join(process.cwd(), ".lean4", "bin", "lean");
+  if (await fileExists(projectLocal)) {
+    cachedLeanBin = projectLocal;
+    return projectLocal;
+  }
+
+  // 4. System PATH — don't cache until proven runnable
   return "lean";
 }
 

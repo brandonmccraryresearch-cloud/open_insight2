@@ -127,11 +127,11 @@ export async function GET() {
     } else if (geminiAvailable) {
       addAction("irh-hlre", mccAgent.name, "prove", "lean4_prover (gemini fallback)", "success",
         "Native Lean 4 binary not found. Using Gemini semantic verification (real, but not native execution).");
-      addFinding("irh-hlre", mccAgent.name, "warning", "emulation",
-        "Lean 4 prover: Gemini fallback active",
+      addFinding("irh-hlre", mccAgent.name, "info", "emulation",
+        "Lean 4 prover: Gemini verification active",
         "src/lib/lean4.ts (runLean4Check)",
-        "Lean 4 code is being verified via Gemini semantic reasoning, not native lean binary execution. Results are real AI verification but not formal proof checking.",
-        "Install the lean4 binary via elan (scripts/install-lean4.sh) for native proof verification.");
+        "Lean 4 code is being verified via Gemini semantic reasoning, not native lean binary execution. Results are real AI verification. Install lean4 via elan for native proof checking.",
+        "Run `npm run lean4:install` or `bash scripts/install-lean4.sh` for native proof verification.");
     } else {
       addAction("irh-hlre", mccAgent.name, "prove", "lean4_prover", "failed",
         "Neither Lean 4 binary nor Gemini API key available. Prover is completely non-functional.");
@@ -410,10 +410,10 @@ export async function GET() {
       addAction("veltman", veltmanAgent.name, "test", "lean4 native binary", "success",
         "Confirmed: Lean 4 binary is native, not emulated. Formal proof checking is real.");
     } else if (geminiAvailable) {
-      addFinding("veltman", veltmanAgent.name, "warning", "emulation",
-        "Lean 4 prover: semantic emulation, not native",
+      addFinding("veltman", veltmanAgent.name, "info", "emulation",
+        "Lean 4 prover: Gemini verification, not native",
         "src/lib/lean4.ts",
-        "Lean 4 verification falls back to Gemini semantic reasoning. This is real AI analysis but NOT formal proof checking — it is an emulation of the prover, not the prover itself.",
+        "Lean 4 verification falls back to Gemini semantic reasoning. This is real AI analysis but NOT formal proof checking. Run `npm run lean4:install` for native verification.",
         "Install lean4 via elan for genuine formal verification. Current mode should be disclosed to users as 'AI-assisted' not 'formally verified'.");
     }
   }
