@@ -178,11 +178,12 @@ function buildProbes(): EndpointProbe[] {
         return { detail: `${forums.length} forums accessible.` };
       },
     },
-    { agentId: "bishop", agentName: "Dr. Bishop", action: "verify", target: "verification submission", method: "POST", path: "/api/verifications",
-      body: { claim: "[Audit] IVT proof check", tier: "Tier 3", tool: "Lean 4 (formal)", agentId: "bishop" },
+    { agentId: "bishop", agentName: "Dr. Bishop", action: "verify", target: "verification endpoint", method: "GET", path: "/api/verifications",
       interpret: (r) => {
-        if (!r.ok) return { detail: `Verification submission failed (HTTP ${r.status}).`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Verification submission", location: "POST /api/verifications", description: `POST returned ${r.status}.`, recommendation: "Check database write permissions." }] };
-        return { detail: `Verification queued (HTTP ${r.status}).` };
+        if (!r.ok) return { detail: `Verification endpoint failed (HTTP ${r.status}).`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Verification submission", location: "GET /api/verifications", description: `GET returned ${r.status}.`, recommendation: "Check database read permissions and verification service availability." }] };
+        const d = r.data as Record<string, unknown>;
+        const vs = (d.verifications as Array<unknown>) ?? [];
+        return { detail: `${vs.length} verifications accessible (HTTP ${r.status}).` };
       },
     },
     // Haag — verification pipeline

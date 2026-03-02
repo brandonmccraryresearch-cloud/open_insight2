@@ -89,6 +89,8 @@ interface AgentTask {
   method: string;
   path: string;
   body?: unknown;
+  /** When true, this probe performs write operations. Skipped unless AUDIT_WRITE_PROBES=true. */
+  writeProbeOnly?: boolean;
   interpret: (r: ProbeResult) => { detail: string; findings?: Array<Omit<StreamEvent, "type" | "agentId" | "agentName">> };
 }
 
@@ -215,6 +217,7 @@ const bishopTasks: AgentTask[] = [
       const thread = d.thread as Record<string, unknown>;
       return { detail: `Thread created successfully: "${thread.title}" (id: ${thread.id}). Forum writes are functional.` };
     },
+    writeProbeOnly: true,
   },
   {
     action: "verify", target: "verification submission", method: "POST", path: "/api/verifications",
@@ -223,6 +226,7 @@ const bishopTasks: AgentTask[] = [
       if (!r.ok) return { detail: `Verification submission failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Verification submission", location: "POST /api/verifications", description: `POST returned ${r.status}. Cannot submit verifications.`, recommendation: "Check database write permissions." }] };
       return { detail: `Verification queued successfully (HTTP ${r.status}). Pipeline accepts new claims.` };
     },
+    writeProbeOnly: true,
   },
 ];
 
@@ -359,6 +363,7 @@ const veltmanTasks: AgentTask[] = [
       const d = r.data as Record<string, unknown>;
       return { detail: `Debate "${d.title}" created (id: ${d.id}). Creation pipeline works.` };
     },
+    writeProbeOnly: true,
   },
 ];
 
@@ -408,11 +413,27 @@ export async function GET(request: NextRequest) {
       });
 
       const agentOrder = shuffle(AUDIT_AGENTS);
+      const allowWrites = process.env.AUDIT_WRITE_PROBES === "true";
 
       for (const agent of agentOrder) {
+        if (request.signal.aborted) break;
         const shuffledTasks = shuffle(agent.tasks);
 
         for (const task of shuffledTasks) {
+          if (request.signal.aborted) break;
+          if (task.writeProbeOnly && !allowWrites) {
+            send({
+              type: "action",
+              agentId: agent.id,
+              agentName: agent.name,
+              action: task.action,
+              target: task.target,
+              status: "blocked",
+              detail: `Write probe skipped (set AUDIT_WRITE_PROBES=true to enable).`,
+              latency: 0,
+            });
+            continue;
+          }
           const result = await probe(baseUrl, task.method, task.path, task.body);
           const interpreted = task.interpret(result);
 

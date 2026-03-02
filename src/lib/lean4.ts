@@ -21,7 +21,8 @@ export interface Lean4Result {
  * Resolve the lean4 binary path. Checks, in order:
  * 1. LEAN4_PATH environment variable (explicit override)
  * 2. ~/.elan/bin/lean (elan-managed installation)
- * 3. "lean" on system PATH (bare binary)
+ * 3. Project-local .lean4/bin/lean (installed during build)
+ * 4. "lean" on system PATH (bare binary)
  */
 let cachedLeanBin: string | null = null;
 
@@ -102,11 +103,11 @@ export async function checkLeanAvailable(): Promise<boolean> {
  *
  * Throws if neither the native binary nor a Gemini API key is available.
  */
-export async function runLean4Check(code: string): Promise<Lean4Result> {
+export async function runLean4Check(code: string, leanAvailable?: boolean): Promise<Lean4Result> {
   const startTime = Date.now();
-  const leanAvailable = await checkLeanAvailable();
+  const isAvailable = leanAvailable ?? await checkLeanAvailable();
 
-  if (leanAvailable) {
+  if (isAvailable) {
     const leanBin = await resolveLeanBinary();
     const workDir = join(tmpdir(), `lean4-${randomUUID()}`);
     const filePath = join(workDir, "check.lean");

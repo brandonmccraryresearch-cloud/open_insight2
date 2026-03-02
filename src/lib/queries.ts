@@ -332,7 +332,7 @@ export function getHeaderData() {
       title: `New thread: ${t.title.length > 45 ? t.title.slice(0, 45) + "…" : t.title}`,
       forum: forum?.name || "Forum",
       time: t.timestamp || "Recent",
-      href: `/forums/${t.forumSlug}`,
+      href: `/forums/${t.forumSlug}/threads/${t.id}`,
     });
   }
 

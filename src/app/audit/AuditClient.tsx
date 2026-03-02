@@ -17,7 +17,7 @@ interface AuditFinding {
   agentId: string;
   agentName: string;
   severity: "critical" | "warning" | "info";
-  category: "mock-data" | "non-functional" | "placeholder" | "inconsistency" | "error" | "emulation";
+  category: "mock-data" | "non-functional" | "placeholder" | "inconsistency" | "error" | "emulation" | "incomplete";
   element: string;
   location: string;
   description: string;
@@ -121,12 +121,16 @@ export default function AuditClient() {
       if (!res.body) throw new Error("No stream body");
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split("\n")) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // Keep the last (potentially incomplete) line in the buffer
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const payload = line.slice(6).trim();
           if (payload === "[DONE]") break;
