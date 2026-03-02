@@ -26,7 +26,9 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
 
   const partner = agent.polarPartner ? getAgentById(agent.polarPartner) : undefined;
   const polarPairs = getPolarPairs();
-  const pair = polarPairs.find((p) => p.agents.includes(agent.id));
+  const pair = polarPairs.find(
+    (p) => p.agents.includes(agent.id) && (agent.polarPartner == null || p.agents.includes(agent.polarPartner))
+  );
 
   return (
     <div className="page-enter p-6 max-w-5xl mx-auto space-y-6">

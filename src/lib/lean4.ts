@@ -1,0 +1,169 @@
+import { execFile } from "child_process";
+import { writeFile, unlink, mkdir, rm, access } from "fs/promises";
+import { join } from "path";
+import { tmpdir, homedir } from "os";
+import { randomUUID } from "crypto";
+import { verifyLean4WithGemini, hasGeminiKey } from "@/lib/gemini";
+
+export interface Lean4Result {
+  status: "success" | "warning" | "error" | "incomplete";
+  goals: string[];
+  hypotheses: string[];
+  warnings: string[];
+  errors: string[];
+  checkTime: string;
+  executionMode: "native" | "gemini";
+  leanVersion?: string;
+  mathlibVersion?: string;
+}
+
+/**
+ * Resolve the lean4 binary path. Checks, in order:
+ * 1. LEAN4_PATH environment variable (explicit override)
+ * 2. ~/.elan/bin/lean (elan-managed installation)
+ * 3. Project-local .lean4/bin/lean (installed during build)
+ * 4. "lean" on system PATH (bare binary)
+ */
+let cachedLeanBin: string | null = null;
+
+async function fileExists(p: string): Promise<boolean> {
+  try { await access(p); return true; } catch { return false; }
+}
+
+async function resolveLeanBinary(): Promise<string> {
+  if (cachedLeanBin) return cachedLeanBin;
+
+  // 1. Explicit override
+  if (process.env.LEAN4_PATH) {
+    const p = process.env.LEAN4_PATH;
+    if (await fileExists(p)) {
+      cachedLeanBin = p;
+      return p;
+    }
+  }
+
+  // 2. elan-managed installation
+  const elanPath = join(homedir(), ".elan", "bin", "lean");
+  if (await fileExists(elanPath)) {
+    cachedLeanBin = elanPath;
+    return elanPath;
+  }
+
+  // 3. Project-local lean4 binary (installed during build)
+  const projectLocal = join(process.cwd(), ".lean4", "bin", "lean");
+  if (await fileExists(projectLocal)) {
+    cachedLeanBin = projectLocal;
+    return projectLocal;
+  }
+
+  // 4. System PATH — don't cache until proven runnable
+  return "lean";
+}
+
+function runLean(
+  filePath: string,
+  leanBin: string,
+  workDir: string,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    execFile(leanBin, [filePath], { timeout: 30000, cwd: workDir }, (error, stdout, stderr) => {
+      let exitCode = 0;
+      if (error) {
+        const errWithStatus = error as NodeJS.ErrnoException & { status?: number; code?: number | string };
+        if (typeof errWithStatus.code === "number") {
+          exitCode = errWithStatus.code;
+        } else if (typeof errWithStatus.status === "number") {
+          exitCode = errWithStatus.status;
+        } else {
+          exitCode = 1;
+        }
+      }
+      resolve({ stdout: stdout || "", stderr: stderr || "", exitCode });
+    });
+  });
+}
+
+export async function checkLeanAvailable(): Promise<boolean> {
+  const leanBin = await resolveLeanBinary();
+  return new Promise((resolve) => {
+    execFile(leanBin, ["--version"], { timeout: 5000 }, (error) => {
+      if (!error && !cachedLeanBin) {
+        // Cache the bare "lean" path only after confirming it works
+        cachedLeanBin = leanBin;
+      }
+      resolve(!error);
+    });
+  });
+}
+
+/**
+ * Run a Lean 4 check using the native binary when available, otherwise fall
+ * back to Gemini semantic verification. The simulation fallback has been
+ * removed — every path produces real verification output.
+ *
+ * Throws if neither the native binary nor a Gemini API key is available.
+ */
+export async function runLean4Check(code: string, leanAvailable?: boolean): Promise<Lean4Result> {
+  const startTime = Date.now();
+  const isAvailable = leanAvailable ?? await checkLeanAvailable();
+
+  if (isAvailable) {
+    const leanBin = await resolveLeanBinary();
+    const workDir = join(tmpdir(), `lean4-${randomUUID()}`);
+    const filePath = join(workDir, "check.lean");
+
+    try {
+      await mkdir(workDir, { recursive: true });
+      await writeFile(filePath, code, "utf-8");
+
+      const result = await runLean(filePath, leanBin, workDir);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      const warnings: string[] = [];
+      const errors: string[] = [];
+      const goals: string[] = [];
+      const hypotheses: string[] = [];
+
+      const lines = (result.stdout + "\n" + result.stderr).split("\n").filter(Boolean);
+      for (const line of lines) {
+        if (line.includes("warning:")) {
+          warnings.push(line.replace(/^.*warning:\s*/, "").trim());
+        } else if (line.includes("error:")) {
+          errors.push(line.replace(/^.*error:\s*/, "").trim());
+        } else if (line.startsWith("⊢") || line.includes("⊢")) {
+          goals.push(line.trim());
+        }
+      }
+
+      const hMatches = code.matchAll(/\((\w+)\s*:\s*([^)]+)\)/g);
+      for (const m of hMatches) {
+        hypotheses.push(`${m[1]} : ${m[2]}`);
+      }
+
+      const hasSorry = /\bsorry\b/.test(code);
+      const status =
+        errors.length > 0 ? "error" : hasSorry ? "warning" : result.exitCode === 0 ? "success" : "error";
+
+      return { status, goals, hypotheses, warnings, errors, checkTime: `${elapsed}s`, executionMode: "native" };
+    } finally {
+      await unlink(filePath).catch((err) => {
+        console.error("Failed to delete Lean temporary file:", filePath, err);
+      });
+      await rm(workDir, { recursive: true, force: true }).catch((err) => {
+        console.error("Failed to remove Lean temporary directory:", workDir, err);
+      });
+    }
+  }
+
+  // Native binary not available — use Gemini semantic verification (real, not simulated).
+  if (!hasGeminiKey()) {
+    throw new Error(
+      "Lean 4 is unavailable: neither the lean binary nor a GEMINI_API_KEY is configured."
+    );
+  }
+
+  const geminiResult = await verifyLean4WithGemini(code);
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  return { ...geminiResult, checkTime: `${elapsed}s`, executionMode: "gemini" };
+}
+

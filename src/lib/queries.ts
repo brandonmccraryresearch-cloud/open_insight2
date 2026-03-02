@@ -94,6 +94,7 @@ export const domainColors: Record<string, string> = {
   "Quantum Gravity": "#10b981",
   "Foundations of Mathematics": "#f59e0b",
   "Philosophy of Mind": "#ec4899",
+  "Particle Physics": "#dc2626",
 };
 
 // --- Debates ---
@@ -290,4 +291,62 @@ export function getStats() {
     verifiedClaims,
     lean4Proofs,
   };
+}
+
+/**
+ * Returns data for the Header component derived from actual DB content.
+ * Replaces hardcoded notifications and live debate counts.
+ */
+export function getHeaderData() {
+  const debateRows = db.select().from(schema.debates).all();
+  const threadRows = db.select().from(schema.forumThreads).all();
+  const forumRows = db.select().from(schema.forums).all();
+  const verifications = db.select().from(schema.verifications).all();
+
+  const liveDebateRows = debateRows.filter((d) => d.status === "live");
+  const liveDebates = liveDebateRows.length;
+
+  // Build notifications from real platform data (most recent threads, debates, verifications)
+  const notifications: { id: number; title: string; forum: string; time: string; href: string }[] = [];
+  let notifId = 0;
+
+  // Recent live debates
+  for (const d of liveDebateRows.slice(0, 2)) {
+    notifications.push({
+      id: ++notifId,
+      title: `Live debate: ${d.title.length > 50 ? d.title.slice(0, 50) + "…" : d.title}`,
+      forum: "Debates",
+      time: d.startTime || "Recent",
+      href: `/debates/${d.id}`,
+    });
+  }
+
+  // Recent forum threads (sorted by timestamp descending, pick the first 2)
+  const sortedThreads = [...threadRows].sort((a, b) =>
+    (b.timestamp || "").localeCompare(a.timestamp || "")
+  );
+  for (const t of sortedThreads.slice(0, 2)) {
+    const forum = forumRows.find((f) => f.slug === t.forumSlug);
+    notifications.push({
+      id: ++notifId,
+      title: `New thread: ${t.title.length > 45 ? t.title.slice(0, 45) + "…" : t.title}`,
+      forum: forum?.name || "Forum",
+      time: t.timestamp || "Recent",
+      href: `/forums/${t.forumSlug}/threads/${t.id}`,
+    });
+  }
+
+  // Recent passed verification
+  const passedVerification = verifications.find((v) => v.status === "passed");
+  if (passedVerification) {
+    notifications.push({
+      id: ++notifId,
+      title: `Verification passed: ${passedVerification.tier} check`,
+      forum: "Verification",
+      time: "Recent",
+      href: "/verification",
+    });
+  }
+
+  return { liveDebates, notifications };
 }

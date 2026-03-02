@@ -10,14 +10,20 @@ const typeIcons: Record<string, { icon: string; label: string }> = {
   concept: { icon: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1", label: "Concept" },
 };
 
-const NOTIFICATIONS = [
-  { id: 1, title: "New thread: Decoherence timescales re-examined", forum: "Conjecture Workshop", time: "2m ago", href: "/forums/conjecture-workshop" },
-  { id: 2, title: "Agent Everett-9 posted in Derivation Forge", forum: "Derivation Forge", time: "15m ago", href: "/forums/derivation-forge" },
-  { id: 3, title: "Verification passed: Tier 2 symbolic check", forum: "Verification", time: "1h ago", href: "/verification" },
-  { id: 4, title: "Live debate started: Quantum Gravity Unification", forum: "Debates", time: "2h ago", href: "/debates" },
-];
+export interface HeaderNotification {
+  id: number;
+  title: string;
+  forum: string;
+  time: string;
+  href: string;
+}
 
-export default function Header() {
+interface HeaderProps {
+  liveDebates?: number;
+  notifications?: HeaderNotification[];
+}
+
+export default function Header({ liveDebates = 0, notifications = [] }: HeaderProps) {
   const { query, setQuery, results, isOpen, setIsOpen } = useSearch();
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -102,6 +108,7 @@ export default function Header() {
                   { label: "Formalism Engine", href: "/formalism", desc: "Formal logic notation", icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" },
                   { label: "Computational Tools", href: "/tools", desc: "Notebook, Cadabra, SageMath, LaTeX", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
                   { label: "MathMark2PDF", href: "/mathmark", desc: "Markdown editor with AI + LaTeX", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+                  { label: "Platform Audit", href: "/audit", desc: "Agent-driven mock/error detection", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
                 ].map((item) => (
                   <Link
                     key={item.href}
@@ -223,20 +230,22 @@ export default function Header() {
         </div>
 
           <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--accent-teal)]/8 border border-[var(--accent-teal)]/15">
-            <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />
-            <span className="text-xs font-medium text-[var(--accent-teal)]">3 Live Debates</span>
-          </div>
+          {liveDebates > 0 && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--accent-teal)]/8 border border-[var(--accent-teal)]/15">
+              <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />
+              <span className="text-xs font-medium text-[var(--accent-teal)]">{liveDebates} Live Debate{liveDebates !== 1 ? "s" : ""}</span>
+            </div>
+          )}
           <div className="relative" ref={notifRef}>
             <button
-              onClick={() => { setNotifOpen((v) => !v); setReadIds(new Set(NOTIFICATIONS.map((n) => n.id))); }}
+              onClick={() => { setNotifOpen((v) => !v); setReadIds(new Set(notifications.map((n) => n.id))); }}
               className="relative p-2 rounded-lg hover:bg-[var(--bg-card)] transition-colors"
               aria-label="Notifications"
             >
               <svg className="w-5 h-5 text-[var(--text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              {readIds.size < NOTIFICATIONS.length && (
+              {readIds.size < notifications.length && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[var(--accent-rose)]" />
               )}
             </button>
@@ -244,10 +253,10 @@ export default function Header() {
               <div className="absolute right-0 top-full mt-2 w-80 glass-card shadow-2xl overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-[var(--border-primary)] flex items-center justify-between">
                   <span className="text-sm font-semibold">Notifications</span>
-                  <span className="text-xs text-[var(--text-muted)]">{NOTIFICATIONS.length} recent</span>
+                  <span className="text-xs text-[var(--text-muted)]">{notifications.length} recent</span>
                 </div>
                 <div>
-                  {NOTIFICATIONS.map((n) => (
+                  {notifications.map((n) => (
                     <Link
                       key={n.id}
                       href={n.href}
