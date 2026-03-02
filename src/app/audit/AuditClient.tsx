@@ -8,6 +8,8 @@ interface AgentAction {
   target: string;
   status: "success" | "failed" | "blocked";
   detail: string;
+  latency?: number;
+  httpStatus?: number;
 }
 
 interface AuditFinding {
@@ -51,6 +53,7 @@ const categoryLabels: Record<string, string> = {
   inconsistency: "Inconsistency",
   error: "Error",
   emulation: "Emulation",
+  incomplete: "Incomplete",
 };
 
 const PRESET_DURATIONS = [
@@ -136,6 +139,8 @@ export default function AuditClient() {
               target?: string;
               status?: string;
               detail?: string;
+              latency?: number;
+              httpStatus?: number;
               severity?: string;
               category?: string;
               element?: string;
@@ -152,8 +157,10 @@ export default function AuditClient() {
                 target: event.target ?? "",
                 status: (event.status as AgentAction["status"]) ?? "success",
                 detail: event.detail ?? "",
+                latency: event.latency,
+                httpStatus: event.httpStatus,
               }]);
-              addLog(`${event.agentName} → ${event.action ?? event.type}${event.target ? ` on ${event.target}` : ""}`);
+              addLog(`${event.agentName} → ${event.action ?? event.type}${event.target ? ` on ${event.target}` : ""}${event.latency ? ` (${event.latency}ms)` : ""}`);
             } else if (event.type === "finding") {
               setStreamFindings((prev) => [...prev, {
                 id: event.findingId ?? `f-${prev.length}`,
@@ -492,6 +499,8 @@ export default function AuditClient() {
                         <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
                         <span className="text-[var(--text-muted)]">→</span>
                         <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
+                        {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[{a.httpStatus}]</span> : null}
+                        {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
                       </div>
                     );
                   })}
@@ -519,10 +528,10 @@ export default function AuditClient() {
           <svg className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Autonomous Agent Session</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Live Agent Audit</h2>
           <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto mb-6">
-            PhD-level agents operate as their defined personas — reasoning, debating, verifying, and navigating the platform.
-            When they encounter non-functional, mock, emulated, or broken elements, they file error reports automatically.
+            Agents make <strong>real HTTP requests</strong> to every API endpoint — testing forums, debates, lean4 prover,
+            verification pipeline, and more. Findings are derived from actual response codes and data.
           </p>
           <div className="flex gap-3 justify-center">
             <button
@@ -564,6 +573,8 @@ export default function AuditClient() {
                   <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
                   <span className="text-[var(--text-muted)]">→</span>
                   <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
+                  {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
+                  {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
                 </div>
               );
             })}

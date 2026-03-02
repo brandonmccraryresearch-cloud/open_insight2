@@ -1,9 +1,4 @@
-import { NextResponse } from "next/server";
-import { getAgents, getStats, getPolarPairs } from "@/lib/queries";
-import { hasGeminiKey } from "@/lib/gemini";
-import { checkLeanAvailable } from "@/lib/lean4";
-import { db } from "@/db";
-import * as schema from "@/db/schema";
+import { NextRequest, NextResponse } from "next/server";
 
 export interface AgentAction {
   agentId: string;
@@ -12,6 +7,8 @@ export interface AgentAction {
   target: string;
   status: "success" | "failed" | "blocked";
   detail: string;
+  latency?: number;
+  httpStatus?: number;
 }
 
 export interface AuditFinding {
@@ -19,7 +16,7 @@ export interface AuditFinding {
   agentId: string;
   agentName: string;
   severity: "critical" | "warning" | "info";
-  category: "mock-data" | "non-functional" | "placeholder" | "inconsistency" | "error" | "emulation";
+  category: string;
   element: string;
   location: string;
   description: string;
@@ -28,6 +25,7 @@ export interface AuditFinding {
 
 export interface AuditReport {
   timestamp: string;
+  mode: "live";
   actions: AgentAction[];
   findings: AuditFinding[];
   summary: {
@@ -42,390 +40,266 @@ export interface AuditReport {
   agentParticipants: string[];
 }
 
-/**
- * Autonomous agent session. Each PhD-level agent actively attempts to use
- * platform features — reasoning, verification, debates, forums, Lean 4 —
- * operating as their defined personas. When they encounter non-functional,
- * mock, emulated, or broken elements, they file error reports.
- */
-export async function GET() {
-  const agents = getAgents();
-  const stats = getStats();
-  const polarPairs = getPolarPairs();
-  const debateRows = db.select().from(schema.debates).all();
-  const threadRows = db.select().from(schema.forumThreads).all();
-  const forumRows = db.select().from(schema.forums).all();
-  const verifications = db.select().from(schema.verifications).all();
+// ─── Real HTTP probe ─────────────────────────────────────────────────────────
 
-  const findings: AuditFinding[] = [];
+interface ProbeResult {
+  ok: boolean;
+  status: number;
+  latency: number;
+  data?: unknown;
+  error?: string;
+  contentType?: string;
+}
+
+async function probe(
+  baseUrl: string,
+  method: string,
+  path: string,
+  body?: unknown,
+  timeoutMs = 15000,
+): Promise<ProbeResult> {
+  const start = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const headers: Record<string, string> = {};
+    if (body) headers["Content-Type"] = "application/json";
+
+    const res = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const latency = Date.now() - start;
+    const contentType = res.headers.get("content-type") || "";
+
+    if (contentType.includes("text/event-stream")) {
+      try { await res.body?.cancel(); } catch { /* ignore */ }
+      return { ok: res.ok, status: res.status, latency, contentType };
+    }
+
+    let data: unknown;
+    try { data = await res.json(); } catch { data = null; }
+    return { ok: res.ok, status: res.status, data, latency, contentType };
+  } catch (err) {
+    clearTimeout(timer);
+    return {
+      ok: false, status: 0,
+      error: err instanceof Error ? err.message : String(err),
+      latency: Date.now() - start,
+    };
+  }
+}
+
+// ─── Endpoint probes per agent ───────────────────────────────────────────────
+
+interface EndpointProbe {
+  agentId: string;
+  agentName: string;
+  action: string;
+  target: string;
+  method: string;
+  path: string;
+  body?: unknown;
+  interpret: (r: ProbeResult) => { detail: string; findings?: Array<Omit<AuditFinding, "id" | "agentId" | "agentName">> };
+}
+
+function buildProbes(): EndpointProbe[] {
+  return [
+    // McCrary — lean4, reasoning, polar pairs
+    { agentId: "irh-hlre", agentName: "Dr. Brandon McCrary", action: "verify", target: "lean4_prover", method: "POST", path: "/api/tools/lean4", body: { code: "#check @Nat.succ_pos" },
+      interpret: (r) => {
+        if (!r.ok && r.status === 503) return { detail: `Lean 4 unavailable (HTTP 503).`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Lean 4 prover", location: "POST /api/tools/lean4", description: `POST returned ${r.status}. Prover non-functional.`, recommendation: "Install lean4 or set GEMINI_API_KEY." }] };
+        if (!r.ok) return { detail: `Lean 4 failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        return { detail: `Lean 4 ${d.executionMode} check: ${d.status} in ${d.checkTime}.` };
+      },
+    },
+    { agentId: "irh-hlre", agentName: "Dr. Brandon McCrary", action: "inspect", target: "own profile", method: "GET", path: "/api/agents/irh-hlre",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Profile failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const agent = d.agent as Record<string, unknown>;
+        return { detail: `Profile: ${agent.name}. Status: ${agent.status}.` };
+      },
+    },
+    { agentId: "irh-hlre", agentName: "Dr. Brandon McCrary", action: "verify", target: "polar pairs", method: "GET", path: "/api/polar-pairs",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Polar pairs failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const pairs = d.polarPairs as Array<unknown>;
+        return { detail: `${pairs.length} polar pairs loaded.` };
+      },
+    },
+    { agentId: "irh-hlre", agentName: "Dr. Brandon McCrary", action: "reason", target: "reasoning engine", method: "POST", path: "/api/agents/irh-hlre/reason", body: { prompt: "2+2 in Peano?" },
+      interpret: (r) => {
+        if (r.contentType?.includes("text/event-stream")) return { detail: `Reasoning engine SSE live (HTTP ${r.status}).` };
+        if (!r.ok) return { detail: `Reasoning failed (HTTP ${r.status}).`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Agent reasoning engine", location: "POST /api/agents/irh-hlre/reason", description: `POST returned ${r.status}.`, recommendation: "Set GEMINI_API_KEY." }] };
+        return { detail: `Reasoning responded (HTTP ${r.status}).` };
+      },
+    },
+    // Gödel — agents, stats, verifications
+    { agentId: "goedel", agentName: "Dr. Gödel", action: "inspect", target: "agent registry", method: "GET", path: "/api/agents",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Agent registry failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const agents = d.agents as Array<Record<string, unknown>>;
+        return { detail: `${agents.length} agents loaded.` };
+      },
+    },
+    { agentId: "goedel", agentName: "Dr. Gödel", action: "inspect", target: "stats", method: "GET", path: "/api/stats",
+      interpret: (r) => ({ detail: r.ok ? `Stats loaded (${r.latency}ms).` : `Stats failed (HTTP ${r.status}).` }),
+    },
+    { agentId: "goedel", agentName: "Dr. Gödel", action: "inspect", target: "verifications", method: "GET", path: "/api/verifications",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Verifications failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const vs = d.verifications as Array<unknown>;
+        return { detail: `${vs.length} verifications loaded.` };
+      },
+    },
+    { agentId: "goedel", agentName: "Dr. Gödel", action: "inspect", target: "knowledge graph", method: "GET", path: "/api/knowledge/graph",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Knowledge graph failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const nodes = d.nodes as Array<unknown>;
+        return { detail: `Knowledge graph: ${nodes.length} nodes.` };
+      },
+    },
+    // Bishop — forums, thread creation
+    { agentId: "bishop", agentName: "Dr. Bishop", action: "read", target: "forums", method: "GET", path: "/api/forums",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Forums failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const forums = d.forums as Array<unknown>;
+        return { detail: `${forums.length} forums accessible.` };
+      },
+    },
+    { agentId: "bishop", agentName: "Dr. Bishop", action: "verify", target: "verification submission", method: "POST", path: "/api/verifications",
+      body: { claim: "[Audit] IVT proof check", tier: "Tier 3", tool: "Lean 4 (formal)", agentId: "bishop" },
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Verification submission failed (HTTP ${r.status}).`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Verification submission", location: "POST /api/verifications", description: `POST returned ${r.status}.`, recommendation: "Check database write permissions." }] };
+        return { detail: `Verification queued (HTTP ${r.status}).` };
+      },
+    },
+    // Haag — verification pipeline
+    { agentId: "haag", agentName: "Dr. Haag", action: "inspect", target: "passed verifications", method: "GET", path: "/api/verifications?status=passed",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Verification filter failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const vs = d.verifications as Array<unknown>;
+        return { detail: `${vs.length} passed verifications.` };
+      },
+    },
+    { agentId: "haag", agentName: "Dr. Haag", action: "test", target: "streaming evaluator", method: "GET", path: "/api/verifications/v-001/stream",
+      interpret: (r) => {
+        if (r.contentType?.includes("text/event-stream")) return { detail: `Streaming evaluator SSE live (HTTP ${r.status}).` };
+        if (!r.ok) return { detail: `Streaming evaluator unavailable (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Streaming evaluator", location: "GET /api/verifications/[id]/stream", description: `GET returned ${r.status}.`, recommendation: "Set GEMINI_API_KEY." }] };
+        return { detail: `Evaluator responded (HTTP ${r.status}).` };
+      },
+    },
+    // Weinberg — debates
+    { agentId: "weinberg", agentName: "Dr. Weinberg", action: "read", target: "debates", method: "GET", path: "/api/debates",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Debates failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const debates = d.debates as Array<unknown>;
+        return { detail: `${debates.length} debates loaded.` };
+      },
+    },
+    { agentId: "weinberg", agentName: "Dr. Weinberg", action: "read", target: "debate detail", method: "GET", path: "/api/debates/debate-001",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Debate detail failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const debate = d.debate as Record<string, unknown>;
+        return { detail: `Debate "${debate.title}" loaded.` };
+      },
+    },
+    // Dennett — UI endpoints
+    { agentId: "dennett", agentName: "Dr. Dennett", action: "navigate", target: "knowledge graph", method: "GET", path: "/api/knowledge/graph",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Knowledge graph failed (HTTP ${r.status}).` };
+        return { detail: `Knowledge graph API live (${r.latency}ms).` };
+      },
+    },
+    { agentId: "dennett", agentName: "Dr. Dennett", action: "test", target: "notebook", method: "POST", path: "/api/tools/notebook",
+      body: { code: "print('audit')", kernel: "python" },
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Notebook failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        return { detail: `Notebook: ${d.executionMode} mode. Status: ${d.status}.` };
+      },
+    },
+    // Veltman — independent cross-validation
+    { agentId: "veltman", agentName: "Dr. Veltman", action: "verify", target: "lean4 cross-check", method: "POST", path: "/api/tools/lean4",
+      body: { code: "#check @Nat.zero_add" },
+      interpret: (r) => {
+        if (!r.ok && r.status === 503) return { detail: `Lean 4 independently confirmed down (HTTP 503).`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Lean 4 (cross-check)", location: "POST /api/tools/lean4", description: `Independent test: ${r.status}.`, recommendation: "Install lean4 or set GEMINI_API_KEY." }] };
+        if (!r.ok) return { detail: `Lean 4 cross-check failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        return { detail: `Cross-check: Lean 4 ${d.executionMode} mode. Status: ${d.status}.` };
+      },
+    },
+    { agentId: "veltman", agentName: "Dr. Veltman", action: "inspect", target: "own profile", method: "GET", path: "/api/agents/veltman",
+      interpret: (r) => {
+        if (!r.ok) return { detail: `Profile failed (HTTP ${r.status}).` };
+        const d = r.data as Record<string, unknown>;
+        const agent = d.agent as Record<string, unknown>;
+        return { detail: `Profile: ${agent.name}. Status: ${agent.status}.` };
+      },
+    },
+  ];
+}
+
+/**
+ * Live audit: each agent makes REAL HTTP requests to platform API endpoints
+ * and reports actual results — no hardcoded findings.
+ */
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
+
   const actions: AgentAction[] = [];
+  const findings: AuditFinding[] = [];
   let findingId = 0;
 
-  function addAction(
-    agentId: string,
-    agentName: string,
-    action: string,
-    target: string,
-    status: AgentAction["status"],
-    detail: string,
-  ) {
-    actions.push({ agentId, agentName, action, target, status, detail });
-  }
+  const probes = buildProbes();
 
-  function addFinding(
-    agentId: string,
-    agentName: string,
-    severity: AuditFinding["severity"],
-    category: AuditFinding["category"],
-    element: string,
-    location: string,
-    description: string,
-    recommendation: string,
-  ) {
-    findings.push({
-      id: `audit-${++findingId}`,
-      agentId,
-      agentName,
-      severity,
-      category,
-      element,
-      location,
-      description,
-      recommendation,
+  for (const p of probes) {
+    const result = await probe(baseUrl, p.method, p.path, p.body);
+    const interpreted = p.interpret(result);
+
+    actions.push({
+      agentId: p.agentId,
+      agentName: p.agentName,
+      action: p.action,
+      target: p.target,
+      status: result.ok ? "success" : (result.status === 0 ? "blocked" : "failed"),
+      detail: interpreted.detail,
+      latency: result.latency,
+      httpStatus: result.status,
     });
-  }
 
-  // ─── Check real tool availability (shared across agents) ───
-  const geminiAvailable = hasGeminiKey();
-  const leanAvailable = await checkLeanAvailable();
-
-  // =====================================================================
-  // Agent: Dr. McCrary (IRH-HLRE) — Frontier Physics
-  // Active role: attempts reasoning with codeExecution + lean4_prover,
-  //              checks polar pair integrity, inspects debate data.
-  // =====================================================================
-  const mccAgent = agents.find((a) => a.id === "irh-hlre");
-  if (mccAgent) {
-    // ACTION: attempt to use the reasoning engine
-    if (geminiAvailable) {
-      addAction("irh-hlre", mccAgent.name, "reason", "/api/agents/irh-hlre/reason", "success",
-        "Gemini API key present. HLRE reasoning engine (codeExecution + lean4_prover) is available.");
-    } else {
-      addAction("irh-hlre", mccAgent.name, "reason", "/api/agents/irh-hlre/reason", "blocked",
-        "GEMINI_API_KEY not configured. Cannot invoke reasoning engine.");
-      addFinding("irh-hlre", mccAgent.name, "critical", "non-functional",
-        "Agent reasoning engine",
-        "src/lib/gemini.ts (getGenAI)",
-        "GEMINI_API_KEY is not set. All agent reasoning calls (streaming, verification, HLRE) will throw. The reasoning panels are non-functional without this key.",
-        "Set GEMINI_API_KEY in .env.local or Vercel environment variables.");
-    }
-
-    // ACTION: attempt to use the Lean 4 prover
-    if (leanAvailable) {
-      addAction("irh-hlre", mccAgent.name, "prove", "lean4_prover (native)", "success",
-        "Native Lean 4 binary resolved and responds to --version.");
-    } else if (geminiAvailable) {
-      addAction("irh-hlre", mccAgent.name, "prove", "lean4_prover (gemini fallback)", "success",
-        "Native Lean 4 binary not found. Using Gemini semantic verification (real, but not native execution).");
-      addFinding("irh-hlre", mccAgent.name, "info", "emulation",
-        "Lean 4 prover: Gemini verification active",
-        "src/lib/lean4.ts (runLean4Check)",
-        "Lean 4 code is being verified via Gemini semantic reasoning, not native lean binary execution. Results are real AI verification. Install lean4 via elan for native proof checking.",
-        "Run `npm run lean4:install` or `bash scripts/install-lean4.sh` for native proof verification.");
-    } else {
-      addAction("irh-hlre", mccAgent.name, "prove", "lean4_prover", "failed",
-        "Neither Lean 4 binary nor Gemini API key available. Prover is completely non-functional.");
-      addFinding("irh-hlre", mccAgent.name, "critical", "non-functional",
-        "Lean 4 prover: fully unavailable",
-        "src/lib/lean4.ts",
-        "Neither the native lean binary nor GEMINI_API_KEY is configured. runLean4Check() will throw. All Lean 4 verification features are non-functional.",
-        "Install lean4 via elan or set GEMINI_API_KEY for semantic fallback.");
-    }
-
-    // ACTION: check polar pair integrity
-    addAction("irh-hlre", mccAgent.name, "verify", "polar pair graph", "success",
-      "Inspecting bidirectional polar partner references across all agents.");
-    for (const agent of agents) {
-      if (agent.polarPartner) {
-        const partner = agents.find((a) => a.id === agent.polarPartner);
-        if (!partner) {
-          addFinding("irh-hlre", mccAgent.name, "critical", "error",
-            `Agent: ${agent.name}`,
-            `src/data/agents.ts (agent: ${agent.id})`,
-            `Agent "${agent.name}" references polar partner "${agent.polarPartner}" which does not exist.`,
-            "Create the missing partner agent or update the polarPartner field.");
-        } else if (partner.polarPartner !== agent.id) {
-          addFinding("irh-hlre", mccAgent.name, "critical", "inconsistency",
-            `Polar pair: ${agent.name} ↔ ${partner.name}`,
-            "src/data/agents.ts",
-            `Polar partnership is not bidirectional: ${agent.name}.polarPartner = "${agent.polarPartner}" but ${partner.name}.polarPartner = "${partner.polarPartner}".`,
-            "Ensure both agents in a polar pair reference each other.");
-        }
-      }
-    }
-
-    // ACTION: check debate participants are real agents
-    addAction("irh-hlre", mccAgent.name, "verify", "debate participant integrity", "success",
-      "Cross-referencing debate participant IDs against registered agents.");
-    for (const debate of debateRows) {
-      const participants: string[] = JSON.parse(debate.participants);
-      for (const pid of participants) {
-        if (!agents.find((a) => a.id === pid)) {
-          addFinding("irh-hlre", mccAgent.name, "critical", "error",
-            `Debate: ${debate.title}`,
-            `src/data/debates.ts (debate: ${debate.id})`,
-            `Debate "${debate.title}" references participant "${pid}" which is not a valid agent.`,
-            "Fix the participant ID or create the missing agent.");
-        }
+    if (interpreted.findings) {
+      for (const f of interpreted.findings) {
+        findings.push({
+          id: `audit-${++findingId}`,
+          agentId: p.agentId,
+          agentName: p.agentName,
+          ...f,
+        });
       }
     }
   }
 
-  // =====================================================================
-  // Agent: Dr. Gödel (Foundations of Mathematics)
-  // Active role: inspects all agent profiles for completeness, attempts
-  //              to read verification data, checks metric consistency.
-  // =====================================================================
-  const goedelAgent = agents.find((a) => a.id === "goedel");
-  if (goedelAgent) {
-    // ACTION: review each agent profile for completeness
-    addAction("goedel", goedelAgent.name, "inspect", "agent profiles", "success",
-      `Reviewing ${agents.length} agent profiles for metric completeness.`);
-    for (const agent of agents) {
-      if (
-        agent.postCount === 0 &&
-        agent.debateWins === 0 &&
-        agent.verificationsSubmitted === 0 &&
-        agent.reputationScore === 0
-      ) {
-        addFinding("goedel", goedelAgent.name, "warning", "mock-data",
-          `Agent: ${agent.name}`,
-          `src/data/agents.ts (agent: ${agent.id})`,
-          `Agent "${agent.name}" has all metrics at 0 (postCount, debateWins, verificationsSubmitted, verifiedClaims, reputationScore). This agent has no recorded activity on the platform.`,
-          "Agent should participate in debates, post threads, and submit verifications to generate real metrics.");
-      }
-    }
-
-    // ACTION: read debates and check for zero-engagement placeholder data
-    addAction("goedel", goedelAgent.name, "inspect", "debate spectator data", "success",
-      `Reviewing ${debateRows.length} debates for engagement metrics.`);
-    for (const debate of debateRows) {
-      if (debate.spectators === 0) {
-        addFinding("goedel", goedelAgent.name, "info", "mock-data",
-          `Debate: ${debate.title}`,
-          `src/data/debates.ts (debate: ${debate.id})`,
-          `Debate "${debate.title}" has 0 spectators. On a live platform, active debates accumulate spectators.`,
-          "Implement real spectator tracking or set initial values from seeding.");
-      }
-    }
-  }
-
-  // =====================================================================
-  // Agent: Dr. Bishop (Constructive Mathematics)
-  // Active role: reads forum threads, attempts to validate engagement
-  //              metrics are constructively verifiable (views, upvotes, replies).
-  // =====================================================================
-  const bishopAgent = agents.find((a) => a.id === "bishop");
-  if (bishopAgent) {
-    // ACTION: read all forum threads and check view counts
-    addAction("bishop", bishopAgent.name, "read", "forum threads", "success",
-      `Reading ${threadRows.length} forum threads across ${forumRows.length} forums.`);
-    for (const thread of threadRows) {
-      if (thread.views === 0) {
-        addFinding("bishop", bishopAgent.name, "info", "mock-data",
-          `Thread: ${thread.title}`,
-          `src/data/forums.ts (thread: ${thread.id})`,
-          `Thread "${thread.title}" has 0 views. A published thread would have at least 1 view (the author's).`,
-          "Implement view tracking or set initial view count to 1 on creation.");
-      }
-    }
-
-    // ACTION: check reply/upvote consistency
-    addAction("bishop", bishopAgent.name, "verify", "thread engagement consistency", "success",
-      "Cross-checking upvotes vs reply counts for constructive consistency.");
-    for (const thread of threadRows) {
-      if (thread.replyCount === 0 && thread.upvotes > 0) {
-        addFinding("bishop", bishopAgent.name, "warning", "inconsistency",
-          `Thread: ${thread.title}`,
-          `src/data/forums.ts (thread: ${thread.id})`,
-          `Thread "${thread.title}" has ${thread.upvotes} upvotes but 0 replies. Engagement typically produces both.`,
-          "Verify upvote and reply counts are consistent.");
-      }
-    }
-
-    // ACTION: attempt to submit a verification
-    addAction("bishop", bishopAgent.name, "verify", "/api/verifications (POST)", "success",
-      "Verification submission endpoint exists and accepts claims.");
-  }
-
-  // =====================================================================
-  // Agent: Dr. Haag (AQFT — Algebraic QFT)
-  // Active role: inspects verification entries for rigor, checks that
-  //              the verification pipeline produces real confidence scores.
-  // =====================================================================
-  const haagAgent = agents.find((a) => a.id === "haag");
-  if (haagAgent) {
-    // ACTION: review all verification entries
-    addAction("haag", haagAgent.name, "inspect", "verification records", "success",
-      `Reviewing ${verifications.length} verification entries for completeness.`);
-    for (const v of verifications) {
-      if (!v.confidence && v.confidence !== 0 && v.status !== "running" && v.status !== "queued") {
-        addFinding("haag", haagAgent.name, "warning", "placeholder",
-          `Verification: ${v.claim.slice(0, 60)}...`,
-          `src/data/verifications.ts (verification: ${v.id})`,
-          `Verification "${v.id}" has no confidence score. Formal verification must produce a quantitative confidence value.`,
-          "Add a confidence score (0–100) to this verification entry.");
-      }
-    }
-
-    // ACTION: check for stale "pending" verifications
-    const pendingVerifications = verifications.filter((v) => v.status === "pending");
-    if (pendingVerifications.length > 0) {
-      addAction("haag", haagAgent.name, "verify", "pending verifications", "blocked",
-        `Found ${pendingVerifications.length} verifications stuck in "pending" with no resolution mechanism.`);
-      addFinding("haag", haagAgent.name, "warning", "non-functional",
-        `${pendingVerifications.length} pending verifications`,
-        "src/data/verifications.ts",
-        `${pendingVerifications.length} verifications are in "pending" status with no mechanism to resolve them. The verification pipeline does not automatically process queued items.`,
-        "Implement a verification resolution pipeline or connect to the Gemini streaming evaluator.");
-    }
-
-    // ACTION: attempt to use the verification streaming evaluator
-    if (geminiAvailable) {
-      addAction("haag", haagAgent.name, "verify", "/api/verifications/[id]/stream", "success",
-        "Gemini-powered streaming verification evaluator is available (real AI evaluation, not emulated).");
-    } else {
-      addAction("haag", haagAgent.name, "verify", "/api/verifications/[id]/stream", "blocked",
-        "GEMINI_API_KEY not set — streaming verification evaluator is non-functional.");
-      addFinding("haag", haagAgent.name, "critical", "non-functional",
-        "Streaming verification evaluator",
-        "src/app/api/verifications/[id]/stream/route.ts",
-        "The streaming verification evaluator requires GEMINI_API_KEY. Without it, verification requests cannot be processed and will throw.",
-        "Set GEMINI_API_KEY to enable real AI-powered verification.");
-    }
-  }
-
-  // =====================================================================
-  // Agent: Dr. Weinberg (QFT — Standard Model)
-  // Active role: inspects debate content for substance, checks that the
-  //              debate engine produces real rounds (not empty placeholders).
-  // =====================================================================
-  const weinbergAgent = agents.find((a) => a.id === "weinberg");
-  if (weinbergAgent) {
-    // ACTION: read debate messages
-    const debateMessages = db.select().from(schema.debateMessages).all();
-    addAction("weinberg", weinbergAgent.name, "read", "debate messages", "success",
-      `Reading ${debateMessages.length} debate messages across ${debateRows.length} debates.`);
-
-    // Check for debates with rounds but 0 messages
-    for (const debate of debateRows) {
-      const msgs = debateMessages.filter((m) => m.debateId === debate.id);
-      if (debate.rounds > 0 && msgs.length === 0 && debate.status !== "scheduled") {
-        addFinding("weinberg", weinbergAgent.name, "warning", "placeholder",
-          `Debate: ${debate.title}`,
-          `src/data/debates.ts (debate: ${debate.id})`,
-          `Debate "${debate.title}" has ${debate.rounds} rounds configured but 0 messages. An active debate should have agent contributions.`,
-          "Generate debate messages from agent reasoning or mark the debate as scheduled.");
-      }
-    }
-
-    // ACTION: check that debate message API can accept new messages
-    addAction("weinberg", weinbergAgent.name, "post", "/api/debates/[id]/message", "success",
-      "Debate message POST endpoint exists and accepts agent contributions.");
-  }
-
-  // =====================================================================
-  // Agent: Dr. Dennett (Philosophy of Mind)
-  // Active role: navigates UI elements, checks for hardcoded/non-functional
-  //              elements, static timestamps, emulated real-time features.
-  // =====================================================================
-  const dennettAgent = agents.find((a) => a.id === "dennett");
-  if (dennettAgent) {
-    const actualLiveCount = debateRows.filter((d) => d.status === "live").length;
-
-    // ACTION: inspect header for hardcoded elements
-    addAction("dennett", dennettAgent.name, "navigate", "Header UI", "success",
-      "Inspecting header components for hardcoded or non-functional elements.");
-
-    addFinding("dennett", dennettAgent.name, "info", "placeholder",
-      "Header notifications",
-      "src/components/Header.tsx (notifications prop)",
-      "Notification items are derived from seeded database content (recent threads, debates, verifications). They reflect real platform data but not real-time activity.",
-      "Implement a real-time event stream or websocket for live notifications.");
-
-    addFinding("dennett", dennettAgent.name, "info", "placeholder",
-      "Header: Live Debates badge",
-      "src/components/Header.tsx (liveDebates prop)",
-      `The Live Debates indicator is now dynamic (from getHeaderData). Current live debate count: ${actualLiveCount}.`,
-      "Badge correctly reflects actual live debate count from the database.");
-
-    // ACTION: check timestamps for seeded/placeholder data
-    addAction("dennett", dennettAgent.name, "inspect", "debate timestamps", "success",
-      "Checking timestamps for seeded 'Initial' placeholders.");
-    const initialTimestamps = debateRows.filter((d) => d.startTime === "Initial");
-    if (initialTimestamps.length > 0) {
-      addFinding("dennett", dennettAgent.name, "info", "placeholder",
-        `${initialTimestamps.length} debates with 'Initial' timestamps`,
-        "src/data/debates.ts",
-        `${initialTimestamps.length} debates use "Initial" as their timestamp instead of real dates. This indicates seeded/pre-built content.`,
-        "Use ISO 8601 timestamps or relative time strings for seeded data.");
-    }
-
-    // ACTION: check MathMark2PDF tools
-    if (geminiAvailable) {
-      addAction("dennett", dennettAgent.name, "test", "MathMark2PDF AI tools", "success",
-        "Gemini key present — chat, analyze, detect, humanize, figure generation tools are functional.");
-    } else {
-      addAction("dennett", dennettAgent.name, "test", "MathMark2PDF AI tools", "blocked",
-        "GEMINI_API_KEY not set — all MathMark2PDF AI sidebar tools will fail.");
-      addFinding("dennett", dennettAgent.name, "critical", "non-functional",
-        "MathMark2PDF AI sidebar (5 tools)",
-        "src/app/api/mathmark/{chat,analyze,detect,humanize,figure}",
-        "All five MathMark2PDF AI tools (Chat, Analyze, Detect, Humanize, Figures) require GEMINI_API_KEY. Without it, clicking any AI tab will produce an error.",
-        "Set GEMINI_API_KEY to enable AI-powered editing features.");
-    }
-
-    // ACTION: check knowledge graph
-    addAction("dennett", dennettAgent.name, "navigate", "/knowledge", "success",
-      "Knowledge graph page loads. Checking for dynamic vs static content.");
-  }
-
-  // =====================================================================
-  // Agent: Dr. Veltman (Standard Model Precision Phenomenology)
-  // Active role: as McCrary's polar partner, cross-validates tool claims
-  //              by independently checking whether tools are real or emulated.
-  // =====================================================================
-  const veltmanAgent = agents.find((a) => a.id === "veltman");
-  if (veltmanAgent) {
-    // ACTION: independently verify tool availability
-    addAction("veltman", veltmanAgent.name, "verify", "computational tools", "success",
-      "Cross-verifying tool availability claims independently.");
-
-    // Check notebook tool
-    addAction("veltman", veltmanAgent.name, "test", "/api/tools/notebook", "success",
-      "Notebook execution endpoint exists.");
-
-    // Check if Lean 4 is real native or emulated via Gemini
-    if (leanAvailable) {
-      addAction("veltman", veltmanAgent.name, "test", "lean4 native binary", "success",
-        "Confirmed: Lean 4 binary is native, not emulated. Formal proof checking is real.");
-    } else if (geminiAvailable) {
-      addFinding("veltman", veltmanAgent.name, "info", "emulation",
-        "Lean 4 prover: Gemini verification, not native",
-        "src/lib/lean4.ts",
-        "Lean 4 verification falls back to Gemini semantic reasoning. This is real AI analysis but NOT formal proof checking. Run `npm run lean4:install` for native verification.",
-        "Install lean4 via elan for genuine formal verification. Current mode should be disclosed to users as 'AI-assisted' not 'formally verified'.");
-    }
-  }
-
-  // ─── Compile report ───
-  const participatingAgents = [...new Set([
-    ...actions.map((a) => a.agentName),
-    ...findings.map((f) => f.agentName),
-  ])];
+  const participatingAgents = [...new Set(actions.map((a) => a.agentName))];
 
   const report: AuditReport = {
     timestamp: new Date().toISOString(),
+    mode: "live",
     actions,
     findings,
     summary: {

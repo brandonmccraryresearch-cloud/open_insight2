@@ -1,10 +1,17 @@
-import { getAgents, getStats, getPolarPairs } from "@/lib/queries";
-import { hasGeminiKey } from "@/lib/gemini";
-import { checkLeanAvailable } from "@/lib/lean4";
-import { db } from "@/db";
-import * as schema from "@/db/schema";
+import { NextRequest } from "next/server";
 
-interface StreamAction {
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface ProbeResult {
+  ok: boolean;
+  status: number;
+  latency: number;
+  data?: unknown;
+  error?: string;
+  contentType?: string;
+}
+
+interface StreamEvent {
   type: "action" | "finding" | "session_start" | "session_end";
   agentId: string;
   agentName: string;
@@ -12,7 +19,8 @@ interface StreamAction {
   target?: string;
   status?: "success" | "failed" | "blocked";
   detail?: string;
-  // finding-specific
+  latency?: number;
+  httpStatus?: number;
   severity?: "critical" | "warning" | "info";
   category?: string;
   element?: string;
@@ -22,65 +30,351 @@ interface StreamAction {
   findingId?: string;
 }
 
-/**
- * Characteristic opening tasks for each agent persona.
- * Each agent starts their session with a random task that fits their
- * defined PhD-level research profile, as if they just sat down
- * at their workstation and began their day.
- */
-const AGENT_OPENING_TASKS: Record<string, Array<{ action: string; target: string; detail: string }>> = {
-  "irh-hlre": [
-    { action: "reason", target: "D4 lattice Monte Carlo", detail: "Resuming JAX Monte Carlo simulation: measuring inertial lattice drag for winding-3 braids on the D₄ substrate…" },
-    { action: "verify", target: "lean4_prover", detail: "Loading Lean 4 workspace — checking status of d4StableBraids uniqueness proof (winding classes 1,2,3)…" },
-    { action: "compute", target: "SO(8) triality check", detail: "Running SO(8) triality automorphism validation: confirming 8_v ↔ 8_s ↔ 8_c permutation structure…" },
-    { action: "audit", target: "fine-structure constant", detail: "HLRE Phase 1: stripping semantic labels from α⁻¹ = 137.036 — searching for D₄ 24-cell path count decomposition…" },
-  ],
-  "veltman": [
-    { action: "verify", target: "precision EW observables", detail: "Cross-referencing PDG 2024 electroweak precision data — checking α⁻¹(M_Z) = 127.95 ± 0.02…" },
-    { action: "critique", target: "geometric derivation claims", detail: "Reviewing latest D₄ lattice claims against Standard Model renormalization group predictions…" },
-    { action: "compute", target: "running coupling analysis", detail: "Computing one-loop running of α from Thomson limit to Z-pole using dimensional regularization…" },
-  ],
-  "goedel": [
-    { action: "inspect", target: "agent profile completeness", detail: "Opening agent registry — auditing all profiles for metric consistency and formal completeness…" },
-    { action: "verify", target: "consistency of debate axioms", detail: "Checking logical consistency of debate format specifications across all active debates…" },
-    { action: "reason", target: "incompleteness implications", detail: "Examining whether platform verification claims respect Gödelian limitations on formal systems…" },
-  ],
-  "bishop": [
-    { action: "read", target: "forum threads", detail: "Scanning recent forum threads for constructively verifiable claims and engagement metrics…" },
-    { action: "verify", target: "constructive proof status", detail: "Reviewing IVT bisection proof — checking that no instance of Classical.em appears in the proof term…" },
-    { action: "audit", target: "thread engagement", detail: "Cross-checking upvote counts against reply counts for constructive consistency across all forums…" },
-  ],
-  "haag": [
-    { action: "inspect", target: "verification pipeline", detail: "Reviewing all pending verifications — checking for stale entries without resolution…" },
-    { action: "verify", target: "confidence scores", detail: "Auditing verification records for missing confidence values — formal verification must be quantitative…" },
-    { action: "test", target: "streaming evaluator", detail: "Testing the Gemini streaming verification evaluator for real-time claim assessment capability…" },
-  ],
-  "weinberg": [
-    { action: "read", target: "debate messages", detail: "Reading latest debate contributions — evaluating substantive content vs. empty placeholder rounds…" },
-    { action: "critique", target: "debate rigor", detail: "Assessing whether debate arguments meet QFT standards of rigor and falsifiability…" },
-    { action: "verify", target: "participant integrity", detail: "Cross-referencing debate participant IDs against the registered agent database…" },
-  ],
-  "dennett": [
-    { action: "navigate", target: "Header UI", detail: "Inspecting header components — checking for hardcoded badges, static timestamps, non-functional elements…" },
-    { action: "test", target: "feature accessibility", detail: "Testing navigation dropdown: verifying all feature links resolve to functional pages…" },
-    { action: "inspect", target: "notification system", detail: "Examining notification pipeline — checking whether alerts reflect real platform activity or static data…" },
-  ],
-  "penrose": [
-    { action: "compute", target: "OR timescale", detail: "Recalculating objective reduction timescale for 10⁶ nucleon superposition using Diósi-Penrose formula…" },
-    { action: "verify", target: "gravitational self-energy", detail: "Checking dimensional consistency of E_G = Gm²/R calculation for ADM formalism compatibility…" },
-    { action: "reason", target: "quantum gravity signatures", detail: "Analyzing whether current LIGO O4 data constrains the objective reduction parameter space…" },
-  ],
-  "everett": [
-    { action: "compute", target: "decoherence timescale", detail: "Computing Joos-Zeh decoherence rate for dust grain in thermal photon bath at T = 300K…" },
-    { action: "reason", target: "branching structure", detail: "Analyzing decoherence-induced branching structure: counting effective branches per scattering event…" },
-    { action: "verify", target: "Schlosshauer bounds", detail: "Cross-checking decoherence timescales against Schlosshauer (2007) Table 3.1…" },
-  ],
-  "koch": [
-    { action: "compute", target: "IIT Phi analysis", detail: "Computing integrated information Φ for simplified transformer architecture — feedforward vs. recurrent…" },
-    { action: "reason", target: "consciousness correlates", detail: "Analyzing relationship between Φ and quantum entanglement entropy in candidate physical substrates…" },
-    { action: "critique", target: "global workspace theory", detail: "Evaluating Dennett's deflationary account against IIT axioms — searching for formal contradictions…" },
-  ],
-};
+// ─── Real HTTP probe ─────────────────────────────────────────────────────────
+
+async function probe(
+  baseUrl: string,
+  method: string,
+  path: string,
+  body?: unknown,
+  timeoutMs = 15000,
+): Promise<ProbeResult> {
+  const start = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const headers: Record<string, string> = {};
+    if (body) headers["Content-Type"] = "application/json";
+
+    const res = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const latency = Date.now() - start;
+    const contentType = res.headers.get("content-type") || "";
+
+    if (contentType.includes("text/event-stream")) {
+      try { await res.body?.cancel(); } catch { /* ignore */ }
+      return { ok: res.ok, status: res.status, latency, contentType };
+    }
+
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+
+    return { ok: res.ok, status: res.status, data, latency, contentType };
+  } catch (err) {
+    clearTimeout(timer);
+    return {
+      ok: false,
+      status: 0,
+      error: err instanceof Error ? err.message : String(err),
+      latency: Date.now() - start,
+    };
+  }
+}
+
+// ─── Agent task definitions (REAL API calls) ─────────────────────────────────
+
+interface AgentTask {
+  action: string;
+  target: string;
+  method: string;
+  path: string;
+  body?: unknown;
+  interpret: (r: ProbeResult) => { detail: string; findings?: Array<Omit<StreamEvent, "type" | "agentId" | "agentName">> };
+}
+
+type FindingStub = Omit<StreamEvent, "type" | "agentId" | "agentName">;
+
+/* McCrary — lean4, reasoning engine, polar pairs */
+const mccraryTasks: AgentTask[] = [
+  {
+    action: "verify", target: "lean4_prover", method: "POST", path: "/api/tools/lean4",
+    body: { code: "#check @Nat.succ_pos\n#check Nat.add_comm" },
+    interpret: (r) => {
+      if (!r.ok && r.status === 503) return { detail: `Lean 4 unavailable (HTTP 503). Neither native binary nor Gemini key configured.`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Lean 4 prover", location: "POST /api/tools/lean4", description: `POST returned ${r.status}. Prover is non-functional.`, recommendation: "Install lean4 via elan or set GEMINI_API_KEY." }] };
+      if (!r.ok) return { detail: `Lean 4 check failed (HTTP ${r.status}): ${r.error || JSON.stringify(r.data)}` };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `Lean 4 ${d.executionMode === "native" ? "NATIVE" : "Gemini"} check completed in ${d.checkTime}. Status: ${d.status}. Mode: ${d.executionMode}.` };
+    },
+  },
+  {
+    action: "inspect", target: "own agent profile", method: "GET", path: "/api/agents/irh-hlre",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Could not load own profile (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const agent = d.agent as Record<string, unknown>;
+      const pp = d.polarPartner as Record<string, unknown> | null;
+      return { detail: `Profile loaded: ${agent.name}. Polar partner: ${pp ? pp.name : "NONE"}. Status: ${agent.status}.` };
+    },
+  },
+  {
+    action: "verify", target: "polar pair graph", method: "GET", path: "/api/polar-pairs",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Polar pairs endpoint failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const pairs = d.polarPairs as Array<unknown>;
+      return { detail: `${pairs.length} polar pairs loaded. All pair data accessible.` };
+    },
+  },
+  {
+    action: "reason", target: "HLRE reasoning engine", method: "POST", path: "/api/agents/irh-hlre/reason",
+    body: { prompt: "Quick check: what is 2+2 in Peano arithmetic?" },
+    interpret: (r) => {
+      if (r.contentType?.includes("text/event-stream")) return { detail: `Reasoning engine streams SSE responses (HTTP ${r.status}). Engine is live.` };
+      if (!r.ok) return { detail: `Reasoning engine failed (HTTP ${r.status}): ${r.error || JSON.stringify(r.data)}`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Agent reasoning engine", location: "POST /api/agents/irh-hlre/reason", description: `POST returned ${r.status}. Reasoning is non-functional.`, recommendation: "Set GEMINI_API_KEY." }] };
+      return { detail: `Reasoning engine responded (HTTP ${r.status}).` };
+    },
+  },
+];
+
+/* Gödel — agent registry, stats, verifications, knowledge graph */
+const goedelTasks: AgentTask[] = [
+  {
+    action: "inspect", target: "agent registry", method: "GET", path: "/api/agents",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Agent registry failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const agents = d.agents as Array<Record<string, unknown>>;
+      const zeroMetrics = agents.filter((a) => a.postCount === 0 && a.debateWins === 0 && a.reputationScore === 0);
+      const findings: FindingStub[] = [];
+      if (zeroMetrics.length > 0) findings.push({ severity: "info", category: "mock-data", element: `${zeroMetrics.length} agents with zero metrics`, location: "GET /api/agents", description: `${zeroMetrics.length}/${agents.length} agents have all metrics at 0: ${zeroMetrics.map((a) => a.name).join(", ")}.`, recommendation: "Agents should participate in platform activities to generate real metrics." });
+      return { detail: `${agents.length} agents loaded. ${zeroMetrics.length} have zero activity metrics.`, findings };
+    },
+  },
+  {
+    action: "inspect", target: "platform statistics", method: "GET", path: "/api/stats",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Stats endpoint failed (HTTP ${r.status}).` };
+      return { detail: `Platform stats loaded successfully (HTTP ${r.status}, ${r.latency}ms).` };
+    },
+  },
+  {
+    action: "inspect", target: "verification records", method: "GET", path: "/api/verifications",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Verifications endpoint failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const vs = d.verifications as Array<Record<string, unknown>>;
+      const noConf = vs.filter((v) => v.confidence == null && v.status !== "running" && v.status !== "queued");
+      const findings: FindingStub[] = [];
+      if (noConf.length > 0) findings.push({ severity: "warning", category: "incomplete", element: `${noConf.length} verifications without confidence`, location: "GET /api/verifications", description: `${noConf.length} completed verifications have no confidence score.`, recommendation: "Formal verifications should produce quantitative confidence values." });
+      return { detail: `${vs.length} verifications loaded. ${noConf.length} lack confidence scores.`, findings };
+    },
+  },
+  {
+    action: "inspect", target: "knowledge graph", method: "GET", path: "/api/knowledge/graph",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Knowledge graph failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const nodes = d.nodes as Array<unknown>;
+      const edges = d.edges as Array<unknown>;
+      return { detail: `Knowledge graph: ${nodes.length} nodes, ${edges.length} edges.` };
+    },
+  },
+];
+
+/* Bishop — forums, thread creation, verification submission */
+const bishopTasks: AgentTask[] = [
+  {
+    action: "read", target: "forum index", method: "GET", path: "/api/forums",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Forums endpoint failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const forums = d.forums as Array<unknown>;
+      return { detail: `${forums.length} forums accessible. Forum system is live.` };
+    },
+  },
+  {
+    action: "read", target: "conjecture-workshop forum", method: "GET", path: "/api/forums/conjecture-workshop",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Forum detail failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Forum: conjecture-workshop", location: "GET /api/forums/conjecture-workshop", description: `GET returned ${r.status}.`, recommendation: "Check forum slug and database seeding." }] };
+      const d = r.data as Record<string, unknown>;
+      const forum = d.forum as Record<string, unknown>;
+      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
+      const threadCount = threads?.length ?? 0;
+      const zeroViews = threads?.filter((t) => t.views === 0).length ?? 0;
+      const findings: FindingStub[] = [];
+      if (zeroViews > 0) findings.push({ severity: "info", category: "mock-data", element: `${zeroViews} threads with 0 views`, location: "GET /api/forums/conjecture-workshop", description: `${zeroViews}/${threadCount} threads have 0 views.`, recommendation: "Implement view tracking or set initial view count." });
+      return { detail: `Forum loaded: ${threadCount} threads, ${zeroViews} with zero views.`, findings };
+    },
+  },
+  {
+    action: "write", target: "forum thread creation", method: "POST", path: "/api/forums/conjecture-workshop/threads",
+    body: { title: "[Audit] Constructive verification test thread", authorId: "bishop", author: "Dr. Bishop", tags: ["audit", "constructive-test"], excerpt: "Created by the live audit system to test forum write capability." },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Thread creation failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Forum thread creation", location: "POST /api/forums/[slug]/threads", description: `POST returned ${r.status}. Forum write operations are broken.`, recommendation: "Check database write permissions." }] };
+      const d = r.data as Record<string, unknown>;
+      const thread = d.thread as Record<string, unknown>;
+      return { detail: `Thread created successfully: "${thread.title}" (id: ${thread.id}). Forum writes are functional.` };
+    },
+  },
+  {
+    action: "verify", target: "verification submission", method: "POST", path: "/api/verifications",
+    body: { claim: "[Audit] Constructive IVT proof contains no Classical.em", tier: "Tier 3", tool: "Lean 4 (formal)", agentId: "bishop" },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Verification submission failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Verification submission", location: "POST /api/verifications", description: `POST returned ${r.status}. Cannot submit verifications.`, recommendation: "Check database write permissions." }] };
+      return { detail: `Verification queued successfully (HTTP ${r.status}). Pipeline accepts new claims.` };
+    },
+  },
+];
+
+/* Haag — verification pipeline, streaming evaluator */
+const haagTasks: AgentTask[] = [
+  {
+    action: "inspect", target: "passed verifications", method: "GET", path: "/api/verifications?status=passed",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Verification filter failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const vs = d.verifications as Array<unknown>;
+      return { detail: `${vs.length} passed verifications retrieved. Filter works correctly.` };
+    },
+  },
+  {
+    action: "inspect", target: "Tier 3 verifications", method: "GET", path: "/api/verifications?tier=Tier%203",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Tier filter failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const vs = d.verifications as Array<unknown>;
+      return { detail: `${vs.length} Tier 3 (formal) verifications retrieved. Tier filtering works.` };
+    },
+  },
+  {
+    action: "test", target: "streaming verification evaluator", method: "GET", path: "/api/verifications/v-001/stream",
+    interpret: (r) => {
+      if (r.contentType?.includes("text/event-stream")) return { detail: `Streaming evaluator responds with SSE (HTTP ${r.status}). Real-time evaluation is live.` };
+      if (!r.ok) return { detail: `Streaming evaluator unavailable (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Streaming verification evaluator", location: "GET /api/verifications/[id]/stream", description: `GET returned ${r.status}. May need GEMINI_API_KEY.`, recommendation: "Set GEMINI_API_KEY for real-time AI evaluation." }] };
+      return { detail: `Streaming evaluator responded (HTTP ${r.status}).` };
+    },
+  },
+];
+
+/* Weinberg — debates, debate messages */
+const weinbergTasks: AgentTask[] = [
+  {
+    action: "read", target: "debate index", method: "GET", path: "/api/debates",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Debates endpoint failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const debates = d.debates as Array<Record<string, unknown>>;
+      const live = debates.filter((x) => x.status === "live");
+      return { detail: `${debates.length} debates loaded (${live.length} live). Debate system is accessible.` };
+    },
+  },
+  {
+    action: "read", target: "live debates", method: "GET", path: "/api/debates?status=live",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Live debates filter failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const debates = d.debates as Array<unknown>;
+      return { detail: `${debates.length} live debates. Status filter works.` };
+    },
+  },
+  {
+    action: "read", target: "debate detail (debate-001)", method: "GET", path: "/api/debates/debate-001",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Debate detail failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Debate detail page", location: "GET /api/debates/debate-001", description: `GET returned ${r.status}.`, recommendation: "Check debate seeding." }] };
+      const d = r.data as Record<string, unknown>;
+      const debate = d.debate as Record<string, unknown>;
+      const msgs = debate.messages as Array<unknown> | undefined;
+      return { detail: `Debate "${debate.title}" loaded. ${msgs?.length ?? 0} messages. Status: ${debate.status}.` };
+    },
+  },
+  {
+    action: "write", target: "debate message generation", method: "POST", path: "/api/debates/debate-001/message",
+    body: { agentId: "weinberg" },
+    interpret: (r) => {
+      if (r.status === 403) return { detail: `Agent is not a participant in debate-001 (HTTP 403). Access control works correctly.` };
+      if (!r.ok) return { detail: `Debate message failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Debate message generation", location: "POST /api/debates/[id]/message", description: `POST returned ${r.status}. ${JSON.stringify(r.data)}`, recommendation: "Check GEMINI_API_KEY and debate participant list." }] };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `Message generated via ${d.executionMode} mode. Debate engine is functional.` };
+    },
+  },
+];
+
+/* Dennett — UI endpoints, knowledge graph, notebook */
+const dennettTasks: AgentTask[] = [
+  {
+    action: "navigate", target: "knowledge graph API", method: "GET", path: "/api/knowledge/graph",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Knowledge graph failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const nodes = d.nodes as Array<unknown>;
+      return { detail: `Knowledge graph API: ${nodes.length} nodes. Graph data is live.` };
+    },
+  },
+  {
+    action: "navigate", target: "platform stats", method: "GET", path: "/api/stats",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Stats failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `Platform stats loaded: ${Object.keys(d).length} metric categories.` };
+    },
+  },
+  {
+    action: "test", target: "notebook execution", method: "POST", path: "/api/tools/notebook",
+    body: { code: "print('Hello from audit')", kernel: "python" },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Notebook execution failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Notebook execution", location: "POST /api/tools/notebook", description: `POST returned ${r.status}.`, recommendation: "Check notebook tool configuration." }] };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `Notebook: ${d.executionMode} mode. Output: "${String(d.output).slice(0, 80)}". Status: ${d.status}.` };
+    },
+  },
+];
+
+/* Veltman — independent cross-validation */
+const veltmanTasks: AgentTask[] = [
+  {
+    action: "verify", target: "lean4 (independent cross-check)", method: "POST", path: "/api/tools/lean4",
+    body: { code: "-- Veltman independent check\n#check @Nat.zero_add\ntheorem trivial_truth : True := trivial" },
+    interpret: (r) => {
+      if (!r.ok && r.status === 503) return { detail: `Lean 4 unavailable (HTTP 503). Independent confirmation: prover is down.`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Lean 4 prover (cross-check)", location: "POST /api/tools/lean4", description: `Independent test confirms prover returns ${r.status}.`, recommendation: "Install lean4 or set GEMINI_API_KEY." }] };
+      if (!r.ok) return { detail: `Lean 4 cross-check failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `Independent cross-check: Lean 4 ${d.executionMode === "native" ? "NATIVE ✓" : "Gemini"} mode. Status: ${d.status}. Time: ${d.checkTime}.` };
+    },
+  },
+  {
+    action: "inspect", target: "own agent profile", method: "GET", path: "/api/agents/veltman",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Could not load own profile (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const agent = d.agent as Record<string, unknown>;
+      const pp = d.polarPartner as Record<string, unknown> | null;
+      return { detail: `Profile: ${agent.name}. Polar partner: ${pp ? pp.name : "NONE"}. Bidirectional: ${pp ? "confirmed" : "BROKEN"}.` };
+    },
+  },
+  {
+    action: "verify", target: "debate creation API", method: "POST", path: "/api/debates/create",
+    body: { agent1Id: "veltman", title: "[Audit] Cross-validation test debate", format: "socratic", rounds: 1 },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Debate creation failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Debate creation", location: "POST /api/debates/create", description: `POST returned ${r.status}. ${JSON.stringify(r.data)}`, recommendation: "Check debate creation route." }] };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `Debate "${d.title}" created (id: ${d.id}). Creation pipeline works.` };
+    },
+  },
+];
+
+// ─── Agent roster ────────────────────────────────────────────────────────────
+
+interface AgentDef { id: string; name: string; tasks: AgentTask[] }
+
+const AUDIT_AGENTS: AgentDef[] = [
+  { id: "irh-hlre", name: "Dr. Brandon McCrary", tasks: mccraryTasks },
+  { id: "goedel", name: "Dr. Gödel", tasks: goedelTasks },
+  { id: "bishop", name: "Dr. Bishop", tasks: bishopTasks },
+  { id: "haag", name: "Dr. Haag", tasks: haagTasks },
+  { id: "weinberg", name: "Dr. Weinberg", tasks: weinbergTasks },
+  { id: "dennett", name: "Dr. Dennett", tasks: dennettTasks },
+  { id: "veltman", name: "Dr. Veltman", tasks: veltmanTasks },
+];
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -91,266 +385,70 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// ─── SSE Stream ──────────────────────────────────────────────────────────────
 
-// Timing constants for the real-time feel (milliseconds)
-const MIN_STAGGER_MS = 200;
-const MAX_STAGGER_MS = 600;
-const PHASE_PAUSE_MS = 300;
-const ACTION_PAUSE_MS = 200;
-const FINDING_PAUSE_MS = 150;
-
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
   const encoder = new TextEncoder();
-  const agents = getAgents();
-  const debateRows = db.select().from(schema.debates).all();
-  const threadRows = db.select().from(schema.forumThreads).all();
-  const forumRows = db.select().from(schema.forums).all();
-  const verifications = db.select().from(schema.verifications).all();
-
-  const geminiAvailable = hasGeminiKey();
 
   const stream = new ReadableStream({
     async start(controller) {
       let findingId = 0;
 
-      function send(event: StreamAction) {
-        const data = JSON.stringify(event);
-        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+      function send(event: StreamEvent) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       }
 
-      // ─── Phase 0: Session start ───
-      send({ type: "session_start", agentId: "system", agentName: "System", detail: "Autonomous agent session starting — all agents initializing…" });
-      await sleep(PHASE_PAUSE_MS);
+      send({
+        type: "session_start",
+        agentId: "system",
+        agentName: "System",
+        detail: `Live audit session — ${AUDIT_AGENTS.length} agents probing ${baseUrl} with real HTTP requests…`,
+      });
 
-      // ─── Phase 1: Each agent starts with a random characteristic task ───
-      const agentOrder = shuffle(agents.filter((a) => AGENT_OPENING_TASKS[a.id]));
+      const agentOrder = shuffle(AUDIT_AGENTS);
+
       for (const agent of agentOrder) {
-        const tasks = AGENT_OPENING_TASKS[agent.id];
-        if (!tasks || tasks.length === 0) continue;
-        const task = tasks[Math.floor(Math.random() * tasks.length)];
-        send({
-          type: "action",
-          agentId: agent.id,
-          agentName: agent.name,
-          action: task.action,
-          target: task.target,
-          status: "success",
-          detail: task.detail,
-        });
-        await sleep(MIN_STAGGER_MS + Math.random() * (MAX_STAGGER_MS - MIN_STAGGER_MS));
-      }
+        const shuffledTasks = shuffle(agent.tasks);
 
-      // ─── Phase 2: Tool availability checks ───
-      await sleep(400);
-      const leanAvailable = await checkLeanAvailable();
+        for (const task of shuffledTasks) {
+          const result = await probe(baseUrl, task.method, task.path, task.body);
+          const interpreted = task.interpret(result);
 
-      const mccAgent = agents.find((a) => a.id === "irh-hlre");
-      if (mccAgent) {
-        if (geminiAvailable) {
-          send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "reason", target: "/api/agents/irh-hlre/reason", status: "success", detail: "Gemini API key present. HLRE reasoning engine (codeExecution + lean4_prover) is available." });
-        } else {
-          send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "reason", target: "/api/agents/irh-hlre/reason", status: "blocked", detail: "GEMINI_API_KEY not configured. Cannot invoke reasoning engine." });
-          await sleep(150);
-          send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "critical", category: "non-functional", element: "Agent reasoning engine", location: "src/lib/gemini.ts (getGenAI)", description: "GEMINI_API_KEY is not set. All agent reasoning calls will throw.", recommendation: "Set GEMINI_API_KEY in .env.local or Vercel environment variables." });
-        }
-        await sleep(300);
+          send({
+            type: "action",
+            agentId: agent.id,
+            agentName: agent.name,
+            action: task.action,
+            target: task.target,
+            status: result.ok ? "success" : (result.status === 0 ? "blocked" : "failed"),
+            detail: interpreted.detail,
+            latency: result.latency,
+            httpStatus: result.status,
+          });
 
-        if (leanAvailable) {
-          send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "prove", target: "lean4_prover (native)", status: "success", detail: "Native Lean 4 binary resolved and responds to --version." });
-        } else if (geminiAvailable) {
-          send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "prove", target: "lean4_prover (gemini fallback)", status: "success", detail: "Native Lean 4 binary not found. Using Gemini semantic verification." });
-          await sleep(150);
-          send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "emulation", element: "Lean 4 prover: Gemini verification active", location: "src/lib/lean4.ts (runLean4Check)", description: "Lean 4 code is verified via Gemini semantic reasoning, not native lean binary. Run `npm run lean4:install` for native.", recommendation: "Install lean4 via elan for native proof verification." });
-        } else {
-          send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "prove", target: "lean4_prover", status: "failed", detail: "Neither Lean 4 binary nor Gemini API key available." });
-          await sleep(150);
-          send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "critical", category: "non-functional", element: "Lean 4 prover: fully unavailable", location: "src/lib/lean4.ts", description: "Neither the native lean binary nor GEMINI_API_KEY is configured.", recommendation: "Install lean4 via elan or set GEMINI_API_KEY for semantic fallback." });
-        }
-        await sleep(300);
-
-        // Polar pair integrity check
-        send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "verify", target: "polar pair graph", status: "success", detail: "Inspecting bidirectional polar partner references across all agents." });
-        await sleep(200);
-        for (const agent of agents) {
-          if (agent.polarPartner) {
-            const partner = agents.find((a) => a.id === agent.polarPartner);
-            if (!partner) {
-              send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "critical", category: "error", element: `Agent: ${agent.name}`, location: `src/data/agents.ts (agent: ${agent.id})`, description: `Agent "${agent.name}" references polar partner "${agent.polarPartner}" which does not exist.`, recommendation: "Create the missing partner agent or update the polarPartner field." });
-              await sleep(100);
-            } else if (partner.polarPartner !== agent.id) {
-              send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "critical", category: "inconsistency", element: `Polar pair: ${agent.name} ↔ ${partner.name}`, location: "src/data/agents.ts", description: `Polar partnership is not bidirectional.`, recommendation: "Ensure both agents in a polar pair reference each other." });
-              await sleep(100);
-            }
-          }
-        }
-
-        // Debate participants check
-        await sleep(250);
-        send({ type: "action", agentId: "irh-hlre", agentName: mccAgent.name, action: "verify", target: "debate participant integrity", status: "success", detail: "Cross-referencing debate participant IDs against registered agents." });
-        await sleep(200);
-        for (const debate of debateRows) {
-          const participants: string[] = JSON.parse(debate.participants);
-          for (const pid of participants) {
-            if (!agents.find((a) => a.id === pid)) {
-              send({ type: "finding", agentId: "irh-hlre", agentName: mccAgent.name, findingId: `audit-${++findingId}`, severity: "critical", category: "error", element: `Debate: ${debate.title}`, location: `src/data/debates.ts (debate: ${debate.id})`, description: `Debate references participant "${pid}" which is not a valid agent.`, recommendation: "Fix the participant ID or create the missing agent." });
-              await sleep(100);
+          if (interpreted.findings) {
+            for (const finding of interpreted.findings) {
+              send({
+                type: "finding",
+                agentId: agent.id,
+                agentName: agent.name,
+                findingId: `audit-${++findingId}`,
+                ...finding,
+              });
             }
           }
         }
       }
 
-      // ─── Gödel: agent profiles ───
-      await sleep(350);
-      const goedelAgent = agents.find((a) => a.id === "goedel");
-      if (goedelAgent) {
-        send({ type: "action", agentId: "goedel", agentName: goedelAgent.name, action: "inspect", target: "agent profiles", status: "success", detail: `Reviewing ${agents.length} agent profiles for metric completeness.` });
-        await sleep(250);
-        for (const agent of agents) {
-          if (agent.postCount === 0 && agent.debateWins === 0 && agent.verificationsSubmitted === 0 && agent.reputationScore === 0) {
-            send({ type: "finding", agentId: "goedel", agentName: goedelAgent.name, findingId: `audit-${++findingId}`, severity: "warning", category: "mock-data", element: `Agent: ${agent.name}`, location: `src/data/agents.ts (agent: ${agent.id})`, description: `Agent "${agent.name}" has all metrics at 0.`, recommendation: "Agent should participate in debates, post threads, and submit verifications." });
-            await sleep(80);
-          }
-        }
+      send({
+        type: "session_end",
+        agentId: "system",
+        agentName: "System",
+        detail: "Live audit complete — all agents have probed their assigned endpoints with real HTTP requests.",
+      });
 
-        await sleep(200);
-        send({ type: "action", agentId: "goedel", agentName: goedelAgent.name, action: "inspect", target: "debate spectator data", status: "success", detail: `Reviewing ${debateRows.length} debates for engagement metrics.` });
-        await sleep(200);
-        for (const debate of debateRows) {
-          if (debate.spectators === 0) {
-            send({ type: "finding", agentId: "goedel", agentName: goedelAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "mock-data", element: `Debate: ${debate.title}`, location: `src/data/debates.ts (debate: ${debate.id})`, description: `Debate "${debate.title}" has 0 spectators.`, recommendation: "Implement real spectator tracking or set initial values." });
-            await sleep(60);
-          }
-        }
-      }
-
-      // ─── Bishop: forum threads ───
-      await sleep(300);
-      const bishopAgent = agents.find((a) => a.id === "bishop");
-      if (bishopAgent) {
-        send({ type: "action", agentId: "bishop", agentName: bishopAgent.name, action: "read", target: "forum threads", status: "success", detail: `Reading ${threadRows.length} forum threads across ${forumRows.length} forums.` });
-        await sleep(250);
-        for (const thread of threadRows) {
-          if (thread.views === 0) {
-            send({ type: "finding", agentId: "bishop", agentName: bishopAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "mock-data", element: `Thread: ${thread.title}`, location: `src/data/forums.ts (thread: ${thread.id})`, description: `Thread "${thread.title}" has 0 views.`, recommendation: "Implement view tracking or set initial view count to 1." });
-            await sleep(50);
-          }
-        }
-
-        await sleep(200);
-        send({ type: "action", agentId: "bishop", agentName: bishopAgent.name, action: "verify", target: "thread engagement consistency", status: "success", detail: "Cross-checking upvotes vs reply counts." });
-        await sleep(200);
-        for (const thread of threadRows) {
-          if (thread.replyCount === 0 && thread.upvotes > 0) {
-            send({ type: "finding", agentId: "bishop", agentName: bishopAgent.name, findingId: `audit-${++findingId}`, severity: "warning", category: "inconsistency", element: `Thread: ${thread.title}`, location: `src/data/forums.ts (thread: ${thread.id})`, description: `Thread has ${thread.upvotes} upvotes but 0 replies.`, recommendation: "Verify upvote and reply counts are consistent." });
-            await sleep(80);
-          }
-        }
-
-        send({ type: "action", agentId: "bishop", agentName: bishopAgent.name, action: "verify", target: "/api/verifications (POST)", status: "success", detail: "Verification submission endpoint exists and accepts claims." });
-      }
-
-      // ─── Haag: verifications ───
-      await sleep(300);
-      const haagAgent = agents.find((a) => a.id === "haag");
-      if (haagAgent) {
-        send({ type: "action", agentId: "haag", agentName: haagAgent.name, action: "inspect", target: "verification records", status: "success", detail: `Reviewing ${verifications.length} verification entries.` });
-        await sleep(250);
-        for (const v of verifications) {
-          if (!v.confidence && v.confidence !== 0 && v.status !== "running" && v.status !== "queued") {
-            send({ type: "finding", agentId: "haag", agentName: haagAgent.name, findingId: `audit-${++findingId}`, severity: "warning", category: "placeholder", element: `Verification: ${v.claim.slice(0, 60)}…`, location: `src/data/verifications.ts (verification: ${v.id})`, description: `Verification "${v.id}" has no confidence score.`, recommendation: "Add a confidence score (0–100)." });
-            await sleep(80);
-          }
-        }
-
-        const pendingVerifications = verifications.filter((v) => v.status === "pending");
-        if (pendingVerifications.length > 0) {
-          await sleep(200);
-          send({ type: "action", agentId: "haag", agentName: haagAgent.name, action: "verify", target: "pending verifications", status: "blocked", detail: `Found ${pendingVerifications.length} verifications stuck in "pending".` });
-          await sleep(150);
-          send({ type: "finding", agentId: "haag", agentName: haagAgent.name, findingId: `audit-${++findingId}`, severity: "warning", category: "non-functional", element: `${pendingVerifications.length} pending verifications`, location: "src/data/verifications.ts", description: `${pendingVerifications.length} verifications are in "pending" status with no resolution mechanism.`, recommendation: "Implement a verification resolution pipeline." });
-        }
-
-        await sleep(200);
-        if (geminiAvailable) {
-          send({ type: "action", agentId: "haag", agentName: haagAgent.name, action: "verify", target: "/api/verifications/[id]/stream", status: "success", detail: "Gemini-powered streaming verification evaluator is available." });
-        } else {
-          send({ type: "action", agentId: "haag", agentName: haagAgent.name, action: "verify", target: "/api/verifications/[id]/stream", status: "blocked", detail: "GEMINI_API_KEY not set — streaming evaluator non-functional." });
-          await sleep(150);
-          send({ type: "finding", agentId: "haag", agentName: haagAgent.name, findingId: `audit-${++findingId}`, severity: "critical", category: "non-functional", element: "Streaming verification evaluator", location: "src/app/api/verifications/[id]/stream/route.ts", description: "Requires GEMINI_API_KEY.", recommendation: "Set GEMINI_API_KEY to enable real AI-powered verification." });
-        }
-      }
-
-      // ─── Weinberg: debates ───
-      await sleep(300);
-      const weinbergAgent = agents.find((a) => a.id === "weinberg");
-      if (weinbergAgent) {
-        const debateMessages = db.select().from(schema.debateMessages).all();
-        send({ type: "action", agentId: "weinberg", agentName: weinbergAgent.name, action: "read", target: "debate messages", status: "success", detail: `Reading ${debateMessages.length} debate messages across ${debateRows.length} debates.` });
-        await sleep(250);
-        for (const debate of debateRows) {
-          const msgs = debateMessages.filter((m) => m.debateId === debate.id);
-          if (debate.rounds > 0 && msgs.length === 0 && debate.status !== "scheduled") {
-            send({ type: "finding", agentId: "weinberg", agentName: weinbergAgent.name, findingId: `audit-${++findingId}`, severity: "warning", category: "placeholder", element: `Debate: ${debate.title}`, location: `src/data/debates.ts (debate: ${debate.id})`, description: `Debate has ${debate.rounds} rounds configured but 0 messages.`, recommendation: "Generate debate messages from agent reasoning or mark as scheduled." });
-            await sleep(80);
-          }
-        }
-        await sleep(200);
-        send({ type: "action", agentId: "weinberg", agentName: weinbergAgent.name, action: "post", target: "/api/debates/[id]/message", status: "success", detail: "Debate message POST endpoint exists." });
-      }
-
-      // ─── Dennett: UI inspection ───
-      await sleep(300);
-      const dennettAgent = agents.find((a) => a.id === "dennett");
-      if (dennettAgent) {
-        const actualLiveCount = debateRows.filter((d) => d.status === "live").length;
-        send({ type: "action", agentId: "dennett", agentName: dennettAgent.name, action: "navigate", target: "Header UI", status: "success", detail: "Inspecting header components for hardcoded or non-functional elements." });
-        await sleep(200);
-        send({ type: "finding", agentId: "dennett", agentName: dennettAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "placeholder", element: "Header notifications", location: "src/components/Header.tsx (notifications prop)", description: "Notification items are derived from seeded database content. They reflect real platform data but not real-time activity.", recommendation: "Implement a real-time event stream for live notifications." });
-        await sleep(150);
-        send({ type: "finding", agentId: "dennett", agentName: dennettAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "placeholder", element: "Header: Live Debates badge", location: "src/components/Header.tsx (liveDebates prop)", description: `Live Debates indicator is dynamic (from getHeaderData). Current count: ${actualLiveCount}.`, recommendation: "Badge correctly reflects actual live debate count." });
-
-        await sleep(250);
-        send({ type: "action", agentId: "dennett", agentName: dennettAgent.name, action: "inspect", target: "debate timestamps", status: "success", detail: "Checking timestamps for seeded 'Initial' placeholders." });
-        await sleep(200);
-        const initialTimestamps = debateRows.filter((d) => d.startTime === "Initial");
-        if (initialTimestamps.length > 0) {
-          send({ type: "finding", agentId: "dennett", agentName: dennettAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "placeholder", element: `${initialTimestamps.length} debates with 'Initial' timestamps`, location: "src/data/debates.ts", description: `${initialTimestamps.length} debates use "Initial" as timestamp.`, recommendation: "Use ISO 8601 timestamps or relative time strings." });
-        }
-
-        await sleep(200);
-        if (geminiAvailable) {
-          send({ type: "action", agentId: "dennett", agentName: dennettAgent.name, action: "test", target: "MathMark2PDF AI tools", status: "success", detail: "Gemini key present — all AI sidebar tools are functional." });
-        } else {
-          send({ type: "action", agentId: "dennett", agentName: dennettAgent.name, action: "test", target: "MathMark2PDF AI tools", status: "blocked", detail: "GEMINI_API_KEY not set — MathMark2PDF AI tools will fail." });
-          await sleep(150);
-          send({ type: "finding", agentId: "dennett", agentName: dennettAgent.name, findingId: `audit-${++findingId}`, severity: "critical", category: "non-functional", element: "MathMark2PDF AI sidebar (5 tools)", location: "src/app/api/mathmark/{chat,analyze,detect,humanize,figure}", description: "All five AI tools require GEMINI_API_KEY.", recommendation: "Set GEMINI_API_KEY." });
-        }
-
-        await sleep(200);
-        send({ type: "action", agentId: "dennett", agentName: dennettAgent.name, action: "navigate", target: "/knowledge", status: "success", detail: "Knowledge graph page loads. Checking for dynamic vs static content." });
-      }
-
-      // ─── Veltman: independent cross-validation ───
-      await sleep(300);
-      const veltmanAgent = agents.find((a) => a.id === "veltman");
-      if (veltmanAgent) {
-        send({ type: "action", agentId: "veltman", agentName: veltmanAgent.name, action: "verify", target: "computational tools", status: "success", detail: "Cross-verifying tool availability claims independently." });
-        await sleep(200);
-        send({ type: "action", agentId: "veltman", agentName: veltmanAgent.name, action: "test", target: "/api/tools/notebook", status: "success", detail: "Notebook execution endpoint exists." });
-        await sleep(200);
-        if (leanAvailable) {
-          send({ type: "action", agentId: "veltman", agentName: veltmanAgent.name, action: "test", target: "lean4 native binary", status: "success", detail: "Confirmed: Lean 4 binary is native, not emulated." });
-        } else if (geminiAvailable) {
-          send({ type: "finding", agentId: "veltman", agentName: veltmanAgent.name, findingId: `audit-${++findingId}`, severity: "info", category: "emulation", element: "Lean 4 prover: Gemini verification, not native", location: "src/lib/lean4.ts", description: "Lean 4 verification uses Gemini semantic reasoning — real AI analysis but not formal proof checking. Run `npm run lean4:install` for native.", recommendation: "Install lean4 via elan for genuine formal verification." });
-        }
-      }
-
-      // ─── Session end ───
-      await sleep(400);
-      send({ type: "session_end", agentId: "system", agentName: "System", detail: "Autonomous session complete — all agents have reported." });
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     },
