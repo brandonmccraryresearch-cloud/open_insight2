@@ -499,7 +499,7 @@ export default function AuditClient() {
                         <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
                         <span className="text-[var(--text-muted)]">→</span>
                         <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
-                        {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[{a.httpStatus}]</span> : null}
+                        {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
                         {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
                       </div>
                     );

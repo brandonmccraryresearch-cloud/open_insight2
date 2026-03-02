@@ -58,7 +58,7 @@ async function probe(
     const contentType = res.headers.get("content-type") || "";
 
     if (contentType.includes("text/event-stream")) {
-      try { await res.body?.cancel(); } catch { /* ignore */ }
+      try { await res.body?.cancel(); } catch { /* Body may already be consumed or closed */ }
       return { ok: res.ok, status: res.status, latency, contentType };
     }
 
