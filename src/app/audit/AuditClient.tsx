@@ -273,10 +273,10 @@ export default function AuditClient() {
     if (!report) return "";
     const mode = autonomousActive || cycleCount > 0 ? "Autonomous" : "Manual";
     const lines: string[] = [
-      `## 🔍 Open Insight Platform Audit Report`,
+      `## 🔍 Open Insight Platform — Live Audit Report`,
       ``,
       `**Generated:** ${new Date(report.timestamp).toLocaleString()}`,
-      `**Mode:** ${mode}${cycleCount > 0 ? ` (${cycleCount} cycle${cycleCount !== 1 ? "s" : ""})` : ""}`,
+      `**Mode:** ${mode}${cycleCount > 0 ? ` (${cycleCount} cycle${cycleCount !== 1 ? "s" : ""})` : ""} — **Live HTTP probing**`,
       `**Participating Agents:** ${report.agentParticipants.join(", ")}`,
       ``,
       `### Agent Activity Summary`,
@@ -300,7 +300,9 @@ export default function AuditClient() {
 
     for (const a of report.actions) {
       const icon = a.status === "success" ? "✅" : a.status === "blocked" ? "🚫" : "❌";
-      lines.push(`- ${icon} **${a.agentName}** → \`${a.action}\` on \`${a.target}\`: ${a.detail}`);
+      const httpTag = a.httpStatus ? ` \`[HTTP ${a.httpStatus}]\`` : "";
+      const latencyTag = a.latency ? ` ${a.latency}ms` : "";
+      lines.push(`- ${icon} **${a.agentName}** → \`${a.action}\` on \`${a.target}\`: ${a.detail}${httpTag}${latencyTag}`);
     }
     lines.push(``);
 
@@ -354,7 +356,7 @@ export default function AuditClient() {
         <div>
           <h1 className="text-2xl font-bold">Platform Audit</h1>
           <p className="text-sm text-[var(--text-secondary)]">
-            Agent-driven inspection of mock, placeholder, and non-functional elements
+            Live API probing by active agents — real HTTP requests, real status codes, real findings
           </p>
         </div>
         <div className="flex gap-2">
@@ -663,9 +665,9 @@ export default function AuditClient() {
                     <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
                     <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
                     <span className="text-[var(--text-muted)]">→</span>
-                    <span className="text-[var(--text-secondary)] font-mono">{a.action}</span>
-                    <span className="text-[var(--text-muted)]">on</span>
-                    <code className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-elevated)] px-1 py-0.5 rounded">{a.target}</code>
+                    <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
+                    {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
+                    {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
                   </div>
                 );
               })}
