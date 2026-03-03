@@ -244,7 +244,7 @@ export default function AuditClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autonomousActive]);
 
-  // Periodic re-audit every 60 seconds during autonomous mode
+  // Periodic re-audit every 60 seconds during autonomous mode — uses streaming for live continuous activity
   useEffect(() => {
     if (!autonomousActive) return;
 
@@ -252,10 +252,13 @@ export default function AuditClient() {
       setCycleCount((prev) => {
         const next = prev + 1;
         addLog(`Cycle ${next}: Agents re-engaging platform features...`);
-        runAudit().then((data) => {
-          if (data) {
-            addLog(`Cycle ${next} complete: ${data.summary.actionsAttempted} actions, ${data.summary.total} error reports`);
-          }
+        runStreamAudit().then(() => {
+          addLog(`Cycle ${next} streaming complete.`);
+          runAudit().then((data) => {
+            if (data) {
+              addLog(`Cycle ${next} snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} error reports`);
+            }
+          });
         });
         return next;
       });

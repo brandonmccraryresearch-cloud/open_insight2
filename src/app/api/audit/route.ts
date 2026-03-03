@@ -57,13 +57,14 @@ async function probe(
   path: string,
   body?: unknown,
   timeoutMs = 15000,
+  forwardHeaders?: Record<string, string>,
 ): Promise<ProbeResult> {
   const start = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...forwardHeaders };
     if (body) headers["Content-Type"] = "application/json";
 
     const res = await fetch(`${baseUrl}${path}`, {
@@ -71,6 +72,7 @@ async function probe(
       headers,
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
+      cache: "no-store",
     });
     clearTimeout(timer);
     const latency = Date.now() - start;
@@ -263,6 +265,13 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const baseUrl = `${url.protocol}//${url.host}`;
 
+  // Forward auth-related headers so self-probes pass deployment protection
+  const forwardHeaders: Record<string, string> = {};
+  const cookie = request.headers.get("cookie");
+  if (cookie) forwardHeaders["cookie"] = cookie;
+  const auth = request.headers.get("authorization");
+  if (auth) forwardHeaders["authorization"] = auth;
+
   const actions: AgentAction[] = [];
   const findings: AuditFinding[] = [];
   let findingId = 0;
@@ -270,7 +279,7 @@ export async function GET(request: NextRequest) {
   const probes = buildProbes();
 
   for (const p of probes) {
-    const result = await probe(baseUrl, p.method, p.path, p.body);
+    const result = await probe(baseUrl, p.method, p.path, p.body, 15000, forwardHeaders);
     const interpreted = p.interpret(result);
 
     actions.push({
