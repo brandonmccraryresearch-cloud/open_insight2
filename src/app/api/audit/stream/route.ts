@@ -89,9 +89,9 @@ async function probe(
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /** Max number of AI-driven turns per agent in continuous mode */
-const MAX_TURNS_CONTINUOUS = 8;
+const MAX_TURNS_CONTINUOUS = 15;
 /** Max number of AI-driven turns per agent in single-pass mode */
-const MAX_TURNS_SINGLE = 5;
+const MAX_TURNS_SINGLE = 8;
 /** Timeout for each HTTP probe call (ms) */
 const PROBE_TIMEOUT_MS = 15000;
 /** Max characters in a result summary fed back to the AI */
@@ -212,6 +212,53 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+// ─── JSON extraction (brace-counting) ────────────────────────────────────────
+
+/**
+ * Extract the first complete JSON object containing `"action"` from a string.
+ * Uses brace counting instead of a regex to correctly handle nested objects.
+ */
+function extractActionJSON(text: string): string | null {
+  const actionIdx = text.indexOf('"action"');
+  if (actionIdx === -1) return null;
+
+  // Walk backwards from "action" to find the outermost opening brace.
+  // We count braces in reverse to handle cases like `{}{...}` where
+  // multiple objects precede the action key.
+  let startIdx = -1;
+  let reverseDepth = 0;
+  for (let i = actionIdx - 1; i >= 0; i--) {
+    if (text[i] === "}") reverseDepth++;
+    if (text[i] === "{") {
+      if (reverseDepth > 0) { reverseDepth--; continue; }
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1) return null;
+
+  // Count braces forward to find the matching closing brace.
+  // Tracks string boundaries so braces inside string values are ignored.
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\" && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return text.slice(startIdx, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Result summarizer ──────────────────────────────────────────────────────
 
 function buildResultSummary(result: ProbeResult): string {
@@ -289,15 +336,15 @@ async function runAIAgentSession(
 
       h.push({ role: "model", parts: [{ text: responseText }] });
 
-      const jsonMatch = responseText.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
-      if (!jsonMatch) {
+      const jsonStr = extractActionJSON(responseText);
+      if (!jsonStr) {
         send({ type: "thought", agentId, agentName, detail: responseText.slice(0, 500) });
         break;
       }
 
       let decision: { thought: string; action: string; params: Record<string, unknown> };
       try {
-        decision = JSON.parse(jsonMatch[0]);
+        decision = JSON.parse(jsonStr);
       } catch {
         send({ type: "thought", agentId, agentName, detail: responseText.slice(0, 500) });
         break;

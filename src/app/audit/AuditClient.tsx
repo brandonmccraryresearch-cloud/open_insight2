@@ -10,6 +10,8 @@ interface AgentAction {
   detail: string;
   latency?: number;
   httpStatus?: number;
+  timestamp?: string;
+  type?: "action" | "thought" | "session_start" | "session_end";
 }
 
 interface AuditFinding {
@@ -63,6 +65,9 @@ const PRESET_DURATIONS = [
   { label: "1 hour", seconds: 60 * 60 },
 ];
 
+/** Max session log entries shown in the compact log panel */
+const MAX_SESSION_LOG_ENTRIES = 30;
+
 export default function AuditClient() {
   const [report, setReport] = useState<AuditReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,6 +88,7 @@ export default function AuditClient() {
   const [streamFindings, setStreamFindings] = useState<AuditFinding[]>([]);
   const [streaming, setStreaming] = useState(false);
   const streamingRef = useRef(false);
+  const streamScrollRef = useRef<HTMLDivElement | null>(null);
 
   /** Keep React state and ref in sync for streaming status */
   const setStreamingStatus = useCallback((value: boolean) => {
@@ -160,6 +166,7 @@ export default function AuditClient() {
               findingId?: string;
             };
             if (event.type === "action" || event.type === "session_start" || event.type === "session_end") {
+              const now = new Date().toLocaleTimeString();
               setStreamActions((prev) => [...prev, {
                 agentId: event.agentId,
                 agentName: event.agentName,
@@ -169,18 +176,23 @@ export default function AuditClient() {
                 detail: event.detail ?? "",
                 latency: event.latency,
                 httpStatus: event.httpStatus,
+                timestamp: now,
+                type: event.type as AgentAction["type"],
               }]);
-              addLog(`${event.agentName} → ${event.action ?? event.type}${event.target ? ` on ${event.target}` : ""}${event.latency ? ` (${event.latency}ms)` : ""}`);
+              addLog(`${event.agentName} → ${event.action ?? event.type}${event.target ? ` on ${event.target}` : ""}${event.httpStatus ? ` [HTTP ${event.httpStatus}]` : ""}${event.latency ? ` (${event.latency}ms)` : ""}`);
             } else if (event.type === "thought") {
+              const now = new Date().toLocaleTimeString();
               setStreamActions((prev) => [...prev, {
                 agentId: event.agentId,
                 agentName: event.agentName,
-                action: "💭 thinking",
+                action: "thinking",
                 target: "",
                 status: "success",
                 detail: event.detail ?? "",
+                timestamp: now,
+                type: "thought",
               }]);
-              addLog(`${event.agentName} 💭 ${(event.detail ?? "").slice(0, 120)}`);
+              addLog(`${event.agentName} 💭 ${(event.detail ?? "").slice(0, 200)}`);
             } else if (event.type === "finding") {
               setStreamFindings((prev) => [...prev, {
                 id: event.findingId ?? `f-${prev.length}`,
@@ -255,6 +267,13 @@ export default function AuditClient() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autonomousActive]);
+
+  // Auto-scroll the stream log to the bottom when new events arrive
+  useEffect(() => {
+    if (streamScrollRef.current) {
+      streamScrollRef.current.scrollTop = streamScrollRef.current.scrollHeight;
+    }
+  }, [streamActions]);
 
   function formatTime(s: number): string {
     const m = Math.floor(s / 60);
@@ -467,40 +486,69 @@ export default function AuditClient() {
             </div>
             {/* Session Log */}
             {sessionLog.length > 0 && (
-              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-40 overflow-y-auto border border-[var(--border-primary)]">
-                {sessionLog.map((entry, i) => (
+              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-32 overflow-y-auto border border-[var(--border-primary)]">
+                {sessionLog.slice(-MAX_SESSION_LOG_ENTRIES).map((entry, i) => (
                   <div key={i} className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
                     {entry}
                   </div>
                 ))}
               </div>
             )}
-            {/* Real-time Agent Stream */}
+            {/* Real-time Agent Stream — detailed live log */}
             {streamActions.length > 0 && (
-              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-60 overflow-y-auto border border-[var(--border-primary)]">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="bg-[var(--bg-primary)] rounded-lg border border-[var(--border-primary)] overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-primary)]">
                   {streaming && <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />}
                   <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                    Live Agent Activity ({streamActions.length} actions, {streamFindings.length} findings)
+                    Live Agent Activity
+                  </span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                    {streamActions.filter(a => a.type === "action" || (!a.type && a.action !== "thinking")).length} actions
+                    {" · "}
+                    {streamActions.filter(a => a.type === "thought" || a.action === "thinking").length} thoughts
+                    {" · "}
+                    {streamFindings.length} findings
                   </span>
                 </div>
-                <div className="space-y-1">
+                <div ref={streamScrollRef} className="p-2 max-h-[500px] overflow-y-auto space-y-0.5">
                   {streamActions.map((a, i) => {
+                    const isThought = a.type === "thought" || a.action === "thinking";
+                    const isSystem = a.type === "session_start" || a.type === "session_end";
+                    if (isSystem) {
+                      return (
+                        <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-[11px] bg-[var(--accent-indigo)]/5 border-l-2 border-[var(--accent-indigo)]">
+                          <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                          <span className="text-[var(--accent-indigo)] font-medium">⚙ {a.detail}</span>
+                        </div>
+                      );
+                    }
+                    if (isThought) {
+                      return (
+                        <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-[11px] bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40">
+                          <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                          <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                          <span className="text-[var(--accent-gold)]">💭</span>
+                          <span className="text-[var(--text-secondary)] italic">{a.detail}</span>
+                        </div>
+                      );
+                    }
                     const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
                     const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
                     return (
-                      <div key={i} className="flex items-start gap-1.5 text-[11px] animate-[fadeIn_0.3s_ease-in]">
+                      <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-[11px] hover:bg-[var(--bg-elevated)] transition-colors">
+                        <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
                         <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
                         <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
                         <span className="text-[var(--text-muted)]">→</span>
-                        <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
-                        {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
+                        <span className="font-mono text-[var(--text-primary)] font-medium shrink-0">{a.action}</span>
+                        {a.target && <span className="text-[var(--text-secondary)] truncate">{a.target}</span>}
+                        {a.httpStatus ? <span className="font-mono text-[10px] px-1 rounded shrink-0" style={{ color: statusColor, backgroundColor: `${statusColor}15` }}>[HTTP {a.httpStatus}]</span> : null}
                         {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
                       </div>
                     );
                   })}
                   {streaming && (
-                    <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                    <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] px-2 py-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
                       Agents working…
                     </div>
@@ -555,30 +603,61 @@ export default function AuditClient() {
           <div className="flex items-center gap-2 mb-3">
             {streaming && <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />}
             <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-              Live Agent Activity Stream ({streamActions.length} actions, {streamFindings.length} findings)
+              Live Agent Activity Stream
             </h3>
+            <span className="text-[10px] font-mono text-[var(--text-muted)]">
+              {streamActions.filter(a => a.type === "action" || (!a.type && a.action !== "thinking")).length} actions
+              {" · "}
+              {streamActions.filter(a => a.type === "thought" || a.action === "thinking").length} thoughts
+              {" · "}
+              {streamFindings.length} findings
+            </span>
           </div>
-          <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-80 overflow-y-auto border border-[var(--border-primary)] space-y-1.5">
-            {streamActions.map((a, i) => {
-              const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
-              const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
-              return (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
-                  <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                  <span className="text-[var(--text-muted)]">→</span>
-                  <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
-                  {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
-                  {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
+          <div className="bg-[var(--bg-primary)] rounded-lg border border-[var(--border-primary)] overflow-hidden">
+            <div className="p-2 max-h-[500px] overflow-y-auto space-y-0.5">
+              {streamActions.map((a, i) => {
+                const isThought = a.type === "thought" || a.action === "thinking";
+                const isSystem = a.type === "session_start" || a.type === "session_end";
+                if (isSystem) {
+                  return (
+                    <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-xs bg-[var(--accent-indigo)]/5 border-l-2 border-[var(--accent-indigo)]">
+                      <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                      <span className="text-[var(--accent-indigo)] font-medium">⚙ {a.detail}</span>
+                    </div>
+                  );
+                }
+                if (isThought) {
+                  return (
+                    <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-xs bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40">
+                      <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                      <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                      <span className="text-[var(--accent-gold)]">💭</span>
+                      <span className="text-[var(--text-secondary)] italic">{a.detail}</span>
+                    </div>
+                  );
+                }
+                const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
+                const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
+                return (
+                  <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-xs hover:bg-[var(--bg-elevated)] transition-colors">
+                    <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                    <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
+                    <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                    <span className="text-[var(--text-muted)]">→</span>
+                    <span className="font-mono text-[var(--text-primary)] font-medium shrink-0">{a.action}</span>
+                    {a.target && <span className="text-[var(--text-secondary)] truncate">{a.target}</span>}
+                    {a.httpStatus ? <span className="font-mono text-[10px] px-1 rounded shrink-0" style={{ color: statusColor, backgroundColor: `${statusColor}15` }}>[HTTP {a.httpStatus}]</span> : null}
+                    {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
+                  </div>
+                );
+              })}
+              {streaming && (
+                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] px-2 py-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
+                  Agents working…
                 </div>
-              );
-            })}
-            {streaming && (
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
-                Agents working…
-              </div>
-            )}
+              )}
+            </div>
           </div>
           {!streaming && streamFindings.length > 0 && (
             <div className="mt-3 space-y-2">
