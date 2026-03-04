@@ -166,12 +166,13 @@ You are actively exploring and using the Open Insight research platform as a rea
 Available platform actions:
 ${actionList}
 
-For each turn, respond with EXACTLY ONE JSON object on a single line:
+IMPORTANT: Every response MUST be a single JSON object. No prose, no markdown, no explanation outside the JSON. Respond with EXACTLY this format:
 {"thought":"your genuine reasoning about what to explore next and why","action":"action_name","params":{"slug":"value","id":"value","query":"value","body":{...}}}
 
 The "params" field should contain path parameters (slug, id, query) and a "body" object for POST requests. Use your own agent ID ("${agentId}") when needed.
 
 Rules:
+- ALWAYS respond with a JSON object — never plain text
 - Be genuinely curious — explore what interests YOU based on your expertise
 - After seeing results, reason about what they mean from your perspective
 - If you find issues, broken features, or interesting data, note them in your thoughts
@@ -316,6 +317,9 @@ async function runAIAgentSession(
   }
 
   let agentDone = false;
+  /** Track consecutive non-JSON responses so we can nudge the AI back on track */
+  let consecutiveNonJSON = 0;
+  const MAX_NON_JSON_RETRIES = 3;
 
   for (let turn = 0; turn < maxTurns; turn++) {
     if (signal.aborted) break;
@@ -338,8 +342,20 @@ async function runAIAgentSession(
 
       const jsonStr = extractActionJSON(responseText);
       if (!jsonStr) {
+        // Emit the thought so the user can see the agent's reasoning
         send({ type: "thought", agentId, agentName, detail: responseText.slice(0, 500) });
-        break;
+        consecutiveNonJSON++;
+        if (consecutiveNonJSON >= MAX_NON_JSON_RETRIES) {
+          // After multiple retries, stop to avoid wasting tokens
+          send({ type: "thought", agentId, agentName, detail: `(Agent could not produce a valid action after ${MAX_NON_JSON_RETRIES} attempts — moving on)` });
+          break;
+        }
+        // Ask the agent to try again with proper format
+        h.push({
+          role: "user",
+          parts: [{ text: `Your response was not in the required JSON format. You MUST respond with exactly one JSON object like:\n{"thought":"your reasoning","action":"action_name","params":{"slug":"value"}}\n\nPick an action from the available list and respond with the JSON object now.` }],
+        });
+        continue;
       }
 
       let decision: { thought: string; action: string; params: Record<string, unknown> };
@@ -347,8 +363,20 @@ async function runAIAgentSession(
         decision = JSON.parse(jsonStr);
       } catch {
         send({ type: "thought", agentId, agentName, detail: responseText.slice(0, 500) });
-        break;
+        consecutiveNonJSON++;
+        if (consecutiveNonJSON >= MAX_NON_JSON_RETRIES) {
+          send({ type: "thought", agentId, agentName, detail: `(Agent produced malformed JSON after ${MAX_NON_JSON_RETRIES} attempts — moving on)` });
+          break;
+        }
+        h.push({
+          role: "user",
+          parts: [{ text: `Your JSON was malformed. Respond with a single valid JSON object:\n{"thought":"your reasoning","action":"action_name","params":{}}\n\nTry again now.` }],
+        });
+        continue;
       }
+
+      // Successfully parsed a valid action — reset the non-JSON counter
+      consecutiveNonJSON = 0;
 
       if (decision.thought) {
         send({ type: "thought", agentId, agentName, detail: decision.thought });
@@ -386,7 +414,7 @@ async function runAIAgentSession(
       const resultSummary = buildResultSummary(result);
       h.push({
         role: "user",
-        parts: [{ text: `The platform returned:\nHTTP ${result.status} (${result.latency}ms)\n${resultSummary}\n\nWhat do you observe? Any issues or interesting findings? What would you like to explore next?` }],
+        parts: [{ text: `The platform returned:\nHTTP ${result.status} (${result.latency}ms)\n${resultSummary}\n\nWhat do you observe? Any issues or interesting findings? What would you like to explore next? Respond with your next JSON action.` }],
       });
 
     } catch (err) {
@@ -396,7 +424,14 @@ async function runAIAgentSession(
         status: "failed", detail: `AI reasoning error: ${err instanceof Error ? err.message : String(err)}`,
         latency: 0,
       });
-      break;
+      // Don't break on single errors — try to recover
+      consecutiveNonJSON++;
+      if (consecutiveNonJSON >= MAX_NON_JSON_RETRIES) break;
+      h.push({
+        role: "user",
+        parts: [{ text: "There was an error processing your response. Please try again with a valid JSON action." }],
+      });
+      continue;
     }
   }
 
