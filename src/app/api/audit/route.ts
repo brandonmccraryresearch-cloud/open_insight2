@@ -263,15 +263,25 @@ function buildProbes(): EndpointProbe[] {
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  const computedOrigin = `${url.protocol}//${url.host}`;
+  const canonicalOrigin = process.env.CANONICAL_ORIGIN;
 
-  // Forward auth-related headers so self-probes pass deployment protection
+  // Prefer a canonical origin if configured; otherwise fall back to the computed origin.
+  // This is used as the base URL for internal self-probes.
+  const baseUrl = canonicalOrigin || computedOrigin;
+
+  // Forward auth-related headers only when we are confident the request is targeting
+  // our canonical origin. This avoids SSRF + credential exfiltration via Host spoofing.
   const forwardHeaders: Record<string, string> = {};
-  const cookie = request.headers.get("cookie");
-  if (cookie) forwardHeaders["cookie"] = cookie;
-  const auth = request.headers.get("authorization");
-  if (auth) forwardHeaders["authorization"] = auth;
+  const shouldForwardSensitiveHeaders =
+    canonicalOrigin !== undefined && canonicalOrigin === computedOrigin;
 
+  if (shouldForwardSensitiveHeaders) {
+    const cookie = request.headers.get("cookie");
+    if (cookie) forwardHeaders["cookie"] = cookie;
+    const auth = request.headers.get("authorization");
+    if (auth) forwardHeaders["authorization"] = auth;
+  }
   const actions: AgentAction[] = [];
   const findings: AuditFinding[] = [];
   let findingId = 0;
