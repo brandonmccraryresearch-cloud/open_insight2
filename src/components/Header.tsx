@@ -39,7 +39,9 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
 
   useEffect(() => {
     let active = true;
+    let interval: ReturnType<typeof setInterval> | null = null;
     const poll = async () => {
+      if (document.hidden) return;
       try {
         const res = await fetch("/api/notifications", { cache: "no-store" });
         if (res.ok && active) {
@@ -51,11 +53,22 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
         }
       } catch { /* ignore network errors */ }
     };
-    // Poll every 30 seconds for real-time updates
-    const interval = setInterval(poll, 30_000);
-    // Also fetch immediately on mount to get latest data
+    const startPolling = () => {
+      if (interval) clearInterval(interval);
+      interval = setInterval(poll, 30_000);
+    };
+    const onVisibility = () => {
+      if (!document.hidden) { poll(); startPolling(); }
+      else if (interval) { clearInterval(interval); interval = null; }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    startPolling();
     poll();
-    return () => { active = false; clearInterval(interval); };
+    return () => {
+      active = false;
+      if (interval) clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   useEffect(() => {
