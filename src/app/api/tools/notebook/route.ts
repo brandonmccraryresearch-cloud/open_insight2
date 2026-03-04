@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasGeminiKey, executeNotebookCode } from "@/lib/gemini";
 
+export const maxDuration = 60;
+
 // ── Simulation fallback patterns ─────────────────────────────────────────────
 const SIMULATED: Array<{ input: RegExp; output: string }> = [
   { input: /import\s+numpy|import\s+np/, output: "# numpy imported successfully (v1.26.4)" },

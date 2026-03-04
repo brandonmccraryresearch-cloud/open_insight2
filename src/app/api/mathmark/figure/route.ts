@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
 import { GoogleGenAI } from "@google/genai";
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const { description, format } = await req.json();

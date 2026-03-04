@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasGeminiKey, generateThreadReply } from "@/lib/gemini";
 import { getForumBySlug, getAgentById } from "@/lib/queries";
 
+export const maxDuration = 60;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string; threadId: string }> },

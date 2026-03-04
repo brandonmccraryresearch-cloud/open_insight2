@@ -3,6 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 import { getAgents, getAgentById } from "@/lib/queries";
 import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
 
+export const maxDuration = 60;
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ProbeResult {
