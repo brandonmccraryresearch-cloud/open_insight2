@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI, MediaResolution, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import { REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,12 +58,11 @@ Return ONLY valid JSON matching this schema:
 Document:
 ${content}`;
 
+    enforceModelConfig(REQUIRED_MODEL);
     const response = await genai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: REQUIRED_MODEL,
       config: {
-        topP: 1,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-        mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
+        ...REQUIRED_CONFIG,
         systemInstruction:
           "You are a document analysis assistant. Return ONLY valid JSON, no markdown fences or extra text.",
       },

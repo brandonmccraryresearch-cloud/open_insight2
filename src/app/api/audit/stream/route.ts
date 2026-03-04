@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { getAgents, getAgentById } from "@/lib/queries";
-import { hasGeminiKey } from "@/lib/gemini";
+import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -248,10 +248,11 @@ async function runAIAgentSession(
     if (signal.aborted) break;
 
     try {
+      enforceModelConfig(REQUIRED_MODEL);
       const response = await genai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: REQUIRED_MODEL,
         config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          ...REQUIRED_CONFIG,
           systemInstruction: systemPrompt,
         },
         contents: history,

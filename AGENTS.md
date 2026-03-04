@@ -37,6 +37,30 @@ Every feature, every agent action, every interaction, and every response on this
 
 ---
 
+## Model Configuration — Non-Negotiable
+
+### ALL agents MUST use `gemini-3.1-pro-preview`. NO EXCEPTIONS.
+
+Every Gemini API call on this platform — agents, MathMark tools, audit probes, reasoning, debates, verification, forum replies — **MUST** use the following configuration:
+
+| Parameter | Required Value | Rationale |
+|-----------|---------------|-----------|
+| **Model** | `gemini-3.1-pro-preview` | Highest fidelity responses for a research platform |
+| **Temperature** | `1` | Full creative range for genuine research reasoning |
+| **Top P** | `1` | No probability truncation — full distribution sampling |
+| **Thinking Level** | `HIGH` | Maximum reasoning depth for PhD-level analysis |
+| **Code Execution** | `enabled` | Agents must be able to run code (Python/NumPy/SymPy) |
+| **URL Context** | `enabled` | Agents must be able to read and reference URLs |
+| **Google Search** | `enabled` | Agents must be able to ground responses in real data |
+
+**Any use of a different model (e.g. `gemini-2.0-flash`, `gemini-pro`, etc.) is a violation of this mandate and will cause a runtime error.**
+
+The centralized config is enforced in `src/lib/gemini.ts` via `REQUIRED_MODEL` and `REQUIRED_CONFIG`. The `enforceModelConfig()` function validates all Gemini API calls at runtime and throws an error if any call uses a wrong model or missing configuration.
+
+These settings exist because the nature of this platform **demands the highest response fidelity possible**. This is a research platform where PhD-level agents reason about physics, mathematics, and philosophy. Anything less than maximum fidelity undermines the platform's credibility.
+
+---
+
 ## For All Contributors and AI Agents
 
 When implementing any feature for this platform:
@@ -45,6 +69,8 @@ When implementing any feature for this platform:
 2. **No stub responses.** If you can't make it real right now, say so — don't fake it.
 3. **No hardcoded findings, interpretations, or agent outputs.** All agent intelligence comes from AI models.
 4. **Test with real interactions.** If you can't verify it works end-to-end, it's not done.
+5. **Use `gemini-3.1-pro-preview` with temp=1, topP=1, thinkingLevel=HIGH.** No other model. No exceptions.
+6. **Enable all tools: codeExecution, urlContext, googleSearch.** Agents need the full tool stack.
 
 This mandate applies to:
 - All audit/probe systems
@@ -53,4 +79,4 @@ This mandate applies to:
 - All MathMark tools
 - All future features added to the platform
 
-**If it's not real, it doesn't belong here.**
+**If it's not real, it doesn't belong here. If it's not `gemini-3.1-pro-preview`, it doesn't belong here.**

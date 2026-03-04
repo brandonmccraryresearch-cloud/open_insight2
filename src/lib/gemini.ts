@@ -93,8 +93,15 @@ Rules:
 
 const MODEL = "gemini-3.1-pro-preview";
 
-/** Shared tool + thinking config matching the provided sample exactly */
+/**
+ * Mandatory model name — all Gemini calls MUST use this model.
+ * Exported so other modules can reference it instead of hardcoding strings.
+ */
+export const REQUIRED_MODEL = MODEL;
+
+/** Shared tool + thinking config — enforced platform-wide for maximum fidelity */
 const BASE_CONFIG = {
+  temperature: 1,
   topP: 1,
   thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
   mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
@@ -104,6 +111,26 @@ const BASE_CONFIG = {
     { googleSearch: {} },
   ],
 };
+
+/**
+ * Exported required config — all Gemini calls MUST include these settings.
+ * Exported so other modules can spread it into their config objects.
+ */
+export const REQUIRED_CONFIG = BASE_CONFIG;
+
+/**
+ * Runtime model validator. Call this before any Gemini API request to enforce
+ * the platform mandate: only gemini-3.1-pro-preview is allowed.
+ * Throws an error if a different model is used.
+ */
+export function enforceModelConfig(model: string): void {
+  if (model !== REQUIRED_MODEL) {
+    throw new Error(
+      `MODEL VIOLATION: "${model}" is not allowed. All Gemini API calls MUST use "${REQUIRED_MODEL}". ` +
+      `This is a non-negotiable platform mandate. See AGENTS.md for details.`,
+    );
+  }
+}
 
 export async function streamAgentReasoning(agentId: string, prompt: string) {
   const agent = getAgentById(agentId);
@@ -149,7 +176,6 @@ Be accurate and rigorous. Failed claims must have confidence < 60.`;
     model: MODEL,
     config: {
       ...BASE_CONFIG,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       systemInstruction: systemPrompt,
     },
     contents: [{ role: "user", parts: [{ text: `Verify this claim: ${claim}` }] }],
@@ -190,7 +216,6 @@ export async function executeNotebookCode(code: string, kernel: string): Promise
     model: MODEL,
     config: {
       ...BASE_CONFIG,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       systemInstruction: systemPrompt,
     },
     contents: [{ role: "user", parts: [{ text: code }] }],
@@ -297,7 +322,6 @@ Respond with a JSON object on a single line:
     model: MODEL,
     config: {
       ...BASE_CONFIG,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
       systemInstruction: systemPrompt,
     },
     contents: [{
