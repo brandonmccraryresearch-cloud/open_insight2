@@ -96,6 +96,10 @@ const MAX_TURNS_PER_ROUND = 15;
 const MAX_TURNS_SINGLE = 25;
 /** Default session duration in seconds when none specified */
 const DEFAULT_SESSION_DURATION_S = 300;
+/** Minimum allowed session duration (seconds) */
+const MIN_SESSION_DURATION_S = 60;
+/** Maximum allowed session duration (seconds) */
+const MAX_SESSION_DURATION_S = 7200;
 /** Timeout for each HTTP probe call (ms) */
 const PROBE_TIMEOUT_MS = 15000;
 /** Max characters in a result summary fed back to the AI */
@@ -548,7 +552,7 @@ export async function GET(request: NextRequest) {
   const encoder = new TextEncoder();
   const continuous = url.searchParams.get("continuous") === "true";
   const durationParam = url.searchParams.get("duration");
-  const sessionDurationS = durationParam ? Math.max(60, Math.min(7200, parseInt(durationParam, 10) || DEFAULT_SESSION_DURATION_S)) : DEFAULT_SESSION_DURATION_S;
+  const sessionDurationS = durationParam ? Math.max(MIN_SESSION_DURATION_S, Math.min(MAX_SESSION_DURATION_S, parseInt(durationParam, 10) || DEFAULT_SESSION_DURATION_S)) : DEFAULT_SESSION_DURATION_S;
   const maxTurnsPerAgent = continuous ? MAX_TURNS_PER_ROUND : MAX_TURNS_SINGLE;
   const sessionStartTime = Date.now();
 
@@ -625,12 +629,9 @@ export async function GET(request: NextRequest) {
             );
             agentHistories.set(agent.id, updatedHistory);
 
-            // If the agent signalled "done", let it rest but re-include in later rounds
-            // so agents keep participating for the full duration
-            if (done && continuous) {
-              // In continuous mode, reset the agent so it can explore more
-              // — only truly stop if it's a single-pass session
-            } else if (done) {
+            // In continuous mode, agents keep participating even after signalling "done"
+            // — only permanently exclude in single-pass mode
+            if (done && !continuous) {
               completedAgents.add(agent.id);
             }
           }

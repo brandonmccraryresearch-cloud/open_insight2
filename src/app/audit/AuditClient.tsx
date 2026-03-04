@@ -42,7 +42,7 @@ const categoryLabels: Record<string, string> = {
 export default function AuditClient() {
   // Subscribe to global persistent session store (survives navigation)
   const session: SessionState = useSyncExternalStore(subscribe, getSessionState, getSessionState);
-  const { actions: streamActions, findings: streamFindings, log: sessionLog, streaming, active: autonomousActive, error } = session;
+  const { actions: streamActions, findings: streamFindings, log: sessionLog, streaming, active, error } = session;
 
   // Local UI state
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>("all");
@@ -55,16 +55,16 @@ export default function AuditClient() {
 
   // Countdown timer — polls getTimeRemaining() every second
   useEffect(() => {
-    if (!autonomousActive) { setTimeRemaining(0); return; }
+    if (!active) { setTimeRemaining(0); return; }
     const id = setInterval(() => {
       const rem = getTimeRemaining();
       setTimeRemaining(rem);
-      if (rem <= 0 && autonomousActive) {
+      if (rem <= 0 && active) {
         // Let the server-side time enforcement handle ending
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [autonomousActive]);
+  }, [active]);
 
   // Auto-scroll
   useEffect(() => {
@@ -349,7 +349,7 @@ export default function AuditClient() {
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
-  const hasSession = autonomousActive || streamActions.length > 0;
+  const hasSession = active || streamActions.length > 0;
 
   return (
     <div className="page-enter p-6 max-w-7xl mx-auto space-y-4">
@@ -379,11 +379,11 @@ export default function AuditClient() {
       {/* Session Control Panel */}
       <div className="glass-card p-4">
         <div className="flex items-center gap-3 mb-3">
-          <div className={`w-3 h-3 rounded-full ${autonomousActive ? "bg-[var(--accent-teal)] status-pulse" : streamActions.length > 0 && !streaming ? "bg-[var(--accent-gold)]" : "bg-[var(--text-muted)]"}`} />
+          <div className={`w-3 h-3 rounded-full ${active ? "bg-[var(--accent-teal)] status-pulse" : streamActions.length > 0 && !streaming ? "bg-[var(--accent-gold)]" : "bg-[var(--text-muted)]"}`} />
           <h3 className="text-sm font-bold text-[var(--text-primary)]">
-            {autonomousActive ? "Session Active" : streamActions.length > 0 ? "Session Complete" : "Start New Session"}
+            {active ? "Session Active" : streamActions.length > 0 ? "Session Complete" : "Start New Session"}
           </h3>
-          {autonomousActive && (
+          {active && (
             <span className="badge bg-[var(--accent-teal)]/10 text-[var(--accent-teal)]">
               {formatTime(timeRemaining)} remaining
             </span>
@@ -394,14 +394,14 @@ export default function AuditClient() {
               Streaming
             </span>
           )}
-          {!autonomousActive && streamActions.length > 0 && !streaming && (
+          {!active && streamActions.length > 0 && !streaming && (
             <span className="badge bg-[var(--text-muted)]/10 text-[var(--text-muted)]">
               Ended
             </span>
           )}
         </div>
 
-        {!autonomousActive && streamActions.length === 0 && (
+        {!active && streamActions.length === 0 && (
           <p className="text-xs text-[var(--text-muted)] mb-4">
             Each PhD-level agent operates as its defined persona — reasoning, debating, verifying,
             posting in forums, and using tools across the platform. Agents run for the full selected
@@ -409,7 +409,7 @@ export default function AuditClient() {
           </p>
         )}
 
-        {!autonomousActive ? (
+        {!active ? (
           <div className="flex items-center gap-3 flex-wrap">
             <label className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
               Duration:
