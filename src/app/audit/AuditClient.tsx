@@ -74,7 +74,6 @@ export default function AuditClient() {
   const [autonomousActive, setAutonomousActive] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(PRESET_DURATIONS[0].seconds);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [cycleCount, setCycleCount] = useState(0);
   const [sessionLog, setSessionLog] = useState<string[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -209,13 +208,12 @@ export default function AuditClient() {
   function startAutonomousMode() {
     setAutonomousActive(true);
     setTimeRemaining(selectedDuration);
-    setCycleCount(0);
     setSessionLog([]);
     addLog(`Autonomous Agent Session activated — ${PRESET_DURATIONS.find((d) => d.seconds === selectedDuration)?.label} continuous session`);
-    addLog("All agents operating as their PhD-level personas with real AI reasoning — exploring the platform as genuine users…");
+    addLog("All agents operating as their PhD-level personas with real AI reasoning — exploring the platform as genuine users with persistent context…");
 
     // Run a single continuous streaming session for the entire duration
-    addLog("Starting continuous AI-driven session — agents will explore the platform using real Gemini AI…");
+    addLog("Starting continuous AI-driven session — agents maintain full context across the entire session…");
     runStreamAudit(true).then(() => {
       addLog("Continuous session stream ended.");
       // Get a final snapshot report for summary cards
@@ -266,12 +264,12 @@ export default function AuditClient() {
 
   function generateMarkdownReport(): string {
     if (!report) return "";
-    const mode = autonomousActive || cycleCount > 0 ? "Autonomous" : "Manual";
+    const mode = autonomousActive ? "Autonomous" : "Manual";
     const lines: string[] = [
       `## 🔍 Open Insight Platform — Live Audit Report`,
       ``,
       `**Generated:** ${new Date(report.timestamp).toLocaleString()}`,
-      `**Mode:** ${mode}${cycleCount > 0 ? ` (${cycleCount} cycle${cycleCount !== 1 ? "s" : ""})` : ""} — **Live HTTP probing**`,
+      `**Mode:** ${mode} — **Live HTTP probing** (persistent agent context)`,
       `**Participating Agents:** ${report.agentParticipants.join(", ")}`,
       ``,
       `### Agent Activity Summary`,
@@ -458,7 +456,7 @@ export default function AuditClient() {
                 </div>
               </div>
               <span className="text-xs font-mono text-[var(--text-muted)]">
-                Cycle {cycleCount}
+                Continuous Session
               </span>
               <button
                 onClick={stopAutonomousMode}

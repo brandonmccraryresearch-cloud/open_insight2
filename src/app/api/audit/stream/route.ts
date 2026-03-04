@@ -223,8 +223,19 @@ function buildResultSummary(result: ProbeResult): string {
   return json;
 }
 
+// ─── Persistent conversation history type ────────────────────────────────────
+
+type ConversationHistory = Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
+
 // ─── AI-driven agent session ─────────────────────────────────────────────────
 
+/**
+ * Run a single turn-batch for an agent. Accepts an existing conversation history
+ * so context persists across the entire continuous session. If no history is
+ * provided, a fresh one is initialised with the opening prompt.
+ *
+ * Returns `true` if the agent signalled "done" (no more actions desired).
+ */
 async function runAIAgentSession(
   agentId: string,
   agentName: string,
@@ -234,15 +245,30 @@ async function runAIAgentSession(
   maxTurns: number,
   send: (event: StreamEvent) => void,
   signal: AbortSignal,
-) {
+  history?: ConversationHistory,
+): Promise<{ done: boolean; history: ConversationHistory }> {
   const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
   const systemPrompt = buildAgentAuditPrompt(agentId, actionList);
-  const history: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
-  history.push({
-    role: "user",
-    parts: [{ text: "You have just logged into the Open Insight platform. Look around and explore what interests you as a researcher. What would you like to investigate first?" }],
-  });
+  // If this is the first invocation for this agent, seed the conversation
+  const h: ConversationHistory = history ?? [];
+  if (h.length === 0) {
+    h.push({
+      role: "user",
+      parts: [{ text: "You have just logged into the Open Insight platform. Look around and explore what interests you as a researcher. What would you like to investigate first?" }],
+    });
+  } else {
+    // Continuing an existing session — the full conversation history (`h`) is
+    // already populated with every prior thought, action, and result. This prompt
+    // leverages that persistent context so the agent can reason about what it
+    // hasn't explored yet rather than repeating its initial actions.
+    h.push({
+      role: "user",
+      parts: [{ text: "Continue exploring the platform. Based on everything you've seen so far, what would you like to investigate next? Try actions you haven't tried yet." }],
+    });
+  }
+
+  let agentDone = false;
 
   for (let turn = 0; turn < maxTurns; turn++) {
     if (signal.aborted) break;
@@ -255,13 +281,13 @@ async function runAIAgentSession(
           ...REQUIRED_CONFIG,
           systemInstruction: systemPrompt,
         },
-        contents: history,
+        contents: h,
       });
 
       const responseText = response.candidates?.[0]?.content?.parts
         ?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
 
-      history.push({ role: "model", parts: [{ text: responseText }] });
+      h.push({ role: "model", parts: [{ text: responseText }] });
 
       const jsonMatch = responseText.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
       if (!jsonMatch) {
@@ -281,7 +307,10 @@ async function runAIAgentSession(
         send({ type: "thought", agentId, agentName, detail: decision.thought });
       }
 
-      if (decision.action === "done") break;
+      if (decision.action === "done") {
+        agentDone = true;
+        break;
+      }
 
       const resolved = resolveAction(decision.action, decision.params ?? {});
       if (!resolved) {
@@ -290,7 +319,7 @@ async function runAIAgentSession(
           action: decision.action, target: "unknown",
           status: "failed", detail: `Unknown action: ${decision.action}`, latency: 0,
         });
-        history.push({
+        h.push({
           role: "user",
           parts: [{ text: `That action "${decision.action}" is not available. Try a different one from the list.` }],
         });
@@ -308,7 +337,7 @@ async function runAIAgentSession(
       });
 
       const resultSummary = buildResultSummary(result);
-      history.push({
+      h.push({
         role: "user",
         parts: [{ text: `The platform returned:\nHTTP ${result.status} (${result.latency}ms)\n${resultSummary}\n\nWhat do you observe? Any issues or interesting findings? What would you like to explore next?` }],
       });
@@ -323,6 +352,8 @@ async function runAIAgentSession(
       break;
     }
   }
+
+  return { done: agentDone, history: h };
 }
 
 // ─── Fallback: basic probe mode (no Gemini key) ──────────────────────────────
@@ -455,38 +486,47 @@ export async function GET(request: NextRequest) {
       const allowWrites = process.env.AUDIT_WRITE_PROBES === "true";
       const actionList = buildActionListForPrompt(allowWrites);
 
-      let pass = 0;
-      do {
-        pass++;
-        const agentOrder = shuffle(auditAgents);
+      if (useAI) {
+        // Persistent conversation history per agent — context carries across
+        // the entire continuous session so agents never lose their memory.
+        const agentHistories = new Map<string, ConversationHistory>();
+        const completedAgents = new Set<string>();
 
-        if (continuous && pass > 1) {
-          send({
-            type: "session_start", agentId: "system", agentName: "System",
-            detail: `Pass ${pass} — agents continuing platform exploration…`,
-          });
-        }
+        do {
+          const activeAgents = auditAgents.filter((a) => !completedAgents.has(a.id));
+          if (activeAgents.length === 0) break;
+          const agentOrder = shuffle(activeAgents);
 
-        for (const agent of agentOrder) {
-          if (request.signal.aborted) break;
+          for (const agent of agentOrder) {
+            if (request.signal.aborted) break;
 
-          if (useAI) {
-            await runAIAgentSession(
+            const existingHistory = agentHistories.get(agent.id);
+            const { done, history: updatedHistory } = await runAIAgentSession(
               agent.id, agent.name, actionList, baseUrl, forwardHeaders,
               maxTurnsPerAgent, send, request.signal,
+              existingHistory,
             );
-          } else {
-            await runBasicProbeSession(
-              agent.id, agent.name, baseUrl, forwardHeaders,
-              send, request.signal, () => `audit-${++findingId}`,
-            );
+            agentHistories.set(agent.id, updatedHistory);
+
+            // If the agent signalled "done", exclude it from future rounds
+            if (done) completedAgents.add(agent.id);
           }
+        } while (continuous && !request.signal.aborted && completedAgents.size < auditAgents.length);
+      } else {
+        // Basic probe mode — no persistent context needed
+        const agentOrder = shuffle(auditAgents);
+        for (const agent of agentOrder) {
+          if (request.signal.aborted) break;
+          await runBasicProbeSession(
+            agent.id, agent.name, baseUrl, forwardHeaders,
+            send, request.signal, () => `audit-${++findingId}`,
+          );
         }
-      } while (continuous && !request.signal.aborted);
+      }
 
       send({
         type: "session_end", agentId: "system", agentName: "System",
-        detail: `Live audit complete.${continuous ? ` ${pass} passes completed.` : ""} All agent sessions used ${useAI ? "real AI reasoning (Gemini)" : "basic HTTP probing"}.`,
+        detail: `Live audit complete. All agent sessions used ${useAI ? "real AI reasoning (Gemini) with persistent context" : "basic HTTP probing"}.`,
       });
 
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
