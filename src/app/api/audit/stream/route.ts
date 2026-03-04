@@ -86,6 +86,17 @@ async function probe(
   }
 }
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+/** Max number of AI-driven turns per agent in continuous mode */
+const MAX_TURNS_CONTINUOUS = 8;
+/** Max number of AI-driven turns per agent in single-pass mode */
+const MAX_TURNS_SINGLE = 5;
+/** Timeout for each HTTP probe call (ms) */
+const PROBE_TIMEOUT_MS = 15000;
+/** Max characters in a result summary fed back to the AI */
+const MAX_RESULT_SUMMARY_LENGTH = 2000;
+
 // ─── Platform action registry (real endpoints agents can call) ───────────────
 
 interface PlatformAction {
@@ -208,7 +219,7 @@ function buildResultSummary(result: ProbeResult): string {
   if (result.contentType?.includes("text/event-stream")) return "Response is a Server-Sent Events stream (SSE). The endpoint is live and streaming.";
   if (!result.data) return "(empty response)";
   const json = JSON.stringify(result.data, null, 2);
-  if (json.length > 2000) return json.slice(0, 2000) + "\n... (truncated)";
+  if (json.length > MAX_RESULT_SUMMARY_LENGTH) return json.slice(0, MAX_RESULT_SUMMARY_LENGTH) + "\n... (truncated)";
   return json;
 }
 
@@ -285,7 +296,7 @@ async function runAIAgentSession(
         continue;
       }
 
-      const result = await probe(baseUrl, resolved.method, resolved.path, resolved.body, 15000, forwardHeaders);
+      const result = await probe(baseUrl, resolved.method, resolved.path, resolved.body, PROBE_TIMEOUT_MS, forwardHeaders);
 
       send({
         type: "action", agentId, agentName,
@@ -374,7 +385,7 @@ async function runBasicProbeSession(
 
   for (const p of probes) {
     if (signal.aborted) break;
-    const result = await probe(baseUrl, p.method, p.path, p.body, 15000, forwardHeaders);
+    const result = await probe(baseUrl, p.method, p.path, p.body, PROBE_TIMEOUT_MS, forwardHeaders);
 
     send({
       type: "action", agentId, agentName,
@@ -406,7 +417,7 @@ export async function GET(request: NextRequest) {
   const baseUrl = configuredBaseUrl ?? `${url.protocol}//${url.host}`;
   const encoder = new TextEncoder();
   const continuous = url.searchParams.get("continuous") === "true";
-  const maxTurnsPerAgent = continuous ? 8 : 5;
+  const maxTurnsPerAgent = continuous ? MAX_TURNS_CONTINUOUS : MAX_TURNS_SINGLE;
 
   // Forward auth-related headers so self-probes pass deployment protection
   const forwardHeaders: Record<string, string> = {};

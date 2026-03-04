@@ -77,7 +77,6 @@ export default function AuditClient() {
   const [cycleCount, setCycleCount] = useState(0);
   const [sessionLog, setSessionLog] = useState<string[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const auditIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Streaming actions state (real-time feed)
@@ -233,12 +232,10 @@ export default function AuditClient() {
     setAutonomousActive(false);
     setTimeRemaining(0);
     if (intervalRef.current) clearInterval(intervalRef.current);
-    if (auditIntervalRef.current) clearInterval(auditIntervalRef.current);
     intervalRef.current = null;
-    auditIntervalRef.current = null;
     abortRef.current?.abort();
     abortRef.current = null;
-    addLog("Autonomous Mode ended. Final report ready for export.");
+    addLog("Autonomous session ended. Final report ready for export.");
   }
 
   // Countdown timer
