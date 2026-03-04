@@ -265,12 +265,12 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const requestOrigin = url.origin;
   const canonicalOrigin = process.env.CANONICAL_ORIGIN;
-  let canonicalOriginOrigin: string | null = null;
+  let parsedCanonicalOrigin: string | null = null;
   if (canonicalOrigin) {
     try {
-      canonicalOriginOrigin = new URL(canonicalOrigin).origin;
+      parsedCanonicalOrigin = new URL(canonicalOrigin).origin;
     } catch {
-      canonicalOriginOrigin = null;
+      parsedCanonicalOrigin = null;
     }
   }
 
@@ -285,7 +285,7 @@ export async function GET(request: NextRequest) {
   const forwardHeaders: Record<string, string> = {};
   const shouldForward =
     !canonicalOrigin ||
-    (canonicalOriginOrigin !== null && canonicalOriginOrigin === requestOrigin);
+    (parsedCanonicalOrigin !== null && parsedCanonicalOrigin === requestOrigin);
   if (shouldForward) {
     const cookie = request.headers.get("cookie");
     if (cookie) forwardHeaders["cookie"] = cookie;
