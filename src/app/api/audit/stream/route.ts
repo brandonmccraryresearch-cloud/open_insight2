@@ -90,10 +90,12 @@ async function probe(
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-/** Max number of AI-driven turns per agent in continuous mode */
-const MAX_TURNS_CONTINUOUS = 50;
+/** Max number of AI-driven turns per agent per round in continuous mode */
+const MAX_TURNS_PER_ROUND = 15;
 /** Max number of AI-driven turns per agent in single-pass mode */
 const MAX_TURNS_SINGLE = 25;
+/** Default session duration in seconds when none specified */
+const DEFAULT_SESSION_DURATION_S = 300;
 /** Timeout for each HTTP probe call (ms) */
 const PROBE_TIMEOUT_MS = 15000;
 /** Max characters in a result summary fed back to the AI */
@@ -152,7 +154,7 @@ function buildActionListForPrompt(): string {
 
 // ─── AI agent persona ────────────────────────────────────────────────────────
 
-function buildAgentAuditPrompt(agentId: string, actionList: string): string {
+function buildAgentPrompt(agentId: string, actionList: string): string {
   const agent = getAgentById(agentId);
   if (!agent) return "You are a research agent exploring a platform.";
 
@@ -300,7 +302,7 @@ async function runAIAgentSession(
   history?: ConversationHistory,
 ): Promise<{ done: boolean; history: ConversationHistory }> {
   const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-  const systemPrompt = buildAgentAuditPrompt(agentId, actionList);
+  const systemPrompt = buildAgentPrompt(agentId, actionList);
 
   // If this is the first invocation for this agent, seed the conversation
   const h: ConversationHistory = history ?? [];
@@ -545,7 +547,10 @@ export async function GET(request: NextRequest) {
   const baseUrl = configuredBaseUrl ?? `${url.protocol}//${url.host}`;
   const encoder = new TextEncoder();
   const continuous = url.searchParams.get("continuous") === "true";
-  const maxTurnsPerAgent = continuous ? MAX_TURNS_CONTINUOUS : MAX_TURNS_SINGLE;
+  const durationParam = url.searchParams.get("duration");
+  const sessionDurationS = durationParam ? Math.max(60, Math.min(7200, parseInt(durationParam, 10) || DEFAULT_SESSION_DURATION_S)) : DEFAULT_SESSION_DURATION_S;
+  const maxTurnsPerAgent = continuous ? MAX_TURNS_PER_ROUND : MAX_TURNS_SINGLE;
+  const sessionStartTime = Date.now();
 
   // Forward auth-related headers so self-probes pass deployment protection.
   // When no AUDIT_BASE_URL is configured, we probe our own origin (same-host),
@@ -590,7 +595,7 @@ export async function GET(request: NextRequest) {
         type: "session_start",
         agentId: "system",
         agentName: "System",
-        detail: `Live audit session — ${auditAgents.length} ${useAI ? "AI-driven" : "basic probe"} agents exploring ${baseUrl}${continuous ? " (continuous mode)" : ""}. ${useAI ? "Each agent uses real Gemini AI to decide what to investigate and interpret results." : "Set GEMINI_API_KEY for AI-driven sessions."}`,
+        detail: `Live agent session — ${auditAgents.length} ${useAI ? "AI-driven" : "basic probe"} agents exploring ${baseUrl}${continuous ? ` (continuous mode, ${Math.round(sessionDurationS / 60)} min)` : ""}. ${useAI ? "Each agent uses real Gemini AI to decide what to investigate and interpret results." : "Set GEMINI_API_KEY for AI-driven sessions."}`,
       });
 
       const actionList = buildActionListForPrompt();
@@ -601,13 +606,16 @@ export async function GET(request: NextRequest) {
         const agentHistories = new Map<string, ConversationHistory>();
         const completedAgents = new Set<string>();
 
+        const isSessionExpired = () => continuous && (Date.now() - sessionStartTime) >= sessionDurationS * 1000;
+
         do {
+          if (isSessionExpired()) break;
           const activeAgents = auditAgents.filter((a) => !completedAgents.has(a.id));
           if (activeAgents.length === 0) break;
           const agentOrder = shuffle(activeAgents);
 
           for (const agent of agentOrder) {
-            if (request.signal.aborted) break;
+            if (request.signal.aborted || isSessionExpired()) break;
 
             const existingHistory = agentHistories.get(agent.id);
             const { done, history: updatedHistory } = await runAIAgentSession(
@@ -617,10 +625,16 @@ export async function GET(request: NextRequest) {
             );
             agentHistories.set(agent.id, updatedHistory);
 
-            // If the agent signalled "done", exclude it from future rounds
-            if (done) completedAgents.add(agent.id);
+            // If the agent signalled "done", let it rest but re-include in later rounds
+            // so agents keep participating for the full duration
+            if (done && continuous) {
+              // In continuous mode, reset the agent so it can explore more
+              // — only truly stop if it's a single-pass session
+            } else if (done) {
+              completedAgents.add(agent.id);
+            }
           }
-        } while (continuous && !request.signal.aborted && completedAgents.size < auditAgents.length);
+        } while (continuous && !request.signal.aborted && !isSessionExpired());
       } else {
         // Basic probe mode — no persistent context needed
         const agentOrder = shuffle(auditAgents);
@@ -635,7 +649,7 @@ export async function GET(request: NextRequest) {
 
       send({
         type: "session_end", agentId: "system", agentName: "System",
-        detail: `Live audit complete. All agent sessions used ${useAI ? "real AI reasoning (Gemini) with persistent context" : "basic HTTP probing"}.`,
+        detail: `Session complete. All agent sessions used ${useAI ? "real AI reasoning (Gemini) with persistent context" : "basic HTTP probing"}.`,
       });
 
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
