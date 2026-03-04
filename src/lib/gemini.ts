@@ -120,15 +120,24 @@ export const REQUIRED_CONFIG = BASE_CONFIG;
 
 /**
  * Runtime model validator. Call this before any Gemini API request to enforce
- * the platform mandate: only gemini-3.1-pro-preview is allowed.
- * Throws an error if a different model is used.
+ * the platform mandate: only gemini-3.1-pro-preview is allowed with the
+ * required configuration (temperature=1, topP=1, thinkingLevel=HIGH).
+ * Throws an error if a different model or missing config is detected.
  */
-export function enforceModelConfig(model: string): void {
+export function enforceModelConfig(model: string, config?: Record<string, unknown>): void {
   if (model !== REQUIRED_MODEL) {
     throw new Error(
       `MODEL VIOLATION: "${model}" is not allowed. All Gemini API calls MUST use "${REQUIRED_MODEL}". ` +
       `This is a non-negotiable platform mandate. See AGENTS.md for details.`,
     );
+  }
+  if (config) {
+    if (config.temperature !== undefined && config.temperature !== 1) {
+      throw new Error(`CONFIG VIOLATION: temperature must be 1, got ${config.temperature}. See AGENTS.md.`);
+    }
+    if (config.topP !== undefined && config.topP !== 1) {
+      throw new Error(`CONFIG VIOLATION: topP must be 1, got ${config.topP}. See AGENTS.md.`);
+    }
   }
 }
 
