@@ -329,7 +329,7 @@ async function runAIAgentSession(
     if (signal.aborted) break;
 
     try {
-      enforceModelConfig(REQUIRED_MODEL);
+      enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
       const response = await genai.models.generateContent({
         model: REQUIRED_MODEL,
         config: {
@@ -552,8 +552,17 @@ export async function GET(request: NextRequest) {
   // so forwarding is always safe. When an explicit base URL IS configured,
   // only forward if it matches the request's own origin to avoid credential leak.
   const forwardHeaders: Record<string, string> = {};
-  const computedOrigin = `${url.protocol}//${url.host}`;
-  const shouldForward = !configuredBaseUrl || configuredBaseUrl === computedOrigin;
+  const computedOrigin = url.origin;
+  let shouldForward = !configuredBaseUrl;
+  if (configuredBaseUrl) {
+    try {
+      const configuredOrigin = new URL(configuredBaseUrl).origin;
+      shouldForward = configuredOrigin === computedOrigin;
+    } catch {
+      // Malformed AUDIT_BASE_URL; do not forward auth headers to avoid leaks.
+      shouldForward = false;
+    }
+  }
   if (shouldForward) {
     const cookie = request.headers.get("cookie");
     if (cookie) forwardHeaders["cookie"] = cookie;

@@ -52,7 +52,7 @@ Return ONLY valid JSON:
   "markdown": "markdown to insert into the document (for SVG, use an inline data URI image; for code, use a fenced code block)"
 }`;
 
-    enforceModelConfig(REQUIRED_MODEL);
+    enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
     const response = await genai.models.generateContent({
       model: REQUIRED_MODEL,
       config: {

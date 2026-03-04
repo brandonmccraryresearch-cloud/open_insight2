@@ -47,7 +47,7 @@ Return ONLY valid JSON:
 Document:
 ${content}`;
 
-    enforceModelConfig(REQUIRED_MODEL);
+    enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
     const response = await genai.models.generateContent({
       model: REQUIRED_MODEL,
       config: {

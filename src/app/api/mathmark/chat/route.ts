@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       { role: "user", parts: [{ text: message }] },
     ];
 
-    enforceModelConfig(REQUIRED_MODEL);
+    enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
     const response = await genai.models.generateContent({
       model: REQUIRED_MODEL,
       config: {

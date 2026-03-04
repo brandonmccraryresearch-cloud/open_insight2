@@ -263,19 +263,29 @@ function buildProbes(): EndpointProbe[] {
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const computedOrigin = `${url.protocol}//${url.host}`;
+  const requestOrigin = url.origin;
   const canonicalOrigin = process.env.CANONICAL_ORIGIN;
+  let canonicalOriginOrigin: string | null = null;
+  if (canonicalOrigin) {
+    try {
+      canonicalOriginOrigin = new URL(canonicalOrigin).origin;
+    } catch {
+      canonicalOriginOrigin = null;
+    }
+  }
 
   // Prefer a canonical origin if configured; otherwise fall back to the computed origin.
   // This is used as the base URL for internal self-probes.
-  const baseUrl = canonicalOrigin || computedOrigin;
+  const baseUrl = canonicalOrigin || requestOrigin;
 
   // Forward auth-related headers so self-probes pass deployment protection.
   // When no CANONICAL_ORIGIN is configured, we probe our own origin (same-host),
   // so forwarding is always safe. When an explicit origin IS configured,
   // only forward if it matches the request's own origin to avoid credential leak.
   const forwardHeaders: Record<string, string> = {};
-  const shouldForward = !canonicalOrigin || canonicalOrigin === computedOrigin;
+  const shouldForward =
+    !canonicalOrigin ||
+    (canonicalOriginOrigin !== null && canonicalOriginOrigin === requestOrigin);
   if (shouldForward) {
     const cookie = request.headers.get("cookie");
     if (cookie) forwardHeaders["cookie"] = cookie;
