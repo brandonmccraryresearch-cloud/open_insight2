@@ -86,6 +86,12 @@ export default function AuditClient() {
   const [streaming, setStreaming] = useState(false);
   const streamingRef = useRef(false);
 
+  /** Keep React state and ref in sync for streaming status */
+  const setStreamingStatus = useCallback((value: boolean) => {
+    setStreaming(value);
+    streamingRef.current = value;
+  }, []);
+
   const addLog = useCallback((msg: string) => {
     const ts = new Date().toLocaleTimeString();
     setSessionLog((prev) => [...prev, `[${ts}] ${msg}`]);
@@ -110,8 +116,7 @@ export default function AuditClient() {
 
   /** Stream audit events via SSE for real-time agent activity display */
   async function runStreamAudit() {
-    setStreaming(true);
-    streamingRef.current = true;
+    setStreamingStatus(true);
     setStreamActions([]);
     setStreamFindings([]);
     setError(null);
@@ -188,8 +193,7 @@ export default function AuditClient() {
         setError(err instanceof Error ? err.message : "Stream error");
       }
     }
-    setStreaming(false);
-    streamingRef.current = false;
+    setStreamingStatus(false);
   }
 
   function startAutonomousMode() {
