@@ -66,7 +66,7 @@ const PRESET_DURATIONS = [
 ];
 
 /** Max session log entries shown in the compact log panel */
-const MAX_SESSION_LOG_ENTRIES = 30;
+const MAX_SESSION_LOG_ENTRIES = 500;
 
 export default function AuditClient() {
   const [report, setReport] = useState<AuditReport | null>(null);
@@ -486,7 +486,7 @@ export default function AuditClient() {
             </div>
             {/* Session Log */}
             {sessionLog.length > 0 && (
-              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-32 overflow-y-auto border border-[var(--border-primary)]">
+              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-60 overflow-y-auto border border-[var(--border-primary)]">
                 {sessionLog.slice(-MAX_SESSION_LOG_ENTRIES).map((entry, i) => (
                   <div key={i} className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
                     {entry}
@@ -510,7 +510,7 @@ export default function AuditClient() {
                     {streamFindings.length} findings
                   </span>
                 </div>
-                <div ref={streamScrollRef} className="p-2 max-h-[500px] overflow-y-auto space-y-0.5">
+                <div ref={streamScrollRef} className="p-2 max-h-[700px] overflow-y-auto space-y-0.5">
                   {streamActions.map((a, i) => {
                     const isThought = a.type === "thought" || a.action === "thinking";
                     const isSystem = a.type === "session_start" || a.type === "session_end";
@@ -614,7 +614,7 @@ export default function AuditClient() {
             </span>
           </div>
           <div className="bg-[var(--bg-primary)] rounded-lg border border-[var(--border-primary)] overflow-hidden">
-            <div className="p-2 max-h-[500px] overflow-y-auto space-y-0.5">
+            <div className="p-2 max-h-[700px] overflow-y-auto space-y-0.5">
               {streamActions.map((a, i) => {
                 const isThought = a.type === "thought" || a.action === "thinking";
                 const isSystem = a.type === "session_start" || a.type === "session_end";

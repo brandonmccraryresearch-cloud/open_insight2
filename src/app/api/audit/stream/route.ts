@@ -89,13 +89,13 @@ async function probe(
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /** Max number of AI-driven turns per agent in continuous mode */
-const MAX_TURNS_CONTINUOUS = 15;
+const MAX_TURNS_CONTINUOUS = 50;
 /** Max number of AI-driven turns per agent in single-pass mode */
-const MAX_TURNS_SINGLE = 8;
+const MAX_TURNS_SINGLE = 25;
 /** Timeout for each HTTP probe call (ms) */
 const PROBE_TIMEOUT_MS = 15000;
 /** Max characters in a result summary fed back to the AI */
-const MAX_RESULT_SUMMARY_LENGTH = 2000;
+const MAX_RESULT_SUMMARY_LENGTH = 3000;
 
 // ─── Platform action registry (real endpoints agents can call) ───────────────
 
