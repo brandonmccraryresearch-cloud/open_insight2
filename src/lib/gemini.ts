@@ -119,26 +119,95 @@ const BASE_CONFIG = {
 export const REQUIRED_CONFIG = BASE_CONFIG;
 
 /**
+ * Internal helper to validate that a config object matches the mandated shape
+ * and values in BASE_CONFIG. Throws descriptive errors on any violation.
+ */
+function assertRequiredConfig(config: unknown): void {
+  if (config === null || typeof config !== "object") {
+    throw new Error(
+      "CONFIG VIOLATION: A non-null configuration object is required. See AGENTS.md for the mandated shape.",
+    );
+  }
+
+  const c = config as Record<string, unknown>;
+
+  const temperature = c.temperature as number | undefined;
+  if (temperature !== BASE_CONFIG.temperature) {
+    throw new Error(
+      `CONFIG VIOLATION: temperature must be ${BASE_CONFIG.temperature}, got ${String(
+        temperature,
+      )}. See AGENTS.md.`,
+    );
+  }
+
+  const topP = c.topP as number | undefined;
+  if (topP !== BASE_CONFIG.topP) {
+    throw new Error(
+      `CONFIG VIOLATION: topP must be ${BASE_CONFIG.topP}, got ${String(topP)}. See AGENTS.md.`,
+    );
+  }
+
+  const thinkingConfig = c.thinkingConfig as { thinkingLevel?: ThinkingLevel } | undefined;
+  if (
+    !thinkingConfig ||
+    thinkingConfig.thinkingLevel !== BASE_CONFIG.thinkingConfig.thinkingLevel
+  ) {
+    throw new Error(
+      `CONFIG VIOLATION: thinkingConfig.thinkingLevel must be ${BASE_CONFIG.thinkingConfig.thinkingLevel}. See AGENTS.md.`,
+    );
+  }
+
+  const mediaResolution = c.mediaResolution as MediaResolution | undefined;
+  if (mediaResolution !== BASE_CONFIG.mediaResolution) {
+    throw new Error(
+      `CONFIG VIOLATION: mediaResolution must be ${BASE_CONFIG.mediaResolution}, got ${String(
+        mediaResolution,
+      )}. See AGENTS.md.`,
+    );
+  }
+
+  const tools = c.tools as unknown;
+  if (!Array.isArray(tools)) {
+    throw new Error(
+      "CONFIG VIOLATION: tools must be an array including urlContext, codeExecution, and googleSearch. See AGENTS.md.",
+    );
+  }
+
+  const hasUrlContext = tools.some(
+    (tool) => tool && typeof tool === "object" && "urlContext" in (tool as Record<string, unknown>),
+  );
+  const hasCodeExecution = tools.some(
+    (tool) => tool && typeof tool === "object" && "codeExecution" in (tool as Record<string, unknown>),
+  );
+  const hasGoogleSearch = tools.some(
+    (tool) => tool && typeof tool === "object" && "googleSearch" in (tool as Record<string, unknown>),
+  );
+
+  if (!hasUrlContext || !hasCodeExecution || !hasGoogleSearch) {
+    throw new Error(
+      "CONFIG VIOLATION: tools must include urlContext, codeExecution, and googleSearch entries. See AGENTS.md.",
+    );
+  }
+}
+
+/**
  * Runtime model validator. Call this before any Gemini API request to enforce
  * the platform mandate: only gemini-3.1-pro-preview is allowed with the
- * required configuration (temperature=1, topP=1, thinkingLevel=HIGH).
- * Throws an error if a different model or missing config is detected.
+ * required configuration (temperature=1, topP=1, thinkingLevel=HIGH, required tools).
+ * Throws an error if a different model or config is detected.
+ *
+ * IMPORTANT: Callers must pass the exact config object they send to Gemini so
+ * that any config drift is detected here at runtime.
  */
-export function enforceModelConfig(model: string, config?: Record<string, unknown>): void {
+export function enforceModelConfig(model: string, config: unknown): void {
   if (model !== REQUIRED_MODEL) {
     throw new Error(
       `MODEL VIOLATION: "${model}" is not allowed. All Gemini API calls MUST use "${REQUIRED_MODEL}". ` +
-      `This is a non-negotiable platform mandate. See AGENTS.md for details.`,
+        `This is a non-negotiable platform mandate. See AGENTS.md for details.`,
     );
   }
-  if (config) {
-    if (config.temperature !== undefined && config.temperature !== 1) {
-      throw new Error(`CONFIG VIOLATION: temperature must be 1, got ${config.temperature}. See AGENTS.md.`);
-    }
-    if (config.topP !== undefined && config.topP !== 1) {
-      throw new Error(`CONFIG VIOLATION: topP must be 1, got ${config.topP}. See AGENTS.md.`);
-    }
-  }
+
+  assertRequiredConfig(config);
 }
 
 export async function streamAgentReasoning(agentId: string, prompt: string) {
