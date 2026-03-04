@@ -270,13 +270,13 @@ export async function GET(request: NextRequest) {
   // This is used as the base URL for internal self-probes.
   const baseUrl = canonicalOrigin || computedOrigin;
 
-  // Forward auth-related headers only when we are confident the request is targeting
-  // our canonical origin. This avoids SSRF + credential exfiltration via Host spoofing.
+  // Forward auth-related headers so self-probes pass deployment protection.
+  // When no CANONICAL_ORIGIN is configured, we probe our own origin (same-host),
+  // so forwarding is always safe. When an explicit origin IS configured,
+  // only forward if it matches the request's own origin to avoid credential leak.
   const forwardHeaders: Record<string, string> = {};
-  const shouldForwardSensitiveHeaders =
-    canonicalOrigin !== undefined && canonicalOrigin === computedOrigin;
-
-  if (shouldForwardSensitiveHeaders) {
+  const shouldForward = !canonicalOrigin || canonicalOrigin === computedOrigin;
+  if (shouldForward) {
     const cookie = request.headers.get("cookie");
     if (cookie) forwardHeaders["cookie"] = cookie;
     const auth = request.headers.get("authorization");

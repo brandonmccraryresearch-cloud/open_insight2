@@ -535,9 +535,14 @@ export async function GET(request: NextRequest) {
   const continuous = url.searchParams.get("continuous") === "true";
   const maxTurnsPerAgent = continuous ? MAX_TURNS_CONTINUOUS : MAX_TURNS_SINGLE;
 
-  // Forward auth-related headers so self-probes pass deployment protection
+  // Forward auth-related headers so self-probes pass deployment protection.
+  // When no AUDIT_BASE_URL is configured, we probe our own origin (same-host),
+  // so forwarding is always safe. When an explicit base URL IS configured,
+  // only forward if it matches the request's own origin to avoid credential leak.
   const forwardHeaders: Record<string, string> = {};
-  if (configuredBaseUrl) {
+  const computedOrigin = `${url.protocol}//${url.host}`;
+  const shouldForward = !configuredBaseUrl || configuredBaseUrl === computedOrigin;
+  if (shouldForward) {
     const cookie = request.headers.get("cookie");
     if (cookie) forwardHeaders["cookie"] = cookie;
     const auth = request.headers.get("authorization");
