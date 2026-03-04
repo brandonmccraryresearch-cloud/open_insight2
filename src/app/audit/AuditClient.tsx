@@ -613,9 +613,10 @@ export default function AuditClient() {
                             <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
                             <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
                             <span className="text-[var(--accent-gold)]">💭</span>
-                            <span className="text-[var(--text-secondary)] italic">{isExpanded ? a.detail : (a.detail || "").slice(0, 200) + ((a.detail || "").length > 200 ? "…" : "")}</span>
+                            <span className="text-[var(--text-secondary)] italic">{(a.detail || "").slice(0, 200)}{(a.detail || "").length > 200 ? "…" : ""}</span>
+                            {(a.detail || "").length > 200 && <span className="text-[10px] text-[var(--text-muted)] ml-auto shrink-0">{isExpanded ? "▼" : "▶"}</span>}
                           </div>
-                          {isExpanded && (a.detail || "").length > 200 && (
+                          {isExpanded && (
                             <div className="mt-1 ml-6 pl-2 border-l border-[var(--accent-gold)]/30 text-[var(--text-secondary)] italic whitespace-pre-wrap text-[10px]">
                               {a.detail}
                             </div>
@@ -788,9 +789,10 @@ export default function AuditClient() {
                         <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
                         <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
                         <span className="text-[var(--accent-gold)]">💭</span>
-                        <span className="text-[var(--text-secondary)] italic">{isExpanded ? a.detail : (a.detail || "").slice(0, 200) + ((a.detail || "").length > 200 ? "…" : "")}</span>
+                        <span className="text-[var(--text-secondary)] italic">{(a.detail || "").slice(0, 200)}{(a.detail || "").length > 200 ? "…" : ""}</span>
+                        {(a.detail || "").length > 200 && <span className="text-[10px] text-[var(--text-muted)] ml-auto shrink-0">{isExpanded ? "▼" : "▶"}</span>}
                       </div>
-                      {isExpanded && (a.detail || "").length > 200 && (
+                      {isExpanded && (
                         <div className="mt-1 ml-6 pl-2 border-l border-[var(--accent-gold)]/30 text-[var(--text-secondary)] italic whitespace-pre-wrap text-[10px]">
                           {a.detail}
                         </div>
