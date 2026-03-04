@@ -559,8 +559,17 @@ export async function GET(request: NextRequest) {
   // Forward auth-related headers so self-probes pass deployment protection.
   // When no AUDIT_BASE_URL is configured, we probe our own origin (same-host),
   // so forwarding is always safe. When an explicit base URL IS configured,
-  // only forward if it matches the request's own origin to avoid credential leak.
-  const forwardHeaders: Record<string, string> = {};
+  const computedOrigin = url.origin;
+  let shouldForward = !configuredBaseUrl;
+  if (configuredBaseUrl) {
+    try {
+      const configuredOrigin = new URL(configuredBaseUrl).origin;
+      shouldForward = configuredOrigin === computedOrigin;
+    } catch {
+      // Malformed AUDIT_BASE_URL; do not forward auth headers to avoid leaks.
+      shouldForward = false;
+    }
+  }
   const computedOrigin = url.origin;
   let shouldForward = !configuredBaseUrl;
   if (configuredBaseUrl) {
