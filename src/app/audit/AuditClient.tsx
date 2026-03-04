@@ -115,7 +115,7 @@ export default function AuditClient() {
   }
 
   /** Stream audit events via SSE for real-time agent activity display */
-  async function runStreamAudit() {
+  async function runStreamAudit(continuous = false) {
     setStreamingStatus(true);
     setStreamActions([]);
     setStreamFindings([]);
@@ -124,7 +124,8 @@ export default function AuditClient() {
     abortRef.current = controller;
 
     try {
-      const res = await fetch("/api/audit/stream", { signal: controller.signal });
+      const url = continuous ? "/api/audit/stream?continuous=true" : "/api/audit/stream";
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.body) throw new Error("No stream body");
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -172,6 +173,16 @@ export default function AuditClient() {
                 httpStatus: event.httpStatus,
               }]);
               addLog(`${event.agentName} → ${event.action ?? event.type}${event.target ? ` on ${event.target}` : ""}${event.latency ? ` (${event.latency}ms)` : ""}`);
+            } else if (event.type === "thought") {
+              setStreamActions((prev) => [...prev, {
+                agentId: event.agentId,
+                agentName: event.agentName,
+                action: "💭 thinking",
+                target: "",
+                status: "success",
+                detail: event.detail ?? "",
+              }]);
+              addLog(`${event.agentName} 💭 ${(event.detail ?? "").slice(0, 120)}`);
             } else if (event.type === "finding") {
               setStreamFindings((prev) => [...prev, {
                 id: event.findingId ?? `f-${prev.length}`,
@@ -201,18 +212,17 @@ export default function AuditClient() {
     setTimeRemaining(selectedDuration);
     setCycleCount(0);
     setSessionLog([]);
-    addLog(`Autonomous Agent Mode activated — ${PRESET_DURATIONS.find((d) => d.seconds === selectedDuration)?.label} session`);
-    addLog("All agents operating as their PhD-level personas — each starting a characteristic research task…");
+    addLog(`Autonomous Agent Session activated — ${PRESET_DURATIONS.find((d) => d.seconds === selectedDuration)?.label} continuous session`);
+    addLog("All agents operating as their PhD-level personas with real AI reasoning — exploring the platform as genuine users…");
 
-    // Run initial streaming audit
-    addLog("Session starting: agents initializing with random opening tasks…");
-    runStreamAudit().then(() => {
-      setCycleCount(1);
-      addLog("Initial session complete — switching to periodic cycle mode.");
-      // Also get the snapshot report for the summary cards
+    // Run a single continuous streaming session for the entire duration
+    addLog("Starting continuous AI-driven session — agents will explore the platform using real Gemini AI…");
+    runStreamAudit(true).then(() => {
+      addLog("Continuous session stream ended.");
+      // Get a final snapshot report for summary cards
       runAudit().then((data) => {
         if (data) {
-          addLog(`Snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} findings (${data.summary.critical} critical)`);
+          addLog(`Final snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} findings (${data.summary.critical} critical)`);
           addLog(`Active agents: ${data.agentParticipants.join(", ")}`);
         }
       });
@@ -247,36 +257,6 @@ export default function AuditClient() {
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autonomousActive]);
-
-  // Periodic re-audit every 60 seconds during autonomous mode — uses streaming for live continuous activity
-  const cycleCountRef = useRef(0);
-  useEffect(() => {
-    if (!autonomousActive) return;
-    cycleCountRef.current = 0;
-
-    auditIntervalRef.current = setInterval(() => {
-      // Skip if a previous streaming audit is still running to avoid concurrent SSE connections
-      if (streamingRef.current) return;
-
-      const next = cycleCountRef.current + 1;
-      cycleCountRef.current = next;
-      setCycleCount(next);
-      addLog(`Cycle ${next}: Agents re-engaging platform features...`);
-      runStreamAudit().then(() => {
-        addLog(`Cycle ${next} streaming complete.`);
-        runAudit().then((data) => {
-          if (data) {
-            addLog(`Cycle ${next} snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} error reports`);
-          }
-        });
-      });
-    }, 60000);
-
-    return () => {
-      if (auditIntervalRef.current) clearInterval(auditIntervalRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autonomousActive]);
@@ -555,7 +535,7 @@ export default function AuditClient() {
           </p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={runStreamAudit}
+              onClick={() => runStreamAudit()}
               className="px-6 py-3 rounded-lg text-sm font-medium text-white bg-[var(--accent-teal)] hover:opacity-90 transition-opacity flex items-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
