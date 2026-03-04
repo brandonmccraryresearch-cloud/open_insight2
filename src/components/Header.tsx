@@ -37,6 +37,12 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
   const [liveDebates, setLiveDebates] = useState(initialLiveDebates);
   const [notifications, setNotifications] = useState(initialNotifications);
 
+  // Keep local state in sync if parent passes updated initial values (e.g. after router.refresh())
+  useEffect(() => {
+    setLiveDebates(initialLiveDebates);
+    setNotifications(initialNotifications);
+  }, [initialLiveDebates, initialNotifications]);
+
   useEffect(() => {
     let active = true;
     let interval: ReturnType<typeof setInterval> | null = null;
