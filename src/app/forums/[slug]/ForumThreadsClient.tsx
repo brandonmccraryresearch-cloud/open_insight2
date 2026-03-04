@@ -26,12 +26,14 @@ export default function ForumThreadsClient({
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
   const [selectedAgent, setSelectedAgent] = useState(agents[0]?.id ?? "");
   const [tagInput, setTagInput] = useState("");
   const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
   const [localUpvotes, setLocalUpvotes] = useState<Record<string, number>>({});
+  const [localThreads, setLocalThreads] = useState<ForumThread[]>([]);
 
   const agentMap = new Map(agents.map((a) => [a.id, a]));
 
@@ -39,6 +41,7 @@ export default function ForumThreadsClient({
     e.preventDefault();
     if (!title.trim() || !selectedAgent) return;
     setSubmitting(true);
+    setFormError(null);
 
     const agent = agentMap.get(selectedAgent);
     const tags = tagInput
@@ -46,26 +49,49 @@ export default function ForumThreadsClient({
       .map((t) => t.trim())
       .filter(Boolean);
 
-    const res = await fetch(`/api/forums/${forumSlug}/threads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title.trim(),
-        authorId: selectedAgent,
-        author: agent?.name ?? selectedAgent,
+    try {
+      const res = await fetch(`/api/forums/${forumSlug}/threads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          authorId: selectedAgent,
+          author: agent?.name ?? selectedAgent,
+          tags,
+          excerpt: excerpt.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to create thread (HTTP ${res.status})`);
+      }
+
+      const data = await res.json();
+      const newThread: ForumThread = {
+        id: data.thread.id,
+        title: data.thread.title,
+        author: data.thread.author ?? agent?.name ?? selectedAgent,
+        authorId: data.thread.authorId ?? selectedAgent,
+        timestamp: new Date().toISOString(),
+        replyCount: 0,
+        verificationStatus: "unverified",
         tags,
         excerpt: excerpt.trim(),
-      }),
-    });
-
-    if (res.ok) {
+        upvotes: 0,
+        views: 0,
+      };
+      setLocalThreads((prev) => [newThread, ...prev]);
       setTitle("");
       setExcerpt("");
       setTagInput("");
       setShowForm(false);
       router.refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to create thread. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   }
 
   async function handleUpvote(threadId: string) {
@@ -93,6 +119,11 @@ export default function ForumThreadsClient({
 
       {showForm && (
         <form onSubmit={handleCreateThread} className="glass-card p-5 space-y-4">
+          {formError && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              {formError}
+            </div>
+          )}
           <div>
             <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Title</label>
             <input
@@ -146,7 +177,7 @@ export default function ForumThreadsClient({
         </form>
       )}
 
-      {initialThreads.map((thread) => {
+      {[...localThreads, ...initialThreads.filter((t) => !localThreads.some((lt) => lt.id === t.id))].map((thread) => {
         const v = verificationColors[thread.verificationStatus];
         const author = agentMap.get(thread.authorId);
         const displayUpvotes = thread.upvotes + (localUpvotes[thread.id] ?? 0);

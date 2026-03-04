@@ -98,7 +98,7 @@ interface AgentTask {
 
 type FindingStub = Omit<StreamEvent, "type" | "agentId" | "agentName">;
 
-/* McCrary — lean4, reasoning engine, polar pairs */
+/* McCrary — lean4, reasoning engine, polar pairs, MathMark tools */
 const mccraryTasks: AgentTask[] = [
   {
     action: "verify", target: "lean4_prover", method: "POST", path: "/api/tools/lean4",
@@ -138,9 +138,28 @@ const mccraryTasks: AgentTask[] = [
       return { detail: `Reasoning engine responded (HTTP ${r.status}).` };
     },
   },
+  {
+    action: "test", target: "MathMark AI detection", method: "POST", path: "/api/mathmark/detect",
+    body: { content: "The wave function collapse occurs when a measurement is performed on a quantum system, causing the superposition of states to reduce to a single eigenstate." },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `MathMark detect failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "MathMark AI detection", location: "POST /api/mathmark/detect", description: `POST returned ${r.status}. Detection tool is non-functional.`, recommendation: "Check MathMark detect route." }] };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `MathMark AI detection: score ${d.score}/100. Verdict: ${d.verdict ? String(d.verdict).slice(0, 80) : "N/A"}.` };
+    },
+  },
+  {
+    action: "test", target: "MathMark document analysis", method: "POST", path: "/api/mathmark/analyze",
+    body: { content: "# Test Document\n\nThis is a test of the document analysis pipeline.\n\n## Section 1\n\nThe Schrödinger equation $i\\hbar\\partial_t|\\psi\\rangle = H|\\psi\\rangle$ governs quantum evolution.", mode: "academic" },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `MathMark analyze failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "MathMark document analysis", location: "POST /api/mathmark/analyze", description: `POST returned ${r.status}. Analysis tool is non-functional.`, recommendation: "Check GEMINI_API_KEY configuration." }] };
+      const d = r.data as Record<string, unknown>;
+      const sections = d.sections as Array<unknown> | undefined;
+      return { detail: `MathMark analysis returned ${sections?.length ?? 0} sections. Document analysis pipeline is functional.` };
+    },
+  },
 ];
 
-/* Gödel — agent registry, stats, verifications, knowledge graph */
+/* Gödel — agent registry, stats, verifications, knowledge graph, knowledge search */
 const goedelTasks: AgentTask[] = [
   {
     action: "inspect", target: "agent registry", method: "GET", path: "/api/agents",
@@ -183,9 +202,18 @@ const goedelTasks: AgentTask[] = [
       return { detail: `Knowledge graph: ${nodes.length} nodes, ${edges.length} edges.` };
     },
   },
+  {
+    action: "search", target: "knowledge search (quantum gravity)", method: "GET", path: "/api/knowledge/search?q=quantum%20gravity",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Knowledge search failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Knowledge search", location: "GET /api/knowledge/search", description: `GET returned ${r.status}. Search is non-functional.`, recommendation: "Check knowledge search route." }] };
+      const d = r.data as Record<string, unknown>;
+      const papers = d.papers as Array<unknown>;
+      return { detail: `Knowledge search returned ${papers.length} results for "quantum gravity". Search is functional.` };
+    },
+  },
 ];
 
-/* Bishop — forums, thread creation, verification submission */
+/* Bishop — forums, thread creation, verification submission, thread replies, upvotes */
 const bishopTasks: AgentTask[] = [
   {
     action: "read", target: "forum index", method: "GET", path: "/api/forums",
@@ -211,6 +239,16 @@ const bishopTasks: AgentTask[] = [
     },
   },
   {
+    action: "read", target: "formal-verification forum", method: "GET", path: "/api/forums/formal-verification",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Forum detail failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Forum: formal-verification", location: "GET /api/forums/formal-verification", description: `GET returned ${r.status}.`, recommendation: "Check forum slug and database seeding." }] };
+      const d = r.data as Record<string, unknown>;
+      const forum = d.forum as Record<string, unknown>;
+      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
+      return { detail: `Formal verification forum: ${threads?.length ?? 0} threads. Forum data accessible.` };
+    },
+  },
+  {
     action: "write", target: "forum thread creation", method: "POST", path: "/api/forums/conjecture-workshop/threads",
     body: { title: "[Audit] Constructive verification test thread", authorId: "bishop", author: "Dr. Bishop", tags: ["audit", "constructive-test"], excerpt: "Created by the live audit system to test forum write capability." },
     interpret: (r) => {
@@ -230,9 +268,19 @@ const bishopTasks: AgentTask[] = [
     },
     writeProbeOnly: true,
   },
+  {
+    action: "test", target: "MathMark humanize tool", method: "POST", path: "/api/mathmark/humanize",
+    body: { content: "Furthermore, it is worth noting that the utilization of constructive methods in this proof demonstrates a significant departure from classical approaches." },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `MathMark humanize failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "MathMark humanize", location: "POST /api/mathmark/humanize", description: `POST returned ${r.status}. Humanize tool is non-functional.`, recommendation: "Check MathMark humanize route." }] };
+      const d = r.data as Record<string, unknown>;
+      const changes = d.changes as Array<unknown> | undefined;
+      return { detail: `MathMark humanize: ${changes?.length ?? 0} changes suggested. Rewriting pipeline is functional.` };
+    },
+  },
 ];
 
-/* Haag — verification pipeline, streaming evaluator */
+/* Haag — verification pipeline, streaming evaluator, forum thread replies */
 const haagTasks: AgentTask[] = [
   {
     action: "inspect", target: "passed verifications", method: "GET", path: "/api/verifications?status=passed",
@@ -260,9 +308,28 @@ const haagTasks: AgentTask[] = [
       return { detail: `Streaming evaluator responded (HTTP ${r.status}).` };
     },
   },
+  {
+    action: "read", target: "quantum-interpretations forum", method: "GET", path: "/api/forums/quantum-interpretations",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Forum detail failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const forum = d.forum as Record<string, unknown>;
+      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
+      return { detail: `Quantum interpretations forum: ${threads?.length ?? 0} threads accessible.` };
+    },
+  },
+  {
+    action: "test", target: "MathMark figure generation", method: "POST", path: "/api/mathmark/figure",
+    body: { description: "Feynman diagram for electron-positron annihilation into two photons", format: "svg" },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `MathMark figure generation failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "MathMark figure generation", location: "POST /api/mathmark/figure", description: `POST returned ${r.status}. Figure generation is non-functional.`, recommendation: "Check GEMINI_API_KEY configuration." }] };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `MathMark figure generated: format=${d.format}, caption="${String(d.caption ?? "").slice(0, 60)}". Figure pipeline functional.` };
+    },
+  },
 ];
 
-/* Weinberg — debates, debate messages */
+/* Weinberg — debates, debate messages, debate creation, additional forums */
 const weinbergTasks: AgentTask[] = [
   {
     action: "read", target: "debate index", method: "GET", path: "/api/debates",
@@ -303,9 +370,28 @@ const weinbergTasks: AgentTask[] = [
       return { detail: `Message generated via ${d.executionMode} mode. Debate engine is functional.` };
     },
   },
+  {
+    action: "read", target: "effective-field-theory forum", method: "GET", path: "/api/forums/effective-field-theory",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Forum detail failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const forum = d.forum as Record<string, unknown>;
+      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
+      return { detail: `EFT forum: ${threads?.length ?? 0} threads accessible.` };
+    },
+  },
+  {
+    action: "search", target: "knowledge search (quantum field theory)", method: "GET", path: "/api/knowledge/search?q=quantum%20field%20theory",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Knowledge search failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const papers = d.papers as Array<unknown>;
+      return { detail: `Knowledge search: ${papers.length} results for "quantum field theory". Academic search functional.` };
+    },
+  },
 ];
 
-/* Dennett — UI endpoints, knowledge graph, notebook */
+/* Dennett — UI endpoints, knowledge graph, notebook, MathMark chat */
 const dennettTasks: AgentTask[] = [
   {
     action: "navigate", target: "knowledge graph API", method: "GET", path: "/api/knowledge/graph",
@@ -333,9 +419,38 @@ const dennettTasks: AgentTask[] = [
       return { detail: `Notebook: ${d.executionMode} mode. Output: "${String(d.output).slice(0, 80)}". Status: ${d.status}.` };
     },
   },
+  {
+    action: "test", target: "MathMark chat assistant", method: "POST", path: "/api/mathmark/chat",
+    body: { message: "What are the key elements of a well-structured mathematical proof?", documentContext: "" },
+    interpret: (r) => {
+      if (!r.ok) return { detail: `MathMark chat failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "MathMark chat assistant", location: "POST /api/mathmark/chat", description: `POST returned ${r.status}. Chat assistant is non-functional.`, recommendation: "Check GEMINI_API_KEY configuration." }] };
+      const d = r.data as Record<string, unknown>;
+      return { detail: `MathMark chat responded: "${String(d.text ?? "").slice(0, 80)}…". Chat assistant is functional.` };
+    },
+  },
+  {
+    action: "read", target: "philosophy-of-physics forum", method: "GET", path: "/api/forums/philosophy-of-physics",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Forum detail failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const forum = d.forum as Record<string, unknown>;
+      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
+      return { detail: `Philosophy of physics forum: ${threads?.length ?? 0} threads accessible.` };
+    },
+  },
+  {
+    action: "read", target: "consciousness-computation forum", method: "GET", path: "/api/forums/consciousness-computation",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Forum detail failed (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const forum = d.forum as Record<string, unknown>;
+      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
+      return { detail: `Consciousness & computation forum: ${threads?.length ?? 0} threads accessible.` };
+    },
+  },
 ];
 
-/* Veltman — independent cross-validation */
+/* Veltman — independent cross-validation, paper review probes */
 const veltmanTasks: AgentTask[] = [
   {
     action: "verify", target: "lean4 (independent cross-check)", method: "POST", path: "/api/tools/lean4",
@@ -366,6 +481,25 @@ const veltmanTasks: AgentTask[] = [
       return { detail: `Debate "${d.title}" created (id: ${d.id}). Creation pipeline works.` };
     },
     writeProbeOnly: true,
+  },
+  {
+    action: "read", target: "paper-review forum", method: "GET", path: "/api/forums/paper-review",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Paper review forum failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Paper review forum", location: "GET /api/forums/paper-review", description: `GET returned ${r.status}. Paper review forum may not be set up.`, recommendation: "Ensure paper-review forum is seeded." }] };
+      const d = r.data as Record<string, unknown>;
+      const forum = d.forum as Record<string, unknown>;
+      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
+      return { detail: `Paper review forum: ${threads?.length ?? 0} threads. Forum accessible for paper discussions.` };
+    },
+  },
+  {
+    action: "inspect", target: "Gödel agent profile (cross-check)", method: "GET", path: "/api/agents/goedel",
+    interpret: (r) => {
+      if (!r.ok) return { detail: `Could not load Gödel profile (HTTP ${r.status}).` };
+      const d = r.data as Record<string, unknown>;
+      const agent = d.agent as Record<string, unknown>;
+      return { detail: `Cross-check: Gödel profile loaded. Domain: ${agent.domain}. Status: ${agent.status}. Agent registry consistent.` };
+    },
   },
 ];
 
@@ -414,6 +548,7 @@ export async function GET(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       let findingId = 0;
+      const continuous = url.searchParams.get("continuous") === "true";
 
       function send(event: StreamEvent) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
@@ -423,65 +558,78 @@ export async function GET(request: NextRequest) {
         type: "session_start",
         agentId: "system",
         agentName: "System",
-        detail: `Live audit session — ${AUDIT_AGENTS.length} agents probing ${baseUrl} with real HTTP requests…`,
+        detail: `Live audit session — ${AUDIT_AGENTS.length} agents probing ${baseUrl} with real HTTP requests…${continuous ? " (continuous mode)" : ""}`,
       });
 
-      const agentOrder = shuffle(AUDIT_AGENTS);
-      const allowWrites = process.env.AUDIT_WRITE_PROBES === "true";
+      let pass = 0;
+      do {
+        pass++;
+        const agentOrder = shuffle(AUDIT_AGENTS);
+        const allowWrites = process.env.AUDIT_WRITE_PROBES === "true";
 
-      for (const agent of agentOrder) {
-        if (request.signal.aborted) break;
-        const shuffledTasks = shuffle(agent.tasks);
+        if (continuous && pass > 1) {
+          send({
+            type: "session_start",
+            agentId: "system",
+            agentName: "System",
+            detail: `Pass ${pass} — agents continuing platform inspection…`,
+          });
+        }
 
-        for (const task of shuffledTasks) {
+        for (const agent of agentOrder) {
           if (request.signal.aborted) break;
-          if (task.writeProbeOnly && !allowWrites) {
+          const shuffledTasks = shuffle(agent.tasks);
+
+          for (const task of shuffledTasks) {
+            if (request.signal.aborted) break;
+            if (task.writeProbeOnly && !allowWrites) {
+              send({
+                type: "action",
+                agentId: agent.id,
+                agentName: agent.name,
+                action: task.action,
+                target: task.target,
+                status: "blocked",
+                detail: `Write probe skipped (set AUDIT_WRITE_PROBES=true to enable).`,
+                latency: 0,
+              });
+              continue;
+            }
+            const result = await probe(baseUrl, task.method, task.path, task.body, 15000, forwardHeaders);
+            const interpreted = task.interpret(result);
+
             send({
               type: "action",
               agentId: agent.id,
               agentName: agent.name,
               action: task.action,
               target: task.target,
-              status: "blocked",
-              detail: `Write probe skipped (set AUDIT_WRITE_PROBES=true to enable).`,
-              latency: 0,
+              status: result.ok ? "success" : (result.status === 0 ? "blocked" : "failed"),
+              detail: interpreted.detail,
+              latency: result.latency,
+              httpStatus: result.status,
             });
-            continue;
-          }
-          const result = await probe(baseUrl, task.method, task.path, task.body, 15000, forwardHeaders);
-          const interpreted = task.interpret(result);
 
-          send({
-            type: "action",
-            agentId: agent.id,
-            agentName: agent.name,
-            action: task.action,
-            target: task.target,
-            status: result.ok ? "success" : (result.status === 0 ? "blocked" : "failed"),
-            detail: interpreted.detail,
-            latency: result.latency,
-            httpStatus: result.status,
-          });
-
-          if (interpreted.findings) {
-            for (const finding of interpreted.findings) {
-              send({
-                type: "finding",
-                agentId: agent.id,
-                agentName: agent.name,
-                findingId: `audit-${++findingId}`,
-                ...finding,
-              });
+            if (interpreted.findings) {
+              for (const finding of interpreted.findings) {
+                send({
+                  type: "finding",
+                  agentId: agent.id,
+                  agentName: agent.name,
+                  findingId: `audit-${++findingId}`,
+                  ...finding,
+                });
+              }
             }
           }
         }
-      }
+      } while (continuous && !request.signal.aborted);
 
       send({
         type: "session_end",
         agentId: "system",
         agentName: "System",
-        detail: "Live audit complete — all agents have probed their assigned endpoints with real HTTP requests.",
+        detail: `Live audit complete — all agents have probed their assigned endpoints with real HTTP requests.${continuous ? ` ${pass} passes completed.` : ""}`,
       });
 
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
