@@ -84,6 +84,7 @@ export default function AuditClient() {
   const [streamActions, setStreamActions] = useState<AgentAction[]>([]);
   const [streamFindings, setStreamFindings] = useState<AuditFinding[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const streamingRef = useRef(false);
 
   const addLog = useCallback((msg: string) => {
     const ts = new Date().toLocaleTimeString();
@@ -110,6 +111,7 @@ export default function AuditClient() {
   /** Stream audit events via SSE for real-time agent activity display */
   async function runStreamAudit() {
     setStreaming(true);
+    streamingRef.current = true;
     setStreamActions([]);
     setStreamFindings([]);
     setError(null);
@@ -187,6 +189,7 @@ export default function AuditClient() {
       }
     }
     setStreaming(false);
+    streamingRef.current = false;
   }
 
   function startAutonomousMode() {
@@ -245,22 +248,26 @@ export default function AuditClient() {
   }, [autonomousActive]);
 
   // Periodic re-audit every 60 seconds during autonomous mode — uses streaming for live continuous activity
+  const cycleCountRef = useRef(0);
   useEffect(() => {
     if (!autonomousActive) return;
+    cycleCountRef.current = 0;
 
     auditIntervalRef.current = setInterval(() => {
-      setCycleCount((prev) => {
-        const next = prev + 1;
-        addLog(`Cycle ${next}: Agents re-engaging platform features...`);
-        runStreamAudit().then(() => {
-          addLog(`Cycle ${next} streaming complete.`);
-          runAudit().then((data) => {
-            if (data) {
-              addLog(`Cycle ${next} snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} error reports`);
-            }
-          });
+      // Skip if a previous streaming audit is still running to avoid concurrent SSE connections
+      if (streamingRef.current) return;
+
+      const next = cycleCountRef.current + 1;
+      cycleCountRef.current = next;
+      setCycleCount(next);
+      addLog(`Cycle ${next}: Agents re-engaging platform features...`);
+      runStreamAudit().then(() => {
+        addLog(`Cycle ${next} streaming complete.`);
+        runAudit().then((data) => {
+          if (data) {
+            addLog(`Cycle ${next} snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} error reports`);
+          }
         });
-        return next;
       });
     }, 60000);
 
