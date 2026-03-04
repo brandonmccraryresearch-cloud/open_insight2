@@ -396,15 +396,20 @@ function shuffle<T>(arr: T[]): T[] {
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  const configuredBaseUrl = process.env.AUDIT_BASE_URL;
+  const baseUrl = configuredBaseUrl ?? `${url.protocol}//${url.host}`;
   const encoder = new TextEncoder();
 
   // Forward auth-related headers so self-probes pass deployment protection
+  // Only do this when using a trusted, configured base URL to avoid
+  // leaking credentials to an attacker-controlled origin.
   const forwardHeaders: Record<string, string> = {};
-  const cookie = request.headers.get("cookie");
-  if (cookie) forwardHeaders["cookie"] = cookie;
-  const auth = request.headers.get("authorization");
-  if (auth) forwardHeaders["authorization"] = auth;
+  if (configuredBaseUrl) {
+    const cookie = request.headers.get("cookie");
+    if (cookie) forwardHeaders["cookie"] = cookie;
+    const auth = request.headers.get("authorization");
+    if (auth) forwardHeaders["authorization"] = auth;
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
