@@ -90,6 +90,10 @@ export default function AuditClient() {
   const streamingRef = useRef(false);
   const streamScrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Per-agent session viewer
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>("all");
+  const [expandedActionIdx, setExpandedActionIdx] = useState<number | null>(null);
+
   /** Keep React state and ref in sync for streaming status */
   const setStreamingStatus = useCallback((value: boolean) => {
     setStreaming(value);
@@ -100,6 +104,32 @@ export default function AuditClient() {
     const ts = new Date().toLocaleTimeString();
     setSessionLog((prev) => [...prev, `[${ts}] ${msg}`]);
   }, []);
+
+  // Derive unique active agents from stream data (excluding system events)
+  const activeAgents = Array.from(
+    new Map(
+      streamActions
+        .filter((a) => a.agentId && a.agentId !== "system")
+        .map((a) => [a.agentId, a.agentName] as const)
+    ).entries()
+  ).map(([id, name]) => ({ id, name }));
+
+  // Filtered view of actions based on selected agent
+  const filteredStreamActions = selectedAgentFilter === "all"
+    ? streamActions
+    : streamActions.filter((a) => a.agentId === selectedAgentFilter || a.type === "session_start" || a.type === "session_end");
+
+  // Per-agent stats
+  const agentStats = (agentId: string) => {
+    const agentActions = streamActions.filter((a) => a.agentId === agentId);
+    return {
+      actions: agentActions.filter((a) => a.type === "action" || (!a.type && a.action !== "thinking")).length,
+      thoughts: agentActions.filter((a) => a.type === "thought" || a.action === "thinking").length,
+      findings: streamFindings.filter((f) => f.agentId === agentId).length,
+      succeeded: agentActions.filter((a) => (a.type === "action" || (!a.type && a.action !== "thinking")) && a.status === "success").length,
+      failed: agentActions.filter((a) => (a.type === "action" || (!a.type && a.action !== "thinking")) && (a.status === "failed" || a.status === "blocked")).length,
+    };
+  };
 
   async function runAudit() {
     setLoading(true);
@@ -494,29 +524,79 @@ export default function AuditClient() {
                 ))}
               </div>
             )}
-            {/* Real-time Agent Stream — detailed live log */}
+            {/* Real-time Agent Stream — detailed live log with per-agent viewer */}
             {streamActions.length > 0 && (
               <div className="bg-[var(--bg-primary)] rounded-lg border border-[var(--border-primary)] overflow-hidden">
+                {/* Header with stats */}
                 <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-primary)]">
                   {streaming && <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />}
                   <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                     Live Agent Activity
                   </span>
                   <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                    {streamActions.filter(a => a.type === "action" || (!a.type && a.action !== "thinking")).length} actions
+                    {(selectedAgentFilter === "all" ? streamActions : filteredStreamActions).filter(a => a.type === "action" || (!a.type && a.action !== "thinking")).length} actions
                     {" · "}
-                    {streamActions.filter(a => a.type === "thought" || a.action === "thinking").length} thoughts
+                    {(selectedAgentFilter === "all" ? streamActions : filteredStreamActions).filter(a => a.type === "thought" || a.action === "thinking").length} thoughts
                     {" · "}
-                    {streamFindings.length} findings
+                    {selectedAgentFilter === "all" ? streamFindings.length : streamFindings.filter(f => f.agentId === selectedAgentFilter).length} findings
                   </span>
                 </div>
+                {/* Agent filter bar */}
+                {activeAgents.length > 1 && (
+                  <div className="flex items-center gap-1 px-3 py-2 bg-[var(--bg-elevated)]/50 border-b border-[var(--border-primary)] flex-wrap">
+                    <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mr-1">Agent:</span>
+                    <button
+                      onClick={() => { setSelectedAgentFilter("all"); setExpandedActionIdx(null); }}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                        selectedAgentFilter === "all"
+                          ? "bg-[var(--accent-teal)] text-white"
+                          : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      }`}
+                    >
+                      All ({streamActions.filter(a => a.agentId !== "system").length})
+                    </button>
+                    {activeAgents.map((agent) => {
+                      const stats = agentStats(agent.id);
+                      return (
+                        <button
+                          key={agent.id}
+                          onClick={() => { setSelectedAgentFilter(agent.id); setExpandedActionIdx(null); }}
+                          className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors flex items-center gap-1 ${
+                            selectedAgentFilter === agent.id
+                              ? "bg-[var(--accent-teal)] text-white"
+                              : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                          }`}
+                        >
+                          {agent.name}
+                          <span className="opacity-70">({stats.actions}⚡{stats.thoughts}💭)</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Per-agent summary card when filtering */}
+                {selectedAgentFilter !== "all" && (() => {
+                  const stats = agentStats(selectedAgentFilter);
+                  const agent = activeAgents.find(a => a.id === selectedAgentFilter);
+                  return (
+                    <div className="px-3 py-2 bg-[var(--accent-teal)]/5 border-b border-[var(--border-primary)] flex items-center gap-4 flex-wrap">
+                      <span className="text-[11px] font-semibold text-[var(--accent-teal)]">{agent?.name} — Session Summary</span>
+                      <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                        ✓ {stats.succeeded} succeeded · ✗ {stats.failed} failed · 💭 {stats.thoughts} thoughts · 📋 {stats.findings} findings
+                      </span>
+                    </div>
+                  );
+                })()}
+                {/* Stream action rows */}
                 <div ref={streamScrollRef} className="p-2 max-h-[700px] overflow-y-auto space-y-0.5">
-                  {streamActions.map((a, i) => {
+                  {filteredStreamActions.map((a, i) => {
+                    const globalIdx = streamActions.indexOf(a);
                     const isThought = a.type === "thought" || a.action === "thinking";
                     const isSystem = a.type === "session_start" || a.type === "session_end";
+                    const isExpanded = expandedActionIdx === globalIdx;
                     if (isSystem) {
                       return (
-                        <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-[11px] bg-[var(--accent-indigo)]/5 border-l-2 border-[var(--accent-indigo)]">
+                        <div key={globalIdx} className="flex items-start gap-2 px-2 py-1.5 rounded text-[11px] bg-[var(--accent-indigo)]/5 border-l-2 border-[var(--accent-indigo)]">
                           <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
                           <span className="text-[var(--accent-indigo)] font-medium">⚙ {a.detail}</span>
                         </div>
@@ -524,26 +604,49 @@ export default function AuditClient() {
                     }
                     if (isThought) {
                       return (
-                        <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-[11px] bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40">
-                          <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
-                          <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                          <span className="text-[var(--accent-gold)]">💭</span>
-                          <span className="text-[var(--text-secondary)] italic">{a.detail}</span>
+                        <div
+                          key={globalIdx}
+                          className="px-2 py-1.5 rounded text-[11px] bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40 cursor-pointer hover:bg-[var(--accent-gold)]/10 transition-colors"
+                          onClick={() => setExpandedActionIdx(isExpanded ? null : globalIdx)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                            <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                            <span className="text-[var(--accent-gold)]">💭</span>
+                            <span className="text-[var(--text-secondary)] italic">{isExpanded ? a.detail : (a.detail || "").slice(0, 200) + ((a.detail || "").length > 200 ? "…" : "")}</span>
+                          </div>
+                          {isExpanded && (a.detail || "").length > 200 && (
+                            <div className="mt-1 ml-6 pl-2 border-l border-[var(--accent-gold)]/30 text-[var(--text-secondary)] italic whitespace-pre-wrap text-[10px]">
+                              {a.detail}
+                            </div>
+                          )}
                         </div>
                       );
                     }
                     const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
                     const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
                     return (
-                      <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-[11px] hover:bg-[var(--bg-elevated)] transition-colors">
-                        <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
-                        <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
-                        <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                        <span className="text-[var(--text-muted)]">→</span>
-                        <span className="font-mono text-[var(--text-primary)] font-medium shrink-0">{a.action}</span>
-                        {a.target && <span className="text-[var(--text-secondary)] truncate">{a.target}</span>}
-                        {a.httpStatus ? <span className="font-mono text-[10px] px-1 rounded shrink-0" style={{ color: statusColor, backgroundColor: `${statusColor}15` }}>[HTTP {a.httpStatus}]</span> : null}
-                        {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
+                      <div
+                        key={globalIdx}
+                        className="px-2 py-1.5 rounded text-[11px] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+                        onClick={() => setExpandedActionIdx(isExpanded ? null : globalIdx)}
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                          <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
+                          <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                          <span className="text-[var(--text-muted)]">→</span>
+                          <span className="font-mono text-[var(--text-primary)] font-medium shrink-0">{a.action}</span>
+                          {a.target && <span className="text-[var(--text-secondary)] truncate">{a.target}</span>}
+                          {a.httpStatus ? <span className="font-mono text-[10px] px-1 rounded shrink-0" style={{ color: statusColor, backgroundColor: `${statusColor}15` }}>[HTTP {a.httpStatus}]</span> : null}
+                          {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
+                          <span className="text-[10px] text-[var(--text-muted)] ml-auto shrink-0">{isExpanded ? "▼" : "▶"}</span>
+                        </div>
+                        {isExpanded && a.detail && (
+                          <div className="mt-1 ml-6 p-2 rounded bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-secondary)] whitespace-pre-wrap">
+                            {a.detail}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -606,21 +709,69 @@ export default function AuditClient() {
               Live Agent Activity Stream
             </h3>
             <span className="text-[10px] font-mono text-[var(--text-muted)]">
-              {streamActions.filter(a => a.type === "action" || (!a.type && a.action !== "thinking")).length} actions
+              {(selectedAgentFilter === "all" ? streamActions : filteredStreamActions).filter(a => a.type === "action" || (!a.type && a.action !== "thinking")).length} actions
               {" · "}
-              {streamActions.filter(a => a.type === "thought" || a.action === "thinking").length} thoughts
+              {(selectedAgentFilter === "all" ? streamActions : filteredStreamActions).filter(a => a.type === "thought" || a.action === "thinking").length} thoughts
               {" · "}
-              {streamFindings.length} findings
+              {selectedAgentFilter === "all" ? streamFindings.length : streamFindings.filter(f => f.agentId === selectedAgentFilter).length} findings
             </span>
           </div>
           <div className="bg-[var(--bg-primary)] rounded-lg border border-[var(--border-primary)] overflow-hidden">
+            {/* Agent filter bar */}
+            {activeAgents.length > 1 && (
+              <div className="flex items-center gap-1 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-primary)] flex-wrap">
+                <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mr-1">Agent:</span>
+                <button
+                  onClick={() => { setSelectedAgentFilter("all"); setExpandedActionIdx(null); }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                    selectedAgentFilter === "all"
+                      ? "bg-[var(--accent-teal)] text-white"
+                      : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  All ({streamActions.filter(a => a.agentId !== "system").length})
+                </button>
+                {activeAgents.map((agent) => {
+                  const stats = agentStats(agent.id);
+                  return (
+                    <button
+                      key={agent.id}
+                      onClick={() => { setSelectedAgentFilter(agent.id); setExpandedActionIdx(null); }}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors flex items-center gap-1 ${
+                        selectedAgentFilter === agent.id
+                          ? "bg-[var(--accent-teal)] text-white"
+                          : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      }`}
+                    >
+                      {agent.name}
+                      <span className="opacity-70">({stats.actions}⚡{stats.thoughts}💭)</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {/* Per-agent summary card when filtering */}
+            {selectedAgentFilter !== "all" && (() => {
+              const stats = agentStats(selectedAgentFilter);
+              const agent = activeAgents.find(a => a.id === selectedAgentFilter);
+              return (
+                <div className="px-3 py-2 bg-[var(--accent-teal)]/5 border-b border-[var(--border-primary)] flex items-center gap-4 flex-wrap">
+                  <span className="text-[11px] font-semibold text-[var(--accent-teal)]">{agent?.name} — Session Summary</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                    ✓ {stats.succeeded} succeeded · ✗ {stats.failed} failed · 💭 {stats.thoughts} thoughts · 📋 {stats.findings} findings
+                  </span>
+                </div>
+              );
+            })()}
             <div className="p-2 max-h-[700px] overflow-y-auto space-y-0.5">
-              {streamActions.map((a, i) => {
+              {filteredStreamActions.map((a, i) => {
+                const globalIdx = streamActions.indexOf(a);
                 const isThought = a.type === "thought" || a.action === "thinking";
                 const isSystem = a.type === "session_start" || a.type === "session_end";
+                const isExpanded = expandedActionIdx === globalIdx;
                 if (isSystem) {
                   return (
-                    <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-xs bg-[var(--accent-indigo)]/5 border-l-2 border-[var(--accent-indigo)]">
+                    <div key={globalIdx} className="flex items-start gap-2 px-2 py-1.5 rounded text-xs bg-[var(--accent-indigo)]/5 border-l-2 border-[var(--accent-indigo)]">
                       <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
                       <span className="text-[var(--accent-indigo)] font-medium">⚙ {a.detail}</span>
                     </div>
@@ -628,26 +779,49 @@ export default function AuditClient() {
                 }
                 if (isThought) {
                   return (
-                    <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-xs bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40">
-                      <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
-                      <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                      <span className="text-[var(--accent-gold)]">💭</span>
-                      <span className="text-[var(--text-secondary)] italic">{a.detail}</span>
+                    <div
+                      key={globalIdx}
+                      className="px-2 py-1.5 rounded text-xs bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40 cursor-pointer hover:bg-[var(--accent-gold)]/10 transition-colors"
+                      onClick={() => setExpandedActionIdx(isExpanded ? null : globalIdx)}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                        <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                        <span className="text-[var(--accent-gold)]">💭</span>
+                        <span className="text-[var(--text-secondary)] italic">{isExpanded ? a.detail : (a.detail || "").slice(0, 200) + ((a.detail || "").length > 200 ? "…" : "")}</span>
+                      </div>
+                      {isExpanded && (a.detail || "").length > 200 && (
+                        <div className="mt-1 ml-6 pl-2 border-l border-[var(--accent-gold)]/30 text-[var(--text-secondary)] italic whitespace-pre-wrap text-[10px]">
+                          {a.detail}
+                        </div>
+                      )}
                     </div>
                   );
                 }
                 const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
                 const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
                 return (
-                  <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded text-xs hover:bg-[var(--bg-elevated)] transition-colors">
-                    <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
-                    <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
-                    <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                    <span className="text-[var(--text-muted)]">→</span>
-                    <span className="font-mono text-[var(--text-primary)] font-medium shrink-0">{a.action}</span>
-                    {a.target && <span className="text-[var(--text-secondary)] truncate">{a.target}</span>}
-                    {a.httpStatus ? <span className="font-mono text-[10px] px-1 rounded shrink-0" style={{ color: statusColor, backgroundColor: `${statusColor}15` }}>[HTTP {a.httpStatus}]</span> : null}
-                    {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
+                  <div
+                    key={globalIdx}
+                    className="px-2 py-1.5 rounded text-xs hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+                    onClick={() => setExpandedActionIdx(isExpanded ? null : globalIdx)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp || ""}</span>
+                      <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
+                      <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
+                      <span className="text-[var(--text-muted)]">→</span>
+                      <span className="font-mono text-[var(--text-primary)] font-medium shrink-0">{a.action}</span>
+                      {a.target && <span className="text-[var(--text-secondary)] truncate">{a.target}</span>}
+                      {a.httpStatus ? <span className="font-mono text-[10px] px-1 rounded shrink-0" style={{ color: statusColor, backgroundColor: `${statusColor}15` }}>[HTTP {a.httpStatus}]</span> : null}
+                      {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
+                      <span className="text-[10px] text-[var(--text-muted)] ml-auto shrink-0">{isExpanded ? "▼" : "▶"}</span>
+                    </div>
+                    {isExpanded && a.detail && (
+                      <div className="mt-1 ml-6 p-2 rounded bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-secondary)] whitespace-pre-wrap">
+                        {a.detail}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -661,7 +835,7 @@ export default function AuditClient() {
           </div>
           {!streaming && streamFindings.length > 0 && (
             <div className="mt-3 space-y-2">
-              {streamFindings.map((finding) => {
+              {(selectedAgentFilter === "all" ? streamFindings : streamFindings.filter(f => f.agentId === selectedAgentFilter)).map((finding) => {
                 const style = severityStyles[finding.severity];
                 return (
                   <div key={finding.id} className="flex items-start gap-2 text-xs p-2 rounded-lg" style={{ backgroundColor: style.bg }}>
