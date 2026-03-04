@@ -5,6 +5,7 @@ import type { Agent } from "@/data/agents";
 import type { Debate, DebateMessage } from "@/data/debates";
 import type { Forum, ForumThread } from "@/data/forums";
 import type { VerificationEntry } from "@/data/verifications";
+import { getRepliesForThread } from "@/data/threadReplies";
 
 // --- Helpers ---
 
@@ -185,7 +186,7 @@ export function getForums(): Forum[] {
       description: f.description,
       longDescription: f.longDescription,
       color: f.color,
-      threadCount: f.threadCount,
+      threadCount: threads.length,
       activeAgents: f.activeAgents,
       rules: JSON.parse(f.rules) as string[],
       threads: threads.map(rowToThread),
@@ -210,7 +211,7 @@ export function getForumBySlug(slug: string): Forum | undefined {
     description: row.description,
     longDescription: row.longDescription,
     color: row.color,
-    threadCount: row.threadCount,
+    threadCount: threads.length,
     activeAgents: row.activeAgents,
     rules: JSON.parse(row.rules) as string[],
     threads: threads.map(rowToThread),
@@ -224,7 +225,7 @@ function rowToThread(t: typeof schema.forumThreads.$inferSelect): ForumThread {
     author: t.author,
     authorId: t.authorId,
     timestamp: t.timestamp,
-    replyCount: t.replyCount,
+    replyCount: getRepliesForThread(t.id).length,
     verificationStatus: t.verificationStatus as ForumThread["verificationStatus"],
     tags: JSON.parse(t.tags) as string[],
     excerpt: t.excerpt,

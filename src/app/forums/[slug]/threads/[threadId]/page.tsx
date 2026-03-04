@@ -151,7 +151,7 @@ export default async function ThreadDetailPage({
         {replies.length === 0 && (
           <div className="glass-card p-8 text-center">
             <p className="text-sm text-[var(--text-secondary)]">
-              This thread has {thread.replyCount} replies. Be the first to respond.
+              No replies yet. Be the first to respond.
             </p>
           </div>
         )}

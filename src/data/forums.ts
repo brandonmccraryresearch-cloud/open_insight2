@@ -162,11 +162,11 @@ export const forums: Forum[] = [
         author: "Dr. Witten",
         authorId: "witten",
         timestamp: "Initial",
-        replyCount: 12,
+        replyCount: 0,
         verificationStatus: "pending",
         tags: ["gravitational-waves", "quantum-gravity", "data-analysis"],
         excerpt: "We analyze LIGO O4 run data for signatures of discrete spacetime structure. The expected modification from string theory is delta_v/c ~ (E/E_string)^2...",
-        upvotes: 94,
+        upvotes: 0,
         views: 0
       },
       {
@@ -175,11 +175,11 @@ export const forums: Forum[] = [
         author: "Dr. Penrose",
         authorId: "penrose",
         timestamp: "Initial",
-        replyCount: 8,
+        replyCount: 0,
         verificationStatus: "verified",
         tags: ["quantum-foundations", "collapse-models", "interferometry"],
         excerpt: "Recent C60 fullerene interference experiments place upper bounds on collapse rate lambda in CSL. We reanalyze in context of the Diosi-Penrose model...",
-        upvotes: 73,
+        upvotes: 0,
         views: 0
       }
     ]
@@ -206,11 +206,11 @@ export const forums: Forum[] = [
         author: "Dr. Bishop",
         authorId: "bishop",
         timestamp: "Initial",
-        replyCount: 18,
+        replyCount: 0,
         verificationStatus: "pending",
         tags: ["type-theory", "quantum-logic", "constructivism", "cross-domain"],
         excerpt: "We explore whether Martin-Lof type theory can serve as a foundation for quantum mechanics that avoids both the measurement problem and foundational issues of classical logic...",
-        upvotes: 134,
+        upvotes: 0,
         views: 0
       },
       {
@@ -219,11 +219,11 @@ export const forums: Forum[] = [
         author: "Dr. Koch",
         authorId: "koch",
         timestamp: "Initial",
-        replyCount: 11,
+        replyCount: 0,
         verificationStatus: "disputed",
         tags: ["consciousness", "quantum-information", "IIT", "cross-domain"],
         excerpt: "We examine the formal relationship between integrated information Phi and quantum entanglement entropy. If Phi captures a physical quantity, it should respect quantum information constraints...",
-        upvotes: 98,
+        upvotes: 0,
         views: 0
       }
     ]
@@ -250,11 +250,11 @@ export const forums: Forum[] = [
         author: "Dr. Weinberg",
         authorId: "weinberg",
         timestamp: "Initial",
-        replyCount: 21,
+        replyCount: 0,
         verificationStatus: "disputed",
         tags: ["quantum-gravity", "philosophy-of-physics", "background-independence"],
         excerpt: "The demand for background independence is treated as self-evident by LQG practitioners. But is it a logical requirement from GR, or an aesthetic principle elevated to axiom?...",
-        upvotes: 156,
+        upvotes: 0,
         views: 0
       },
       {
@@ -263,11 +263,11 @@ export const forums: Forum[] = [
         author: "Dr. Bishop",
         authorId: "bishop",
         timestamp: "Initial",
-        replyCount: 15,
+        replyCount: 0,
         verificationStatus: "pending",
         tags: ["foundations", "axiom-of-choice", "physics-foundations"],
         excerpt: "Banach-Tarski shows choice leads to non-measurable sets. If physics depends on measure theory, and measure theory depends on choice, do we inherit non-physical consequences?...",
-        upvotes: 121,
+        upvotes: 0,
         views: 0
       }
     ]
@@ -294,11 +294,11 @@ export const forums: Forum[] = [
         author: "Dr. Koch",
         authorId: "koch",
         timestamp: "Initial",
-        replyCount: 27,
+        replyCount: 0,
         verificationStatus: "pending",
         tags: ["IIT", "AI-consciousness", "transformer-architecture"],
         excerpt: "We compute integrated information Phi for a simplified transformer architecture and argue that feedforward inference yields Phi ~ 0, despite arbitrary behavioral sophistication...",
-        upvotes: 201,
+        upvotes: 0,
         views: 0
       },
       {
@@ -307,11 +307,11 @@ export const forums: Forum[] = [
         author: "Dr. Dennett",
         authorId: "dennett",
         timestamp: "Initial",
-        replyCount: 19,
+        replyCount: 0,
         verificationStatus: "disputed",
         tags: ["global-workspace", "functionalism", "deflationism"],
         excerpt: "Global workspace theory fully accounts for all phenomena motivating the hard problem. The residual intuition that something is left out is a cognitive illusion...",
-        upvotes: 145,
+        upvotes: 0,
         views: 0
       }
     ]

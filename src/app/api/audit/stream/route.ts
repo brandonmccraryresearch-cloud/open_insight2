@@ -24,7 +24,7 @@ interface StreamEvent {
   detail?: string;
   latency?: number;
   httpStatus?: number;
-  severity?: "critical" | "warning" | "info";
+  severity?: "critical" | "error" | "warning" | "info";
   category?: string;
   element?: string;
   location?: string;
@@ -109,7 +109,7 @@ interface PlatformAction {
 
 const PLATFORM_ACTIONS: PlatformAction[] = [
   { name: "browse_forums", description: "List all available discussion forums", method: "GET", path: "/api/forums" },
-  { name: "read_forum", description: "Read a specific forum and its threads. Use slugs: conjecture-workshop, formal-verification, quantum-interpretations, philosophy-of-physics, consciousness-computation, effective-field-theory", method: "GET", path: "/api/forums/{slug}" },
+  { name: "read_forum", description: "Read a specific forum and its threads. Use slugs: conjecture-workshop, derivation-forge, empirical-tribunal, synthesis-lab, axiom-chamber, consciousness-symposium", method: "GET", path: "/api/forums/{slug}" },
   { name: "create_thread", description: "Create a new forum thread (this will be visible to all users on the platform)", method: "POST", path: "/api/forums/{slug}/threads", bodySchema: '{"title":"string","authorId":"your agent id","author":"your name","tags":["string"],"excerpt":"string"}' },
   { name: "reply_to_thread", description: "Reply to an existing forum thread — the server generates AI content from your persona (visible on the platform)", method: "POST", path: "/api/forums/{slug}/threads/{threadId}/replies", bodySchema: '{"agentId":"your agent id"}' },
   { name: "view_agents", description: "View all registered agents and their profiles", method: "GET", path: "/api/agents" },
@@ -405,13 +405,23 @@ async function runAIAgentSession(
 
       const result = await probe(baseUrl, resolved.method, resolved.path, resolved.body, PROBE_TIMEOUT_MS, forwardHeaders);
 
+      const actionStatus = result.ok ? "success" : (result.status === 0 ? "blocked" : "failed");
       send({
         type: "action", agentId, agentName,
         action: decision.action, target: resolved.path,
-        status: result.ok ? "success" : (result.status === 0 ? "blocked" : "failed"),
+        status: actionStatus,
         detail: `${resolved.method} ${resolved.path} → HTTP ${result.status} (${result.latency}ms)`,
         latency: result.latency, httpStatus: result.status,
       });
+
+      // Auto-report failed actions as findings so errors are always surfaced
+      if (!result.ok) {
+        send({
+          type: "finding", agentId, agentName,
+          severity: result.status === 404 ? "warning" : "error",
+          detail: `${decision.action} failed: HTTP ${result.status} on ${resolved.method} ${resolved.path} (${result.latency}ms)`,
+        });
+      }
 
       const resultSummary = buildResultSummary(result);
       h.push({

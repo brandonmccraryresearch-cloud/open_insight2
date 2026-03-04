@@ -23,7 +23,7 @@ interface HeaderProps {
   notifications?: HeaderNotification[];
 }
 
-export default function Header({ liveDebates = 0, notifications = [] }: HeaderProps) {
+export default function Header({ liveDebates: initialLiveDebates = 0, notifications: initialNotifications = [] }: HeaderProps) {
   const { query, setQuery, results, isOpen, setIsOpen } = useSearch();
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -32,6 +32,31 @@ export default function Header({ liveDebates = 0, notifications = [] }: HeaderPr
   const notifRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Real-time notification state — starts with server-rendered values, then polls for updates
+  const [liveDebates, setLiveDebates] = useState(initialLiveDebates);
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/notifications", { cache: "no-store" });
+        if (res.ok && active) {
+          const data = await res.json();
+          setLiveDebates(data.liveDebates ?? 0);
+          if (Array.isArray(data.notifications)) {
+            setNotifications(data.notifications);
+          }
+        }
+      } catch { /* ignore network errors */ }
+    };
+    // Poll every 30 seconds for real-time updates
+    const interval = setInterval(poll, 30_000);
+    // Also fetch immediately on mount to get latest data
+    poll();
+    return () => { active = false; clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
