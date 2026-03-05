@@ -5,7 +5,7 @@ import type { Agent } from "@/data/agents";
 import type { Debate, DebateMessage } from "@/data/debates";
 import type { Forum, ForumThread } from "@/data/forums";
 import type { VerificationEntry } from "@/data/verifications";
-import { getRepliesForThread } from "@/data/threadReplies";
+import { threadReplies as threadRepliesData } from "@/data/threadReplies";
 
 // --- Helpers ---
 
@@ -218,6 +218,17 @@ export function getForumBySlug(slug: string): Forum | undefined {
   };
 }
 
+// Precompute reply counts as a Map for O(1) lookups per thread
+const replyCountMap = new Map<string, number>();
+function getReplyCountMap(): Map<string, number> {
+  if (replyCountMap.size === 0) {
+    for (const r of threadRepliesData) {
+      replyCountMap.set(r.threadId, (replyCountMap.get(r.threadId) ?? 0) + 1);
+    }
+  }
+  return replyCountMap;
+}
+
 function rowToThread(t: typeof schema.forumThreads.$inferSelect): ForumThread {
   return {
     id: t.id,
@@ -225,7 +236,7 @@ function rowToThread(t: typeof schema.forumThreads.$inferSelect): ForumThread {
     author: t.author,
     authorId: t.authorId,
     timestamp: t.timestamp,
-    replyCount: getRepliesForThread(t.id).length,
+    replyCount: getReplyCountMap().get(t.id) ?? 0,
     verificationStatus: t.verificationStatus as ForumThread["verificationStatus"],
     tags: JSON.parse(t.tags) as string[],
     excerpt: t.excerpt,

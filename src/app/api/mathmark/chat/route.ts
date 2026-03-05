@@ -31,13 +31,14 @@ export async function POST(req: NextRequest) {
       { role: "user", parts: [{ text: message }] },
     ];
 
-    enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction: systemPrompt,
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
     const response = await genai.models.generateContent({
       model: REQUIRED_MODEL,
-      config: {
-        ...REQUIRED_CONFIG,
-        systemInstruction: systemPrompt,
-      },
+      config,
       contents,
     });
 

@@ -47,14 +47,15 @@ Return ONLY valid JSON:
 Document:
 ${content}`;
 
-    enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction:
+        "You are a ghostwriter assistant. Rewrite text to sound more natural and human while preserving all technical content and formatting. Return ONLY valid JSON, no markdown fences or extra text.",
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
     const response = await genai.models.generateContent({
       model: REQUIRED_MODEL,
-      config: {
-        ...REQUIRED_CONFIG,
-        systemInstruction:
-          "You are a ghostwriter assistant. Rewrite text to sound more natural and human while preserving all technical content and formatting. Return ONLY valid JSON, no markdown fences or extra text.",
-      },
+      config,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 

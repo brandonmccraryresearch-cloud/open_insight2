@@ -335,13 +335,14 @@ async function runAIAgentSession(
     if (signal.aborted) break;
 
     try {
-      enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
+      const config = {
+        ...REQUIRED_CONFIG,
+        systemInstruction: systemPrompt,
+      };
+      enforceModelConfig(REQUIRED_MODEL, config);
       const response = await genai.models.generateContent({
         model: REQUIRED_MODEL,
-        config: {
-          ...REQUIRED_CONFIG,
-          systemInstruction: systemPrompt,
-        },
+        config,
         contents: h,
       });
 
@@ -425,9 +426,16 @@ async function runAIAgentSession(
       // Auto-report failed actions as findings so errors are always surfaced
       if (!result.ok) {
         send({
-          type: "finding", agentId, agentName,
+          type: "finding",
+          agentId,
+          agentName,
+          findingId: `${decision.action}:${resolved.method} ${resolved.path}:${result.status}`,
+          category: "http_error",
+          element: decision.action,
+          location: `${resolved.method} ${resolved.path}`,
           severity: result.status === 404 ? "warning" : "error",
-          detail: `${decision.action} failed: HTTP ${result.status} on ${resolved.method} ${resolved.path} (${result.latency}ms)`,
+          description: `${decision.action} failed with HTTP ${result.status} when calling ${resolved.method} ${resolved.path}.`,
+          recommendation: "Verify the endpoint URL, HTTP method, request body, and authentication/authorization. If the issue persists, check backend logs or documentation for this endpoint.",
         });
       }
 

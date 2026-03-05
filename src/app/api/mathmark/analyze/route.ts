@@ -60,14 +60,15 @@ Return ONLY valid JSON matching this schema:
 Document:
 ${content}`;
 
-    enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction:
+        "You are a document analysis assistant. Return ONLY valid JSON, no markdown fences or extra text.",
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
     const response = await genai.models.generateContent({
       model: REQUIRED_MODEL,
-      config: {
-        ...REQUIRED_CONFIG,
-        systemInstruction:
-          "You are a document analysis assistant. Return ONLY valid JSON, no markdown fences or extra text.",
-      },
+      config,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 

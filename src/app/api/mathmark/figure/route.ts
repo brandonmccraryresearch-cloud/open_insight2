@@ -52,14 +52,15 @@ Return ONLY valid JSON:
   "markdown": "markdown to insert into the document (for SVG, use an inline data URI image; for code, use a fenced code block)"
 }`;
 
-    enforceModelConfig(REQUIRED_MODEL, REQUIRED_CONFIG);
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction:
+        "You are an expert scientific figure generator. Create precise, publication-quality figures. Return ONLY valid JSON, no markdown fences or extra text.",
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
     const response = await genai.models.generateContent({
       model: REQUIRED_MODEL,
-      config: {
-        ...REQUIRED_CONFIG,
-        systemInstruction:
-          "You are an expert scientific figure generator. Create precise, publication-quality figures. Return ONLY valid JSON, no markdown fences or extra text.",
-      },
+      config,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 

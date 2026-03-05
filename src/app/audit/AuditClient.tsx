@@ -23,6 +23,7 @@ const PRESET_DURATIONS = [
 
 const severityStyles: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: "rgba(239,68,68,0.1)", text: "#ef4444", label: "Critical" },
+  error: { bg: "rgba(220,38,38,0.1)", text: "#dc2626", label: "Error" },
   warning: { bg: "rgba(245,158,11,0.1)", text: "#f59e0b", label: "Warning" },
   info: { bg: "rgba(99,102,241,0.1)", text: "#6366f1", label: "Info" },
 };
@@ -33,6 +34,7 @@ const categoryLabels: Record<string, string> = {
   placeholder: "Placeholder",
   inconsistency: "Inconsistency",
   error: "Error",
+  http_error: "HTTP Error",
   emulation: "Emulation",
   incomplete: "Incomplete",
 };
