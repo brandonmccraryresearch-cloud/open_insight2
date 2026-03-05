@@ -1,0 +1,63 @@
+import { NextRequest, NextResponse } from "next/server";
+import { GoogleGenAI } from "@google/genai";
+import {
+  hasGeminiKey,
+  REQUIRED_MODEL,
+  REQUIRED_CONFIG,
+  enforceModelConfig,
+} from "@/lib/gemini";
+
+export const maxDuration = 60;
+
+export async function POST(request: NextRequest) {
+  if (!hasGeminiKey()) {
+    return NextResponse.json(
+      { error: "GEMINI_API_KEY is not configured" },
+      { status: 503 },
+    );
+  }
+
+  let body: { url?: string; query?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 },
+    );
+  }
+
+  const { url, query } = body;
+  if (!url || typeof url !== "string") {
+    return NextResponse.json(
+      { error: "A 'url' string is required" },
+      { status: 400 },
+    );
+  }
+
+  const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+
+  const prompt = query
+    ? `Browse the following URL and summarize its content, focusing on: ${query}\n\nURL: ${url}`
+    : `Browse the following URL and provide a comprehensive summary of its content.\n\nURL: ${url}`;
+
+  const config = {
+    ...REQUIRED_CONFIG,
+    systemInstruction:
+      "You are a web research assistant. When given a URL, use the urlContext tool to read the page and provide a clear, structured summary. Include key facts, data points, and relevant details. Be thorough but concise.",
+  };
+  enforceModelConfig(REQUIRED_MODEL, config);
+
+  const response = await genai.models.generateContent({
+    model: REQUIRED_MODEL,
+    config,
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+
+  const text =
+    response.candidates?.[0]?.content?.parts
+      ?.map((p: { text?: string }) => p.text ?? "")
+      .join("") ?? "";
+
+  return NextResponse.json({ url, query: query ?? null, summary: text });
+}

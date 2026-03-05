@@ -43,8 +43,10 @@ export interface SessionState {
   log: string[];
   streaming: boolean;
   active: boolean;
+  paused: boolean;
   selectedDuration: number;
   startedAt: number | null;
+  pausedElapsed: number;
   error: string | null;
 }
 
@@ -58,8 +60,10 @@ let state: SessionState = {
   log: [],
   streaming: false,
   active: false,
+  paused: false,
   selectedDuration: 5 * 60,
   startedAt: null,
+  pausedElapsed: 0,
   error: null,
 };
 
@@ -94,8 +98,40 @@ export function setSelectedDuration(seconds: number) {
 
 export function getTimeRemaining(): number {
   if (!state.active || !state.startedAt) return 0;
-  const elapsed = (Date.now() - state.startedAt) / 1000;
+  if (state.paused) {
+    return Math.max(0, state.selectedDuration - state.pausedElapsed);
+  }
+  const elapsed = state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
   return Math.max(0, state.selectedDuration - elapsed);
+}
+
+export function getElapsedTime(): number {
+  if (!state.startedAt) return 0;
+  if (state.paused) return state.pausedElapsed;
+  return state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
+}
+
+export function pauseSession() {
+  if (!state.active || state.paused) return;
+  const elapsed = (Date.now() - (state.startedAt ?? Date.now())) / 1000;
+  state = {
+    ...state,
+    paused: true,
+    pausedElapsed: state.pausedElapsed + elapsed,
+  };
+  addLog("Session paused by user.");
+  notify();
+}
+
+export function resumeSession() {
+  if (!state.active || !state.paused) return;
+  state = {
+    ...state,
+    paused: false,
+    startedAt: Date.now(),
+  };
+  addLog("Session resumed by user.");
+  notify();
 }
 
 export function startSession() {
@@ -108,7 +144,9 @@ export function startSession() {
     log: [],
     streaming: true,
     active: true,
+    paused: false,
     startedAt: Date.now(),
+    pausedElapsed: 0,
     error: null,
   };
   addLog(
@@ -125,7 +163,7 @@ export function stopSession() {
   abortController?.abort();
   abortController = null;
   addLog("Session stopped by user.");
-  state = { ...state, streaming: false, active: false };
+  state = { ...state, streaming: false, active: false, paused: false };
   notify();
 }
 
@@ -187,7 +225,7 @@ async function runStream() {
   }
 
   addLog("Session stream ended.");
-  state = { ...state, streaming: false, active: false };
+  state = { ...state, streaming: false, active: false, paused: false };
   notify();
 }
 

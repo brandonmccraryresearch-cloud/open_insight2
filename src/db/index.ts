@@ -7,6 +7,12 @@ import { existsSync, copyFileSync } from "fs";
 const isVercel = !!process.env.VERCEL;
 const buildDbPath = path.join(process.cwd(), "open-insight.db");
 
+// KNOWN LIMITATION: On Vercel, SQLite is ephemeral. Each serverless function
+// invocation copies the build-time DB snapshot to /tmp. Writes (new debates,
+// threads, messages) are visible only within the same function instance.
+// Cross-invocation writes are NOT shared. For full persistence, migrate to a
+// hosted database (e.g., Turso, Neon, PlanetScale).
+
 // On Vercel the task root is read-only at runtime.
 // Copy the bundled DB to /tmp (writable) on cold start.
 let dbPath = buildDbPath;

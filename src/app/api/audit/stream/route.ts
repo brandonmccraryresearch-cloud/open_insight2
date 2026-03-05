@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getAgents, getAgentById } from "@/lib/queries";
 import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
 
-export const maxDuration = 60;
+export const maxDuration = 900;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -144,6 +144,8 @@ const PLATFORM_ACTIONS: PlatformAction[] = [
   { name: "test_mathmark_humanize", description: "Test MathMark text humanization", method: "POST", path: "/api/mathmark/humanize", bodySchema: '{"content":"text to rewrite"}' },
   { name: "test_mathmark_figure", description: "Test MathMark figure generation", method: "POST", path: "/api/mathmark/figure", bodySchema: '{"description":"figure description","format":"svg"}' },
   { name: "test_mathmark_chat", description: "Test MathMark AI writing assistant", method: "POST", path: "/api/mathmark/chat", bodySchema: '{"message":"your question","documentContext":""}' },
+  { name: "browse_web", description: "Browse a web page and get an AI-generated summary of its content", method: "POST", path: "/api/tools/browse", bodySchema: '{"url":"https://example.com","query":"what to look for on the page"}' },
+  { name: "search_docs", description: "Search for the latest documentation on any library, framework, or tool using Google Search", method: "POST", path: "/api/tools/docs", bodySchema: '{"query":"search query for documentation"}' },
 ];
 
 function buildActionListForPrompt(): string {
@@ -187,7 +189,9 @@ Rules:
 - If you find issues, broken features, or interesting data, note them in your thoughts
 - Vary your exploration — don't repeat the same action twice in a row
 - Stay in character — your epistemic stance and domain expertise guide what you investigate
-- When you have explored enough, respond with: {"thought":"your summary","action":"done","params":{}}`;
+- When you have explored enough, respond with: {"thought":"your summary","action":"done","params":{}}
+- IMPORTANT — Debate creation: After creating a debate with create_debate, the returned debate ID may NOT be immediately accessible via post_debate_message due to serverless database isolation. Use view_live_debates to find the debate by title before posting messages. Prefer posting messages to pre-existing debates (debate-001 through debate-006) for reliability.
+- You can use browse_web and search_docs to look up external information, documentation, or web pages relevant to your research.`;
 }
 
 // ─── Resolve action to real HTTP call ────────────────────────────────────────

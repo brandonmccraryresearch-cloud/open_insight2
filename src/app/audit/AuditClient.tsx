@@ -8,8 +8,11 @@ import {
   subscribe,
   setSelectedDuration,
   getTimeRemaining,
+  getElapsedTime,
   startSession,
   stopSession,
+  pauseSession,
+  resumeSession,
 } from "@/lib/agentSessionStore";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -51,16 +54,18 @@ export default function AuditClient() {
   const [expandedActionIdx, setExpandedActionIdx] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const [activeTab, setActiveTab] = useState<"timeline" | "agents" | "findings" | "log">("timeline");
 
   const streamScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Countdown timer — polls getTimeRemaining() every second
   useEffect(() => {
-    if (!active) { setTimeRemaining(0); return; }
+    if (!active) { setTimeRemaining(0); setElapsed(0); return; }
     const id = setInterval(() => {
       const rem = getTimeRemaining();
       setTimeRemaining(rem);
+      setElapsed(getElapsedTime());
       if (rem <= 0 && active) {
         // Let the server-side time enforcement handle ending
       }
@@ -107,6 +112,13 @@ export default function AuditClient() {
     succeeded: streamActions.filter((a) => a.type === "action" && a.status === "success").length,
     failed: streamActions.filter((a) => a.type === "action" && (a.status === "failed" || a.status === "blocked")).length,
   };
+
+  const actionCount = totalStats.actions;
+  const elapsedMin = elapsed / 60;
+  const actionsPerMin = elapsedMin > 0 ? actionCount / elapsedMin : 0;
+  const successRate = actionCount > 0 ? (totalStats.succeeded / actionCount) * 100 : 0;
+  const actionLatencies = streamActions.filter((a) => a.type === "action" && a.latency).map((a) => a.latency!);
+  const avgResponseTime = actionLatencies.length > 0 ? actionLatencies.reduce((s, v) => s + v, 0) / actionLatencies.length : 0;
 
   function formatTime(s: number): string {
     const m = Math.floor(s / 60);
@@ -257,7 +269,7 @@ export default function AuditClient() {
 
   function StatsBar({ stats }: { stats: typeof totalStats }) {
     return (
-      <div className="flex items-center gap-4 text-[11px] font-mono">
+      <div className="flex items-center gap-4 text-[11px] font-mono flex-wrap">
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-[#10b981]" />
           <span className="text-[var(--text-muted)]">{stats.succeeded}</span>
@@ -276,6 +288,18 @@ export default function AuditClient() {
           <span className="text-[var(--accent-rose)]">📋</span>
           <span className="text-[var(--text-muted)]">{stats.findings}</span>
         </span>
+        <span className="flex items-center gap-1" title="Actions per minute">
+          <span className="text-[var(--text-muted)] opacity-60">⚡</span>
+          <span className="text-[var(--text-muted)]">{actionsPerMin.toFixed(1)}/m</span>
+        </span>
+        <span className="flex items-center gap-1" title="Success rate">
+          <span className="text-[var(--text-muted)] opacity-60">📊</span>
+          <span className="text-[var(--text-muted)]">{successRate.toFixed(0)}%</span>
+        </span>
+        <span className="flex items-center gap-1" title="Avg response time">
+          <span className="text-[var(--text-muted)] opacity-60">⏱</span>
+          <span className="text-[var(--text-muted)]">{avgResponseTime.toFixed(0)}ms</span>
+        </span>
       </div>
     );
   }
@@ -290,6 +314,16 @@ export default function AuditClient() {
     const lastThought = streamActions
       .filter((a) => a.agentId === agentId && a.type === "thought")
       .slice(-1)[0];
+
+    const agentActions = streamActions.filter((a) => a.agentId === agentId && a.type === "action");
+    const agentSuccessRate = agentActions.length > 0
+      ? (stats.succeeded / agentActions.length) * 100
+      : 0;
+    const agentLatencies = agentActions.filter((a) => a.latency).map((a) => a.latency!);
+    const agentAvgLatency = agentLatencies.length > 0
+      ? agentLatencies.reduce((s, v) => s + v, 0) / agentLatencies.length
+      : 0;
+    const shareOfTotal = actionCount > 0 ? (agentActions.length / actionCount) * 100 : 0;
 
     return (
       <div className="glass-card p-4">
@@ -310,7 +344,7 @@ export default function AuditClient() {
             View timeline →
           </button>
         </div>
-        <div className="grid grid-cols-5 gap-2 mb-3">
+        <div className="grid grid-cols-5 gap-2 mb-2">
           {[
             { label: "Actions", value: stats.actions, color: "var(--accent-teal)" },
             { label: "Success", value: stats.succeeded, color: "#10b981" },
@@ -323,6 +357,11 @@ export default function AuditClient() {
               <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-wider">{s.label}</div>
             </div>
           ))}
+        </div>
+        <div className="flex items-center gap-3 text-[10px] font-mono text-[var(--text-muted)] mb-3 px-1">
+          <span title="Success rate">📊 {agentSuccessRate.toFixed(0)}%</span>
+          <span title="Avg latency">⏱ {agentAvgLatency.toFixed(0)}ms</span>
+          <span title="Share of total actions">🔀 {shareOfTotal.toFixed(0)}% of total</span>
         </div>
         {lastThought && (
           <div className="text-[10px] text-[var(--text-secondary)] italic border-l-2 border-[var(--accent-gold)]/30 pl-2 mb-2 line-clamp-2">
@@ -390,6 +429,16 @@ export default function AuditClient() {
               {formatTime(timeRemaining)} remaining
             </span>
           )}
+          {active && (
+            <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">
+              {formatTime(elapsed)} elapsed
+            </span>
+          )}
+          {session.paused && (
+            <span className="badge bg-[var(--accent-gold)]/10 text-[var(--accent-gold)]">
+              Paused
+            </span>
+          )}
           {streaming && (
             <span className="badge bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-gold)] status-pulse" />
@@ -450,12 +499,24 @@ export default function AuditClient() {
                   className="progress-fill"
                   style={{
                     width: `${((session.selectedDuration - timeRemaining) / session.selectedDuration) * 100}%`,
-                    background: "linear-gradient(90deg, var(--accent-teal), var(--accent-gold))",
+                    background: session.paused
+                      ? "linear-gradient(90deg, var(--accent-gold), var(--accent-gold))"
+                      : "linear-gradient(90deg, var(--accent-teal), var(--accent-gold))",
                   }}
                 />
               </div>
             </div>
             <StatsBar stats={totalStats} />
+            <button
+              onClick={session.paused ? resumeSession : pauseSession}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                session.paused
+                  ? "text-[var(--accent-teal)] bg-[var(--accent-teal)]/10 hover:bg-[var(--accent-teal)]/20"
+                  : "text-[var(--accent-gold)] bg-[var(--accent-gold)]/10 hover:bg-[var(--accent-gold)]/20"
+              }`}
+            >
+              {session.paused ? "Resume" : "Pause"}
+            </button>
             <button
               onClick={stopSession}
               className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--accent-rose)] bg-[var(--accent-rose)]/10 hover:bg-[var(--accent-rose)]/20 transition-colors"
@@ -476,13 +537,16 @@ export default function AuditClient() {
       {hasSession && (
         <>
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
             {[
-              { label: "Total Actions", value: totalStats.actions, color: "var(--accent-teal)" },
-              { label: "Succeeded", value: totalStats.succeeded, color: "#10b981" },
-              { label: "Failed", value: totalStats.failed, color: "#ef4444" },
-              { label: "Thoughts", value: totalStats.thoughts, color: "var(--accent-gold)" },
-              { label: "Findings", value: totalStats.findings, color: "var(--accent-rose)" },
+              { label: "Total Actions", value: String(totalStats.actions), color: "var(--accent-teal)" },
+              { label: "Succeeded", value: String(totalStats.succeeded), color: "#10b981" },
+              { label: "Failed", value: String(totalStats.failed), color: "#ef4444" },
+              { label: "Thoughts", value: String(totalStats.thoughts), color: "var(--accent-gold)" },
+              { label: "Findings", value: String(totalStats.findings), color: "var(--accent-rose)" },
+              { label: "Actions/min", value: actionsPerMin.toFixed(1), color: "var(--accent-indigo)" },
+              { label: "Success Rate", value: `${successRate.toFixed(0)}%`, color: "#10b981" },
+              { label: "Avg Latency", value: `${avgResponseTime.toFixed(0)}ms`, color: "var(--accent-teal)" },
             ].map((s) => (
               <div key={s.label} className="glass-card p-3 text-center">
                 <div className="text-xl font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
