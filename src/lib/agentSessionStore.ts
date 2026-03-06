@@ -171,6 +171,14 @@ export function stopSession() {
 
 /** Maximum duration the server can run a single stream segment (Vercel limit) */
 const SERVER_SEGMENT_LIMIT_S = 300;
+/** Minimum remaining time to justify starting a new segment */
+const MIN_SEGMENT_REMAINING_S = 5;
+/** Max chars for action detail in context summary */
+const CTX_DETAIL_LIMIT = 100;
+/** Max chars for thought detail in context summary */
+const CTX_THOUGHT_LIMIT = 150;
+/** Max chars for finding description in context summary */
+const CTX_FINDING_LIMIT = 100;
 
 /**
  * Builds a compact context summary from the current session state for transfer
@@ -192,21 +200,21 @@ function buildContextSummary(): string {
   // Include last 20 actions to stay within prompt limits
   const recentActions = actions.slice(-20);
   for (const a of recentActions) {
-    lines.push(`- ${a.agentName} → ${a.action} on ${a.target}: ${a.status} (${a.detail?.slice(0, 100) ?? ""})`);
+    lines.push(`- ${a.agentName} → ${a.action} on ${a.target}: ${a.status} (${a.detail?.slice(0, CTX_DETAIL_LIMIT) ?? ""})`);
   }
 
   if (thoughts.length > 0) {
     lines.push(``, `## Recent Agent Thoughts:`);
     const recentThoughts = thoughts.slice(-10);
     for (const t of recentThoughts) {
-      lines.push(`- ${t.agentName}: ${(t.detail || "").slice(0, 150)}`);
+      lines.push(`- ${t.agentName}: ${(t.detail || "").slice(0, CTX_THOUGHT_LIMIT)}`);
     }
   }
 
   if (findings.length > 0) {
     lines.push(``, `## Findings Reported:`);
     for (const f of findings) {
-      lines.push(`- [${f.severity}] ${f.element}: ${f.description?.slice(0, 100) ?? ""}`);
+      lines.push(`- [${f.severity}] ${f.element}: ${f.description?.slice(0, CTX_FINDING_LIMIT) ?? ""}`);
     }
   }
 
@@ -229,7 +237,7 @@ async function runStream() {
 
       const elapsedS = (Date.now() - sessionStart) / 1000;
       const remainingS = totalDuration - elapsedS;
-      if (remainingS <= 5) break; // less than 5s remaining, stop
+      if (remainingS <= MIN_SEGMENT_REMAINING_S) break; // less than threshold remaining, stop
 
       segmentNumber++;
       // Each segment runs for at most SERVER_SEGMENT_LIMIT_S or remaining time
@@ -290,7 +298,7 @@ async function runStream() {
 
       // Check if total session time has elapsed
       const totalElapsed = (Date.now() - sessionStart) / 1000;
-      if (totalElapsed >= totalDuration - 5) break; // done
+      if (totalElapsed >= totalDuration - MIN_SEGMENT_REMAINING_S) break; // done
     }
   } catch (err) {
     if ((err as Error).name !== "AbortError") {

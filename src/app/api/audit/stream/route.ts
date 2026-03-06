@@ -343,17 +343,19 @@ async function runAIAgentSession(
   /** Track consecutive non-JSON responses so we can nudge the AI back on track */
   let consecutiveNonJSON = 0;
   const MAX_NON_JSON_RETRIES = 3;
-  /** Max conversation turns to keep in context (sliding window) */
+/** Max conversation turns to keep in context (sliding window) */
   const MAX_HISTORY_TURNS = 60;
+  /** Number of initial messages to always preserve in sliding window */
+  const KEEP_INITIAL_MESSAGES = 2;
 
   for (let turn = 0; turn < maxTurns; turn++) {
     if (signal.aborted) break;
 
     // Sliding window: trim old history to prevent context overflow.
-    // Keep the first 2 messages (system seed + initial response) and the last
+    // Keep the first messages (system seed + initial response) and the last
     // MAX_HISTORY_TURNS messages for continuity.
-    if (h.length > MAX_HISTORY_TURNS + 2) {
-      const head = h.slice(0, 2);
+    if (h.length > MAX_HISTORY_TURNS + KEEP_INITIAL_MESSAGES) {
+      const head = h.slice(0, KEEP_INITIAL_MESSAGES);
       const tail = h.slice(-MAX_HISTORY_TURNS);
       h.length = 0;
       h.push(...head, {

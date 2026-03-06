@@ -55,11 +55,14 @@ export async function POST(request: NextRequest) {
 
   const hostname = parsedUrl.hostname;
   const privateIpPattern =
-    /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/;
+    /^(0\.|10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/;
 
   if (
     hostname === "localhost" ||
     hostname === "::1" ||
+    hostname.startsWith("fc") ||
+    hostname.startsWith("fd") ||
+    hostname.startsWith("fe80") ||
     privateIpPattern.test(hostname)
   ) {
     return NextResponse.json(
