@@ -274,9 +274,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Prefer a canonical origin if configured; otherwise fall back to the computed origin.
+  // Prefer a canonical origin if configured and valid; otherwise fall back to the computed origin.
   // This is used as the base URL for internal self-probes.
-  const baseUrl = canonicalOrigin || requestOrigin;
+  const baseUrl = parsedCanonicalOrigin || requestOrigin;
 
   // Forward auth-related headers so self-probes pass deployment protection.
   // When no CANONICAL_ORIGIN is configured, we probe our own origin (same-host),
