@@ -106,7 +106,7 @@ export function getTimeRemaining(): number {
 }
 
 export function getElapsedTime(): number {
-  if (!state.startedAt) return 0;
+  if (!state.active || !state.startedAt) return 0;
   if (state.paused) return state.pausedElapsed;
   return state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
 }

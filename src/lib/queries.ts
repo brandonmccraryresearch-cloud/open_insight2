@@ -218,7 +218,8 @@ export function getForumBySlug(slug: string): Forum | undefined {
   };
 }
 
-// Precompute reply counts as a Map for O(1) lookups per thread
+// Precompute reply counts as a Map for O(1) lookups per thread.
+// threadRepliesData is a static read-only array so the cache never goes stale.
 const replyCountMap = new Map<string, number>();
 function getReplyCountMap(): Map<string, number> {
   if (replyCountMap.size === 0) {

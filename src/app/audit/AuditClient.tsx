@@ -269,35 +269,35 @@ export default function AuditClient() {
 
   function StatsBar({ stats }: { stats: typeof totalStats }) {
     return (
-      <div className="flex items-center gap-4 text-[11px] font-mono flex-wrap">
-        <span className="flex items-center gap-1">
+      <div className="flex items-center gap-4 text-[11px] font-mono flex-wrap" role="status" aria-label="Session statistics">
+        <span className="flex items-center gap-1" aria-label={`${stats.succeeded} succeeded`}>
           <span className="w-2 h-2 rounded-full bg-[#10b981]" />
           <span className="text-[var(--text-muted)]">{stats.succeeded}</span>
           <span className="text-[var(--text-muted)] opacity-60">ok</span>
         </span>
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1" aria-label={`${stats.failed} failed`}>
           <span className="w-2 h-2 rounded-full bg-[#ef4444]" />
           <span className="text-[var(--text-muted)]">{stats.failed}</span>
           <span className="text-[var(--text-muted)] opacity-60">fail</span>
         </span>
-        <span className="flex items-center gap-1">
-          <span className="text-[var(--accent-gold)]">💭</span>
+        <span className="flex items-center gap-1" aria-label={`${stats.thoughts} thoughts`}>
+          <span className="text-[var(--accent-gold)]" aria-hidden="true">💭</span>
           <span className="text-[var(--text-muted)]">{stats.thoughts}</span>
         </span>
-        <span className="flex items-center gap-1">
-          <span className="text-[var(--accent-rose)]">📋</span>
+        <span className="flex items-center gap-1" aria-label={`${stats.findings} findings`}>
+          <span className="text-[var(--accent-rose)]" aria-hidden="true">📋</span>
           <span className="text-[var(--text-muted)]">{stats.findings}</span>
         </span>
-        <span className="flex items-center gap-1" title="Actions per minute">
-          <span className="text-[var(--text-muted)] opacity-60">⚡</span>
+        <span className="flex items-center gap-1" title="Actions per minute" aria-label={`${actionsPerMin.toFixed(1)} actions per minute`}>
+          <span className="text-[var(--text-muted)] opacity-60" aria-hidden="true">⚡</span>
           <span className="text-[var(--text-muted)]">{actionsPerMin.toFixed(1)}/m</span>
         </span>
-        <span className="flex items-center gap-1" title="Success rate">
-          <span className="text-[var(--text-muted)] opacity-60">📊</span>
+        <span className="flex items-center gap-1" title="Success rate" aria-label={`${successRate.toFixed(0)} percent success rate`}>
+          <span className="text-[var(--text-muted)] opacity-60" aria-hidden="true">📊</span>
           <span className="text-[var(--text-muted)]">{successRate.toFixed(0)}%</span>
         </span>
-        <span className="flex items-center gap-1" title="Avg response time">
-          <span className="text-[var(--text-muted)] opacity-60">⏱</span>
+        <span className="flex items-center gap-1" title="Avg response time" aria-label={`${avgResponseTime.toFixed(0)} milliseconds average response time`}>
+          <span className="text-[var(--text-muted)] opacity-60" aria-hidden="true">⏱</span>
           <span className="text-[var(--text-muted)]">{avgResponseTime.toFixed(0)}ms</span>
         </span>
       </div>
@@ -359,9 +359,9 @@ export default function AuditClient() {
           ))}
         </div>
         <div className="flex items-center gap-3 text-[10px] font-mono text-[var(--text-muted)] mb-3 px-1">
-          <span title="Success rate">📊 {agentSuccessRate.toFixed(0)}%</span>
-          <span title="Avg latency">⏱ {agentAvgLatency.toFixed(0)}ms</span>
-          <span title="Share of total actions">🔀 {shareOfTotal.toFixed(0)}% of total</span>
+          <span title="Success rate" aria-label={`${agentSuccessRate.toFixed(0)} percent success rate`}><span aria-hidden="true">📊</span> {agentSuccessRate.toFixed(0)}%</span>
+          <span title="Avg latency" aria-label={`${agentAvgLatency.toFixed(0)} milliseconds average latency`}><span aria-hidden="true">⏱</span> {agentAvgLatency.toFixed(0)}ms</span>
+          <span title="Share of total actions" aria-label={`${shareOfTotal.toFixed(0)} percent of total actions`}><span aria-hidden="true">🔀</span> {shareOfTotal.toFixed(0)}% of total</span>
         </div>
         {lastThought && (
           <div className="text-[10px] text-[var(--text-secondary)] italic border-l-2 border-[var(--accent-gold)]/30 pl-2 mb-2 line-clamp-2">
