@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasGeminiKey, executeNotebookCode } from "@/lib/gemini";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 // ── Simulation fallback patterns ─────────────────────────────────────────────
 const SIMULATED: Array<{ input: RegExp; output: string }> = [

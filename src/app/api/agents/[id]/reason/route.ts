@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { streamAgentReasoning } from "@/lib/gemini";
 import { runLean4Check } from "@/lib/lean4";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

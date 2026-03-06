@@ -6,7 +6,7 @@ import * as schema from "@/db/schema";
 import { eq, max } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(
   request: NextRequest,

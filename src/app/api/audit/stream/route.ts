@@ -100,8 +100,11 @@ const DEFAULT_SESSION_DURATION_S = 300;
 const MIN_SESSION_DURATION_S = 60;
 /** Maximum allowed session duration (seconds) – must not exceed route maxDuration */
 const MAX_SESSION_DURATION_S = maxDuration;
-/** Timeout for each HTTP probe call (ms) */
-const PROBE_TIMEOUT_MS = 15000;
+/** Timeout for each HTTP probe call (ms) — used for quick GET health checks */
+const PROBE_TIMEOUT_MS = 15_000;
+/** Timeout for agent action probes that involve AI generation (ms) — Gemini
+ *  with ThinkingLevel.HIGH can take 30-90s for a single call */
+const AI_ACTION_TIMEOUT_MS = 120_000;
 /** Max characters in a result summary fed back to the AI */
 const MAX_RESULT_SUMMARY_LENGTH = 3000;
 
@@ -442,7 +445,7 @@ async function runAIAgentSession(
         continue;
       }
 
-      const result = await probe(baseUrl, resolved.method, resolved.path, resolved.body, PROBE_TIMEOUT_MS, forwardHeaders);
+      const result = await probe(baseUrl, resolved.method, resolved.path, resolved.body, AI_ACTION_TIMEOUT_MS, forwardHeaders);
 
       const actionStatus = result.ok ? "success" : (result.status === 0 ? "blocked" : "failed");
       send({

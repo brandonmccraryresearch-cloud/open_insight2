@@ -4,7 +4,7 @@ import * as schema from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { hasGeminiKey, streamVerificationEval } from "@/lib/gemini";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
