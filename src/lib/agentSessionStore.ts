@@ -190,6 +190,19 @@ async function runStream() {
       throw new Error(message);
     }
 
+    if (!res.ok) {
+      let errorText = "";
+      try {
+        errorText = await res.text();
+      } catch {
+        // ignore errors while reading error body
+      }
+      const message =
+        `Stream request failed with status ${res.status}` +
+        (errorText ? `: ${errorText}` : "");
+      throw new Error(message);
+    }
+
     if (!res.body) throw new Error("No stream body");
 
     const reader = res.body.getReader();
