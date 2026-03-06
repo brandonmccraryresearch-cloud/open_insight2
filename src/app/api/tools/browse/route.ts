@@ -35,29 +35,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  try {
+    const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-  const prompt = query
-    ? `Browse the following URL and summarize its content, focusing on: ${query}\n\nURL: ${url}`
-    : `Browse the following URL and provide a comprehensive summary of its content.\n\nURL: ${url}`;
+    const prompt = query
+      ? `Browse the following URL and summarize its content, focusing on: ${query}\n\nURL: ${url}`
+      : `Browse the following URL and provide a comprehensive summary of its content.\n\nURL: ${url}`;
 
-  const config = {
-    ...REQUIRED_CONFIG,
-    systemInstruction:
-      "You are a web research assistant. When given a URL, use the urlContext tool to read the page and provide a clear, structured summary. Include key facts, data points, and relevant details. Be thorough but concise.",
-  };
-  enforceModelConfig(REQUIRED_MODEL, config);
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction:
+        "You are a web research assistant. When given a URL, use the urlContext tool to read the page and provide a clear, structured summary. Include key facts, data points, and relevant details. Be thorough but concise.",
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
 
-  const response = await genai.models.generateContent({
-    model: REQUIRED_MODEL,
-    config,
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-  });
+    const response = await genai.models.generateContent({
+      model: REQUIRED_MODEL,
+      config,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
 
-  const text =
-    response.candidates?.[0]?.content?.parts
-      ?.map((p: { text?: string }) => p.text ?? "")
-      .join("") ?? "";
+    const text =
+      response.candidates?.[0]?.content?.parts
+        ?.map((p: { text?: string }) => p.text ?? "")
+        .join("") ?? "";
 
-  return NextResponse.json({ url, query: query ?? null, summary: text });
+    return NextResponse.json({ url, query: query ?? null, summary: text });
+  } catch (err) {
+    console.error("Browse error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to browse URL" },
+      { status: 500 },
+    );
+  }
 }
