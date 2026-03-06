@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getAgents, getAgentById } from "@/lib/queries";
 import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
 
-export const maxDuration = 900;
+export const maxDuration = 300;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -98,8 +98,8 @@ const MAX_TURNS_SINGLE = 25;
 const DEFAULT_SESSION_DURATION_S = 300;
 /** Minimum allowed session duration (seconds) */
 const MIN_SESSION_DURATION_S = 60;
-/** Maximum allowed session duration (seconds) */
-const MAX_SESSION_DURATION_S = 7200;
+/** Maximum allowed session duration (seconds) – must not exceed route maxDuration */
+const MAX_SESSION_DURATION_S = maxDuration;
 /** Timeout for each HTTP probe call (ms) */
 const PROBE_TIMEOUT_MS = 15000;
 /** Max characters in a result summary fed back to the AI */
@@ -308,6 +308,7 @@ async function runAIAgentSession(
   send: (event: StreamEvent) => void,
   signal: AbortSignal,
   history?: ConversationHistory,
+  contextTransfer?: string,
 ): Promise<{ done: boolean; history: ConversationHistory }> {
   const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
   const systemPrompt = buildAgentPrompt(agentId, actionList);
@@ -315,10 +316,18 @@ async function runAIAgentSession(
   // If this is the first invocation for this agent, seed the conversation
   const h: ConversationHistory = history ?? [];
   if (h.length === 0) {
-    h.push({
-      role: "user",
-      parts: [{ text: "You have just logged into the Open Insight platform. Look around and explore what interests you as a researcher. What would you like to investigate first?" }],
-    });
+    if (contextTransfer) {
+      // Continuation from a previous segment — inject context summary
+      h.push({
+        role: "user",
+        parts: [{ text: `${contextTransfer}\n\nYou are continuing a session on the Open Insight platform. The above is a summary of what was accomplished in previous session segment(s). Continue exploring — do NOT repeat actions already performed. What would you like to investigate next?` }],
+      });
+    } else {
+      h.push({
+        role: "user",
+        parts: [{ text: "You have just logged into the Open Insight platform. Look around and explore what interests you as a researcher. What would you like to investigate first?" }],
+      });
+    }
   } else {
     // Continuing an existing session — the full conversation history (`h`) is
     // already populated with every prior thought, action, and result. This prompt
@@ -334,9 +343,24 @@ async function runAIAgentSession(
   /** Track consecutive non-JSON responses so we can nudge the AI back on track */
   let consecutiveNonJSON = 0;
   const MAX_NON_JSON_RETRIES = 3;
+  /** Max conversation turns to keep in context (sliding window) */
+  const MAX_HISTORY_TURNS = 60;
 
   for (let turn = 0; turn < maxTurns; turn++) {
     if (signal.aborted) break;
+
+    // Sliding window: trim old history to prevent context overflow.
+    // Keep the first 2 messages (system seed + initial response) and the last
+    // MAX_HISTORY_TURNS messages for continuity.
+    if (h.length > MAX_HISTORY_TURNS + 2) {
+      const head = h.slice(0, 2);
+      const tail = h.slice(-MAX_HISTORY_TURNS);
+      h.length = 0;
+      h.push(...head, {
+        role: "user",
+        parts: [{ text: "[Earlier conversation history trimmed for context efficiency. Continue from your most recent actions.]" }],
+      }, ...tail);
+    }
 
     try {
       const config = {
@@ -565,6 +589,7 @@ export async function GET(request: NextRequest) {
   const continuous = url.searchParams.get("continuous") === "true";
   const durationParam = url.searchParams.get("duration");
   const sessionDurationS = durationParam ? Math.max(MIN_SESSION_DURATION_S, Math.min(MAX_SESSION_DURATION_S, parseInt(durationParam, 10) || DEFAULT_SESSION_DURATION_S)) : DEFAULT_SESSION_DURATION_S;
+  const contextTransfer = url.searchParams.get("context"); // Context from previous segment
   const maxTurnsPerAgent = continuous ? MAX_TURNS_PER_ROUND : MAX_TURNS_SINGLE;
   const sessionStartTime = Date.now();
 
@@ -637,7 +662,7 @@ export async function GET(request: NextRequest) {
             const { done, history: updatedHistory } = await runAIAgentSession(
               agent.id, agent.name, actionList, baseUrl, forwardHeaders,
               maxTurnsPerAgent, send, request.signal,
-              existingHistory,
+              existingHistory, contextTransfer ?? undefined,
             );
             agentHistories.set(agent.id, updatedHistory);
 

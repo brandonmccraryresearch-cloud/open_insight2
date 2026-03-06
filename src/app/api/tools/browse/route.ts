@@ -35,6 +35,39 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // URL validation and SSRF protection
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid 'url' format" },
+      { status: 400 },
+    );
+  }
+
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    return NextResponse.json(
+      { error: "URL must use http or https scheme" },
+      { status: 400 },
+    );
+  }
+
+  const hostname = parsedUrl.hostname;
+  const privateIpPattern =
+    /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/;
+
+  if (
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    privateIpPattern.test(hostname)
+  ) {
+    return NextResponse.json(
+      { error: "URL may not target localhost or private network addresses" },
+      { status: 400 },
+    );
+  }
+
   try {
     const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 

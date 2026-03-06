@@ -115,8 +115,9 @@ const BASE_CONFIG = {
 /**
  * Exported required config — all Gemini calls MUST include these settings.
  * Exported so other modules can spread it into their config objects.
+ * Frozen at runtime to prevent accidental mutation (cast preserves mutable type).
  */
-export const REQUIRED_CONFIG = BASE_CONFIG;
+export const REQUIRED_CONFIG = Object.freeze({ ...BASE_CONFIG }) as typeof BASE_CONFIG;
 
 /**
  * Internal helper to validate that a config object matches the mandated shape

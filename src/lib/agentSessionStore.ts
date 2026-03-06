@@ -167,66 +167,130 @@ export function stopSession() {
   notify();
 }
 
-// ─── Internal: SSE stream consumer ───────────────────────────────────────────
+// ─── Internal: SSE stream consumer with auto-chaining ────────────────────────
+
+/** Maximum duration the server can run a single stream segment (Vercel limit) */
+const SERVER_SEGMENT_LIMIT_S = 300;
+
+/**
+ * Builds a compact context summary from the current session state for transfer
+ * to the next stream segment. This preserves agent memory across Vercel timeouts.
+ */
+function buildContextSummary(): string {
+  const actions = state.actions.filter(a => a.type === "action");
+  const thoughts = state.actions.filter(a => a.type === "thought");
+  const findings = state.findings;
+
+  const lines: string[] = [
+    `--- CONTEXT TRANSFER FROM PREVIOUS SESSION SEGMENT ---`,
+    `The following is a summary of what agents accomplished in the previous session segment(s).`,
+    `Agents should continue from where they left off — do NOT repeat actions already performed.`,
+    ``,
+    `## Actions Performed (${actions.length} total):`,
+  ];
+
+  // Include last 20 actions to stay within prompt limits
+  const recentActions = actions.slice(-20);
+  for (const a of recentActions) {
+    lines.push(`- ${a.agentName} → ${a.action} on ${a.target}: ${a.status} (${a.detail?.slice(0, 100) ?? ""})`);
+  }
+
+  if (thoughts.length > 0) {
+    lines.push(``, `## Recent Agent Thoughts:`);
+    const recentThoughts = thoughts.slice(-10);
+    for (const t of recentThoughts) {
+      lines.push(`- ${t.agentName}: ${(t.detail || "").slice(0, 150)}`);
+    }
+  }
+
+  if (findings.length > 0) {
+    lines.push(``, `## Findings Reported:`);
+    for (const f of findings) {
+      lines.push(`- [${f.severity}] ${f.element}: ${f.description?.slice(0, 100) ?? ""}`);
+    }
+  }
+
+  lines.push(``, `--- END CONTEXT TRANSFER ---`);
+  return lines.join("\n");
+}
 
 async function runStream() {
   const controller = new AbortController();
   abortController = controller;
+  const totalDuration = state.selectedDuration;
+  const sessionStart = Date.now();
+  let segmentNumber = 0;
 
   try {
-    const url = `/api/audit/stream?continuous=true&duration=${state.selectedDuration}`;
-    const res = await fetch(url, { signal: controller.signal });
-
-    if (!res.ok) {
-      let errorText = "";
-      try {
-        errorText = await res.text();
-      } catch {
-        // ignore errors while reading error body
-      }
-      const message =
-        `Stream request failed with status ${res.status}` +
-        (errorText ? `: ${errorText}` : "");
-      throw new Error(message);
-    }
-
-    if (!res.ok) {
-      let errorText = "";
-      try {
-        errorText = await res.text();
-      } catch {
-        // ignore errors while reading error body
-      }
-      const message =
-        `Stream request failed with status ${res.status}` +
-        (errorText ? `: ${errorText}` : "");
-      throw new Error(message);
-    }
-
-    if (!res.body) throw new Error("No stream body");
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
+    // Auto-chain loop: keep starting new stream segments until the full
+    // user-selected duration has elapsed or the user stops the session.
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
+      if (controller.signal.aborted) break;
 
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const payload = line.slice(6).trim();
-        if (payload === "[DONE]") break;
+      const elapsedS = (Date.now() - sessionStart) / 1000;
+      const remainingS = totalDuration - elapsedS;
+      if (remainingS <= 5) break; // less than 5s remaining, stop
+
+      segmentNumber++;
+      // Each segment runs for at most SERVER_SEGMENT_LIMIT_S or remaining time
+      const segmentDuration = Math.min(SERVER_SEGMENT_LIMIT_S, Math.ceil(remainingS));
+
+      if (segmentNumber > 1) {
+        addLog(`Auto-continuing session (segment ${segmentNumber}) — ${Math.ceil(remainingS)}s remaining of ${Math.round(totalDuration / 60)} min session.`);
+        notify();
+      }
+
+      // Build URL with context summary for continuation segments
+      let url = `/api/audit/stream?continuous=true&duration=${segmentDuration}`;
+      if (segmentNumber > 1) {
+        const ctx = buildContextSummary();
+        url += `&context=${encodeURIComponent(ctx)}`;
+      }
+
+      const res = await fetch(url, { signal: controller.signal });
+
+      if (!res.ok) {
+        let errorText = "";
         try {
-          const event = JSON.parse(payload) as Record<string, unknown>;
-          processEvent(event);
+          errorText = await res.text();
         } catch {
-          /* ignore parse errors */
+          // ignore errors while reading error body
+        }
+        const message =
+          `Stream request failed with status ${res.status}` +
+          (errorText ? `: ${errorText}` : "");
+        throw new Error(message);
+      }
+
+      if (!res.body) throw new Error("No stream body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (payload === "[DONE]") break;
+          try {
+            const event = JSON.parse(payload) as Record<string, unknown>;
+            processEvent(event);
+          } catch {
+            /* ignore parse errors */
+          }
         }
       }
+
+      // Check if total session time has elapsed
+      const totalElapsed = (Date.now() - sessionStart) / 1000;
+      if (totalElapsed >= totalDuration - 5) break; // done
     }
   } catch (err) {
     if ((err as Error).name !== "AbortError") {
@@ -237,9 +301,16 @@ async function runStream() {
     }
   }
 
-  addLog("Session stream ended.");
+  addLog(`Continuous session completed — ${segmentNumber} segment(s) over ${formatElapsed(Date.now() - sessionStart)}.`);
   state = { ...state, streaming: false, active: false, paused: false };
   notify();
+}
+
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}m ${s}s`;
 }
 
 function processEvent(event: Record<string, unknown>) {

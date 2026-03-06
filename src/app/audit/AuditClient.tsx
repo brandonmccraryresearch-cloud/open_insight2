@@ -117,7 +117,7 @@ export default function AuditClient() {
   const elapsedMin = elapsed / 60;
   const actionsPerMin = elapsedMin > 0 ? actionCount / elapsedMin : 0;
   const successRate = actionCount > 0 ? (totalStats.succeeded / actionCount) * 100 : 0;
-  const actionLatencies = streamActions.filter((a) => a.type === "action" && a.latency).map((a) => a.latency!);
+  const actionLatencies = streamActions.filter((a) => a.type === "action" && a.latency != null).map((a) => a.latency!);
   const avgResponseTime = actionLatencies.length > 0 ? actionLatencies.reduce((s, v) => s + v, 0) / actionLatencies.length : 0;
 
   function formatTime(s: number): string {
@@ -165,7 +165,14 @@ export default function AuditClient() {
     if (streamFindings.length > 0) {
       lines.push(`### Error Reports (Findings)`, ``);
       for (const f of streamFindings) {
-        const icon = f.severity === "critical" ? "🔴" : f.severity === "warning" ? "🟡" : "🔵";
+        const icon =
+          f.severity === "critical"
+            ? "🔴"
+            : f.severity === "error"
+              ? "🟠"
+              : f.severity === "warning"
+                ? "🟡"
+                : "🔵";
         lines.push(`#### ${icon} ${f.element}`, ``);
         lines.push(`- **Severity:** ${f.severity}`);
         lines.push(`- **Category:** ${categoryLabels[f.category] ?? f.category}`);
@@ -187,6 +194,50 @@ export default function AuditClient() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  // ─── "Take me there" link generator ──────────────────────────────────────
+
+  function getActionLink(a: AgentAction): string | null {
+    if (a.status !== "success" || a.type !== "action") return null;
+    const target = a.target || "";
+    const action = a.action || "";
+
+    // Forum actions
+    if (action === "create_thread" || action === "reply_to_thread") {
+      // Target is typically the thread endpoint like /api/forums/slug/threads
+      const forumMatch = target.match(/\/api\/forums\/([^/]+)/);
+      if (forumMatch) return `/forums/${forumMatch[1]}`;
+    }
+    if (action === "read_forum" || action === "browse_forums") {
+      const forumMatch = target.match(/\/api\/forums\/([^/]+)$/);
+      if (forumMatch) return `/forums/${forumMatch[1]}`;
+      return `/forums`;
+    }
+
+    // Debate actions
+    if (action === "create_debate" || action === "post_debate_message" || action === "view_live_debates") {
+      const debateMatch = target.match(/\/api\/debates\/([^/]+)/);
+      if (debateMatch && debateMatch[1] !== "create") return `/debates/${debateMatch[1]}`;
+      return `/debates`;
+    }
+
+    // Verification actions
+    if (action === "submit_verification" || action === "view_verifications") {
+      return `/verifications`;
+    }
+
+    // Agent/reasoning actions
+    if (action === "view_agents" || action === "run_agent_reasoning") {
+      return `/agents`;
+    }
+
+    // MathMark tools
+    if (action.startsWith("mathmark_")) {
+      return `/mathmark`;
+    }
+
+    return null;
   }
 
   // ─── Action row renderer (shared between autonomous and standalone views)
@@ -261,6 +312,25 @@ export default function AuditClient() {
             {a.detail}
           </div>
         )}
+        {isExpanded && (() => {
+          const link = getActionLink(a);
+          return link ? (
+            <div className="mt-1 ml-8">
+              <a
+                href={link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[10px] font-medium text-[var(--accent-teal)] hover:text-[var(--accent-gold)] transition-colors bg-[var(--accent-teal)]/10 hover:bg-[var(--accent-gold)]/10 px-2.5 py-1 rounded-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+                Take me there →
+              </a>
+            </div>
+          ) : null;
+        })()}
       </div>
     );
   }
@@ -319,7 +389,9 @@ export default function AuditClient() {
     const agentSuccessRate = agentActions.length > 0
       ? (stats.succeeded / agentActions.length) * 100
       : 0;
-    const agentLatencies = agentActions.filter((a) => a.latency).map((a) => a.latency!);
+    const agentLatencies = agentActions
+      .filter((a) => a.latency !== null && a.latency !== undefined)
+      .map((a) => a.latency!);
     const agentAvgLatency = agentLatencies.length > 0
       ? agentLatencies.reduce((s, v) => s + v, 0) / agentLatencies.length
       : 0;
@@ -515,7 +587,7 @@ export default function AuditClient() {
                   : "text-[var(--accent-gold)] bg-[var(--accent-gold)]/10 hover:bg-[var(--accent-gold)]/20"
               }`}
             >
-              {session.paused ? "Resume" : "Pause"}
+              {session.paused ? "Resume UI" : "Pause UI"}
             </button>
             <button
               onClick={stopSession}
