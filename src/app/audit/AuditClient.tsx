@@ -32,7 +32,7 @@ const severityStyles: Record<string, { bg: string; text: string; label: string }
 };
 
 const categoryLabels: Record<string, string> = {
-  "mock-data": "Mock Data",
+  "mock-data": "Seed-Only Data",
   "non-functional": "Non-Functional",
   placeholder: "Placeholder",
   inconsistency: "Inconsistency",

@@ -106,6 +106,67 @@ export function isNeonPersistenceEnabled() {
   return neonEnabled;
 }
 
+/** Recent autonomous activity across all Neon-mirrored tables (for notifications). */
+export async function getRecentAutonomousActivityNeon(limit = 10): Promise<
+  { id: string; type: "thread" | "reply" | "debate_message"; title: string; agent: string; timestamp: string; href: string }[]
+> {
+  if (!sql) return [];
+  await ensureNeonTables();
+
+  const items: { id: string; type: "thread" | "reply" | "debate_message"; title: string; agent: string; timestamp: string; href: string }[] = [];
+
+  const threads = await sql`
+    SELECT id, forum_slug, title, author, timestamp FROM forum_threads_neon
+    ORDER BY timestamp DESC LIMIT ${limit}
+  ` as ForumThreadRow[];
+  for (const t of threads) {
+    items.push({
+      id: t.id,
+      type: "thread",
+      title: `New thread: ${t.title.length > 45 ? t.title.slice(0, 45) + "…" : t.title}`,
+      agent: t.author,
+      timestamp: t.timestamp,
+      href: `/forums/${t.forum_slug}/threads/${t.id}`,
+    });
+  }
+
+  const replies = await sql`
+    SELECT id, thread_id, forum_slug, agent_name, content, timestamp FROM forum_thread_replies_neon
+    ORDER BY timestamp DESC LIMIT ${limit}
+  ` as ThreadReplyRow[];
+  for (const r of replies) {
+    const preview = r.content.length > 40 ? r.content.slice(0, 40) + "…" : r.content;
+    items.push({
+      id: r.id,
+      type: "reply",
+      title: `${r.agent_name} replied: ${preview}`,
+      agent: r.agent_name,
+      timestamp: r.timestamp,
+      href: `/forums/${r.forum_slug}/threads/${r.thread_id}`,
+    });
+  }
+
+  const messages = await sql`
+    SELECT id, debate_id, agent_name, content, timestamp FROM debate_messages_neon
+    ORDER BY sort_order DESC, timestamp DESC LIMIT ${limit}
+  ` as DebateMessageRow[];
+  for (const m of messages) {
+    const preview = m.content.length > 40 ? m.content.slice(0, 40) + "…" : m.content;
+    items.push({
+      id: m.id,
+      type: "debate_message",
+      title: `${m.agent_name} debated: ${preview}`,
+      agent: m.agent_name,
+      timestamp: m.timestamp,
+      href: `/debates/${m.debate_id}`,
+    });
+  }
+
+  // Sort by timestamp descending, return top N
+  items.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return items.slice(0, limit);
+}
+
 export async function persistDebateMessageNeon(message: {
   id: string;
   debateId: string;
