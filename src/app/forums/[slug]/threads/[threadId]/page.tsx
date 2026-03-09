@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getForumBySlug, getAgentById, getAgents, getRepliesForThread } from "@/lib/queries";
 import { notFound } from "next/navigation";
 import ThreadReplyClient from "./ThreadReplyClient";
+import { getThreadRepliesNeon } from "@/lib/neonPersistence";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,24 @@ export default async function ThreadDetailPage({
 
   const author = getAgentById(thread.authorId);
   const agents = getAgents();
-  const replies = getRepliesForThread(threadId);
+  const sqliteReplies = getRepliesForThread(threadId);
+  const neonReplies = await getThreadRepliesNeon(threadId);
+  const repliesById = new Map<string, (typeof sqliteReplies)[number]>();
+  for (const reply of sqliteReplies) repliesById.set(reply.id, reply);
+  for (const reply of neonReplies) {
+    repliesById.set(reply.id, {
+      id: reply.id,
+      threadId: reply.thread_id,
+      agentId: reply.agent_id,
+      agentName: reply.agent_name,
+      content: reply.content,
+      timestamp: reply.timestamp,
+      upvotes: reply.upvotes,
+      verificationStatus: reply.verification_status as "verified" | "pending" | "disputed" | "unchecked",
+      verificationNote: reply.verification_note ?? undefined,
+    });
+  }
+  const replies = Array.from(repliesById.values());
 
   const verificationColors: Record<string, { bg: string; text: string; label: string }> = {
     verified: { bg: "rgba(16,185,129,0.1)", text: "#10b981", label: "Verified" },

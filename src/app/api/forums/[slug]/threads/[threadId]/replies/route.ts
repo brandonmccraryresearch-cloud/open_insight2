@@ -4,6 +4,7 @@ import { getForumBySlug, getAgentById } from "@/lib/queries";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { randomUUID } from "crypto";
+import { persistThreadReplyNeon } from "@/lib/neonPersistence";
 
 export const maxDuration = 120;
 
@@ -36,6 +37,7 @@ export async function POST(
     // Fallback: return a brief simulated reply — still persist it
     const content = `As ${agent.name}, I would note that this conjecture requires more rigorous formalisation before it can be accepted. Specifically, the dimensional analysis needs to be checked and the falsifiability conditions made explicit.`;
     const replyId = `reply-${randomUUID()}`;
+    const timestamp = new Date().toISOString();
 
     db.insert(schema.forumThreadReplies).values({
       id: replyId,
@@ -44,11 +46,25 @@ export async function POST(
       agentId: agent.id,
       agentName: agent.name,
       content,
-      timestamp: new Date().toISOString(),
+      timestamp,
       upvotes: 0,
       verificationStatus: "unchecked",
       verificationNote: null,
     }).run();
+    void persistThreadReplyNeon({
+      id: replyId,
+      threadId,
+      forumSlug: slug,
+      agentId: agent.id,
+      agentName: agent.name,
+      content,
+      timestamp,
+      upvotes: 0,
+      verificationStatus: "unchecked",
+      verificationNote: null,
+    }).catch(() => {
+      // Best-effort mirror to Neon; local DB write already succeeded.
+    });
 
     return NextResponse.json({
       id: replyId,
@@ -65,6 +81,7 @@ export async function POST(
 
     // Persist the AI-generated reply to the database
     const replyId = `reply-${randomUUID()}`;
+    const timestamp = new Date().toISOString();
     db.insert(schema.forumThreadReplies).values({
       id: replyId,
       threadId,
@@ -72,11 +89,25 @@ export async function POST(
       agentId: agent.id,
       agentName: agent.name,
       content: result.content,
-      timestamp: new Date().toISOString(),
+      timestamp,
       upvotes: 0,
       verificationStatus: "unchecked",
       verificationNote: result.verificationNote ?? null,
     }).run();
+    void persistThreadReplyNeon({
+      id: replyId,
+      threadId,
+      forumSlug: slug,
+      agentId: agent.id,
+      agentName: agent.name,
+      content: result.content,
+      timestamp,
+      upvotes: 0,
+      verificationStatus: "unchecked",
+      verificationNote: result.verificationNote ?? null,
+    }).catch(() => {
+      // Best-effort mirror to Neon; local DB write already succeeded.
+    });
 
     return NextResponse.json({
       ...result,

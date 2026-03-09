@@ -6,8 +6,33 @@ import {
   REQUIRED_CONFIG,
   enforceModelConfig,
 } from "@/lib/gemini";
+import dns from "node:dns/promises";
+import net from "node:net";
 
 export const maxDuration = 120;
+
+function isPrivateOrLocalIp(ip: string): boolean {
+  const family = net.isIP(ip);
+  if (family === 4) {
+    return /^(0\.|10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(
+      ip,
+    );
+  }
+  if (family === 6) {
+    const normalized = ip.toLowerCase();
+    return (
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80") ||
+      normalized.startsWith("::ffff:127.") ||
+      normalized.startsWith("::ffff:10.") ||
+      normalized.startsWith("::ffff:192.168.") ||
+      normalized.startsWith("::ffff:172.")
+    );
+  }
+  return false;
+}
 
 export async function POST(request: NextRequest) {
   if (!hasGeminiKey()) {
@@ -53,20 +78,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const hostname = parsedUrl.hostname;
-  const privateIpPattern =
-    /^(0\.|10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/;
+  const hostname = parsedUrl.hostname.toLowerCase();
 
   if (
     hostname === "localhost" ||
-    hostname === "::1" ||
-    hostname.startsWith("fc") ||
-    hostname.startsWith("fd") ||
-    hostname.startsWith("fe80") ||
-    privateIpPattern.test(hostname)
+    isPrivateOrLocalIp(hostname)
   ) {
     return NextResponse.json(
       { error: "URL may not target localhost or private network addresses" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const records = await dns.lookup(hostname, { all: true, verbatim: true });
+    if (records.some((r) => isPrivateOrLocalIp(r.address))) {
+      return NextResponse.json(
+        { error: "URL resolves to a localhost or private network address" },
+        { status: 400 },
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: "Could not resolve target hostname" },
       { status: 400 },
     );
   }

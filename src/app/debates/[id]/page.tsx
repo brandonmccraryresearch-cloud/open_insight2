@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { getDebateById, getAgents } from "@/lib/queries";
+import { getDebateMessagesNeon } from "@/lib/neonPersistence";
 import DebateAspicViewer from "./DebateAspicViewer";
 import DebateContinueClient from "./DebateContinueClient";
 
@@ -29,37 +30,54 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
     );
   }
 
+  const neonMessages = await getDebateMessagesNeon(id);
+  const mergedMessages = [
+    ...debate.messages,
+    ...neonMessages.map((m) => ({
+      id: m.id,
+      agentId: m.agent_id,
+      agentName: m.agent_name,
+      content: m.content,
+      timestamp: m.timestamp,
+      verificationStatus: m.verification_status as "verified" | "disputed" | "pending" | "unchecked",
+      verificationDetails: m.verification_details ?? undefined,
+      upvotes: m.upvotes,
+    })),
+  ];
+  const uniqueMessages = Array.from(new Map(mergedMessages.map((m) => [m.id, m])).values());
+  const renderedDebate = { ...debate, messages: uniqueMessages };
+
   const agents = getAgents();
   const agentMap = new Map(agents.map((a) => [a.id, a]));
-  const participantAgents = debate.participants.map((pid) => agentMap.get(pid)).filter((a): a is NonNullable<typeof a> => !!a);
+  const participantAgents = renderedDebate.participants.map((pid) => agentMap.get(pid)).filter((a): a is NonNullable<typeof a> => !!a);
 
   return (
     <div className="page-enter p-6 max-w-5xl mx-auto space-y-6">
       {/* Debate Header */}
       <div className="glass-card p-6">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          {debate.status === "live" && (
+          {renderedDebate.status === "live" && (
             <span className="badge uppercase tracking-wider" style={{ backgroundColor: "rgba(244,63,94,0.1)", color: "#f43f5e", fontSize: 10 }}>
               <span className="w-2 h-2 rounded-full bg-[#f43f5e] inline-block mr-1.5 status-pulse" />
               Live
             </span>
           )}
-          {debate.status === "scheduled" && (
+          {renderedDebate.status === "scheduled" && (
             <span className="badge uppercase tracking-wider" style={{ backgroundColor: "rgba(139,92,246,0.1)", color: "#8b5cf6", fontSize: 10 }}>Scheduled</span>
           )}
-          {debate.status === "concluded" && (
+          {renderedDebate.status === "concluded" && (
             <span className="badge uppercase tracking-wider" style={{ backgroundColor: "rgba(100,116,139,0.1)", color: "#64748b", fontSize: 10 }}>Concluded</span>
           )}
-          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{debate.format}</span>
-          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{debate.domain}</span>
+          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{renderedDebate.format}</span>
+          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{renderedDebate.domain}</span>
         </div>
 
-        <h1 className="text-2xl font-bold mb-2">{debate.title}</h1>
-        <p className="text-[var(--text-secondary)] mb-4">{debate.summary}</p>
+        <h1 className="text-2xl font-bold mb-2">{renderedDebate.title}</h1>
+        <p className="text-[var(--text-secondary)] mb-4">{renderedDebate.summary}</p>
 
-        {debate.verdict && (
+        {renderedDebate.verdict && (
           <div className="p-3 rounded-lg border border-[var(--accent-amber)]/20 bg-[var(--accent-amber)]/5 mb-4">
-            <p className="text-sm text-[var(--accent-amber)]"><strong>Verdict:</strong> {debate.verdict}</p>
+            <p className="text-sm text-[var(--accent-amber)]"><strong>Verdict:</strong> {renderedDebate.verdict}</p>
           </div>
         )}
 
@@ -82,34 +100,34 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
             ))}
           </div>
           <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
-            {debate.status === "live" && (
-              <span>Round {debate.currentRound}/{debate.rounds}</span>
+            {renderedDebate.status === "live" && (
+              <span>Round {renderedDebate.currentRound}/{renderedDebate.rounds}</span>
             )}
-            <span>{debate.spectators.toLocaleString()} spectators</span>
-            <span>{debate.startTime}</span>
+            <span>{renderedDebate.spectators.toLocaleString()} spectators</span>
+            <span>{renderedDebate.startTime}</span>
           </div>
         </div>
 
-        {debate.status === "live" && (
+        {renderedDebate.status === "live" && (
           <div className="progress-bar mt-4">
-            <div className="progress-fill" style={{ width: `${(debate.currentRound / debate.rounds) * 100}%`, background: "linear-gradient(90deg, var(--accent-indigo), var(--accent-violet))" }} />
+            <div className="progress-fill" style={{ width: `${(renderedDebate.currentRound / renderedDebate.rounds) * 100}%`, background: "linear-gradient(90deg, var(--accent-indigo), var(--accent-violet))" }} />
           </div>
         )}
       </div>
 
       {/* Messages */}
-      {debate.messages.length === 0 ? (
+      {renderedDebate.messages.length === 0 ? (
         <div className="glass-card p-12 text-center">
           <svg className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <h3 className="text-lg font-semibold mb-1">Debate Scheduled</h3>
-          <p className="text-sm text-[var(--text-secondary)]">This debate will begin at {debate.startTime}</p>
+          <p className="text-sm text-[var(--text-secondary)]">This debate will begin at {renderedDebate.startTime}</p>
         </div>
       ) : (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Discourse ({debate.messages.length} messages)</h2>
-          {debate.messages.map((msg) => {
+          <h2 className="text-lg font-semibold">Discourse ({renderedDebate.messages.length} messages)</h2>
+          {renderedDebate.messages.map((msg) => {
             const agent = agentMap.get(msg.agentId);
             if (!agent) return null;
             const vBadge = verificationBadge(msg.verificationStatus);
@@ -166,19 +184,19 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
 
       {/* Tags */}
       <div className="flex flex-wrap gap-2">
-        {debate.tags.map((tag) => (
+        {renderedDebate.tags.map((tag) => (
           <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{tag}</span>
         ))}
       </div>
 
       {/* ASPIC Argument Structure */}
-      <DebateAspicViewer debateId={debate.id} />
+      <DebateAspicViewer debateId={renderedDebate.id} />
 
       {/* Live debate continuation (only for live debates) */}
-      {debate.status === "live" && (
+      {renderedDebate.status === "live" && (
         <DebateContinueClient
-          debateId={debate.id}
-          participants={debate.participants}
+          debateId={renderedDebate.id}
+          participants={renderedDebate.participants}
           agentMap={agentMap}
         />
       )}

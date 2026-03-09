@@ -1,12 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDebateById } from "@/lib/queries";
+import { getDebateMessagesNeon } from "@/lib/neonPersistence";
 
-export function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return params.then(({ id }) => {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return params.then(async ({ id }) => {
     const debate = getDebateById(id);
     if (!debate) {
       return NextResponse.json({ error: "Debate not found" }, { status: 404 });
     }
-    return NextResponse.json({ debate });
+    const neonMessages = await getDebateMessagesNeon(id);
+    const mergedMessages = [
+      ...debate.messages,
+      ...neonMessages.map((m) => ({
+        id: m.id,
+        agentId: m.agent_id,
+        agentName: m.agent_name,
+        content: m.content,
+        timestamp: m.timestamp,
+        verificationStatus: m.verification_status,
+        verificationDetails: m.verification_details ?? undefined,
+        upvotes: m.upvotes,
+      })),
+    ];
+    const uniqueMessages = Array.from(new Map(mergedMessages.map((m) => [m.id, m])).values());
+    return NextResponse.json({ debate: { ...debate, messages: uniqueMessages } });
   });
 }

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, asc } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import type { Agent } from "@/data/agents";
 import type { Debate, DebateMessage } from "@/data/debates";
@@ -231,6 +231,7 @@ export function getRepliesForThread(threadId: string): ThreadReply[] {
     .select()
     .from(schema.forumThreadReplies)
     .where(eq(schema.forumThreadReplies.threadId, threadId))
+    .orderBy(asc(schema.forumThreadReplies.timestamp), asc(schema.forumThreadReplies.id))
     .all();
   return rows.map((r) => ({
     id: r.id,

@@ -98,28 +98,22 @@ export function setSelectedDuration(seconds: number) {
 
 export function getTimeRemaining(): number {
   if (!state.active || !state.startedAt) return 0;
-  if (state.paused) {
-    return Math.max(0, state.selectedDuration - state.pausedElapsed);
-  }
   const elapsed = state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
   return Math.max(0, state.selectedDuration - elapsed);
 }
 
 export function getElapsedTime(): number {
   if (!state.active || !state.startedAt) return 0;
-  if (state.paused) return state.pausedElapsed;
   return state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
 }
 
 export function pauseSession() {
   if (!state.active || state.paused) return;
-  const elapsed = (Date.now() - (state.startedAt ?? Date.now())) / 1000;
   state = {
     ...state,
     paused: true,
-    pausedElapsed: state.pausedElapsed + elapsed,
   };
-  addLog("Session paused by user.");
+  addLog("Session UI paused by user.");
   notify();
 }
 
@@ -128,9 +122,8 @@ export function resumeSession() {
   state = {
     ...state,
     paused: false,
-    startedAt: Date.now(),
   };
-  addLog("Session resumed by user.");
+  addLog("Session UI resumed by user.");
   notify();
 }
 
@@ -179,6 +172,10 @@ const CTX_DETAIL_LIMIT = 100;
 const CTX_THOUGHT_LIMIT = 150;
 /** Max chars for finding description in context summary */
 const CTX_FINDING_LIMIT = 100;
+/** Maximum findings to include in context transfer */
+const CTX_MAX_FINDINGS = 50;
+/** Hard cap to avoid oversized context query params */
+const MAX_CONTEXT_SUMMARY_CHARS = 6000;
 
 /**
  * Builds a compact context summary from the current session state for transfer
@@ -213,13 +210,16 @@ function buildContextSummary(): string {
 
   if (findings.length > 0) {
     lines.push(``, `## Findings Reported:`);
-    for (const f of findings) {
+    const recentFindings = findings.slice(-CTX_MAX_FINDINGS);
+    for (const f of recentFindings) {
       lines.push(`- [${f.severity}] ${f.element}: ${f.description?.slice(0, CTX_FINDING_LIMIT) ?? ""}`);
     }
   }
 
   lines.push(``, `--- END CONTEXT TRANSFER ---`);
-  return lines.join("\n");
+  const summary = lines.join("\n");
+  if (summary.length <= MAX_CONTEXT_SUMMARY_CHARS) return summary;
+  return summary.slice(0, MAX_CONTEXT_SUMMARY_CHARS) + "\n... (truncated)";
 }
 
 async function runStream() {
@@ -309,7 +309,9 @@ async function runStream() {
     }
   }
 
-  addLog(`Continuous session completed — ${segmentNumber} segment(s) over ${formatElapsed(Date.now() - sessionStart)}.`);
+  if (!controller.signal.aborted) {
+    addLog(`Continuous session completed — ${segmentNumber} segment(s) over ${formatElapsed(Date.now() - sessionStart)}.`);
+  }
   state = { ...state, streaming: false, active: false, paused: false };
   notify();
 }
