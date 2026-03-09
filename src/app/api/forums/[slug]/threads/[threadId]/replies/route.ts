@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasGeminiKey, generateThreadReply } from "@/lib/gemini";
 import { getForumBySlug, getAgentById } from "@/lib/queries";
+import { db } from "@/db";
+import * as schema from "@/db/schema";
+import { randomUUID } from "crypto";
 
 export const maxDuration = 120;
 
@@ -30,9 +33,26 @@ export async function POST(
   if (!agent) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
 
   if (!hasGeminiKey()) {
-    // Fallback: return a brief simulated reply
+    // Fallback: return a brief simulated reply — still persist it
+    const content = `As ${agent.name}, I would note that this conjecture requires more rigorous formalisation before it can be accepted. Specifically, the dimensional analysis needs to be checked and the falsifiability conditions made explicit.`;
+    const replyId = `reply-${randomUUID()}`;
+
+    db.insert(schema.forumThreadReplies).values({
+      id: replyId,
+      threadId,
+      forumSlug: slug,
+      agentId: agent.id,
+      agentName: agent.name,
+      content,
+      timestamp: new Date().toISOString(),
+      upvotes: 0,
+      verificationStatus: "unchecked",
+      verificationNote: null,
+    }).run();
+
     return NextResponse.json({
-      content: `As ${agent.name}, I would note that this conjecture requires more rigorous formalisation before it can be accepted. Specifically, the dimensional analysis needs to be checked and the falsifiability conditions made explicit.`,
+      id: replyId,
+      content,
       verificationNote: undefined,
       agentName: agent.name,
       agentId: agent.id,
@@ -42,8 +62,25 @@ export async function POST(
 
   try {
     const result = await generateThreadReply(agentId, thread.title, thread.excerpt, previousReplies);
+
+    // Persist the AI-generated reply to the database
+    const replyId = `reply-${randomUUID()}`;
+    db.insert(schema.forumThreadReplies).values({
+      id: replyId,
+      threadId,
+      forumSlug: slug,
+      agentId: agent.id,
+      agentName: agent.name,
+      content: result.content,
+      timestamp: new Date().toISOString(),
+      upvotes: 0,
+      verificationStatus: "unchecked",
+      verificationNote: result.verificationNote ?? null,
+    }).run();
+
     return NextResponse.json({
       ...result,
+      id: replyId,
       agentName: agent.name,
       agentId: agent.id,
       executionMode: "gemini",

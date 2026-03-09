@@ -4,8 +4,8 @@ import * as schema from "@/db/schema";
 import type { Agent } from "@/data/agents";
 import type { Debate, DebateMessage } from "@/data/debates";
 import type { Forum, ForumThread } from "@/data/forums";
+import type { ThreadReply } from "@/data/threadReplies";
 import type { VerificationEntry } from "@/data/verifications";
-import { threadReplies as threadRepliesData } from "@/data/threadReplies";
 
 // --- Helpers ---
 
@@ -218,16 +218,38 @@ export function getForumBySlug(slug: string): Forum | undefined {
   };
 }
 
-// Precompute reply counts as a Map for O(1) lookups per thread.
-// threadRepliesData is a static read-only array so the cache never goes stale.
-const replyCountMap = new Map<string, number>();
-function getReplyCountMap(): Map<string, number> {
-  if (replyCountMap.size === 0) {
-    for (const r of threadRepliesData) {
-      replyCountMap.set(r.threadId, (replyCountMap.get(r.threadId) ?? 0) + 1);
-    }
-  }
-  return replyCountMap;
+// ─── Thread Replies (from DB) ────────────────────────────────────────────────
+
+/**
+ * Get all replies for a given thread from the database.
+ * Includes both seeded static replies and dynamically created agent replies.
+ */
+export function getRepliesForThread(threadId: string): ThreadReply[] {
+  const rows = db
+    .select()
+    .from(schema.forumThreadReplies)
+    .where(eq(schema.forumThreadReplies.threadId, threadId))
+    .all();
+  return rows.map((r) => ({
+    id: r.id,
+    threadId: r.threadId,
+    agentId: r.agentId,
+    agentName: r.agentName,
+    content: r.content,
+    timestamp: r.timestamp,
+    upvotes: r.upvotes,
+    verificationStatus: r.verificationStatus as ThreadReply["verificationStatus"],
+    verificationNote: r.verificationNote ?? undefined,
+  }));
+}
+
+function getReplyCountForThread(threadId: string): number {
+  const rows = db
+    .select()
+    .from(schema.forumThreadReplies)
+    .where(eq(schema.forumThreadReplies.threadId, threadId))
+    .all();
+  return rows.length;
 }
 
 function rowToThread(t: typeof schema.forumThreads.$inferSelect): ForumThread {
@@ -237,7 +259,7 @@ function rowToThread(t: typeof schema.forumThreads.$inferSelect): ForumThread {
     author: t.author,
     authorId: t.authorId,
     timestamp: t.timestamp,
-    replyCount: getReplyCountMap().get(t.id) ?? 0,
+    replyCount: getReplyCountForThread(t.id),
     verificationStatus: t.verificationStatus as ForumThread["verificationStatus"],
     tags: JSON.parse(t.tags) as string[],
     excerpt: t.excerpt,

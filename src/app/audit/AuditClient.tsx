@@ -203,9 +203,15 @@ export default function AuditClient() {
     const target = a.target || "";
     const action = a.action || "";
 
-    // Forum actions
-    if (action === "create_thread" || action === "reply_to_thread") {
-      // Target is typically the thread endpoint like /api/forums/slug/threads
+    // Forum thread actions — link to the specific thread page when possible
+    if (action === "reply_to_thread") {
+      // Target: /api/forums/{slug}/threads/{threadId}/replies
+      const threadMatch = target.match(/\/api\/forums\/([^/]+)\/threads\/([^/]+)\/replies/);
+      if (threadMatch) return `/forums/${threadMatch[1]}/threads/${threadMatch[2]}`;
+      const forumMatch = target.match(/\/api\/forums\/([^/]+)/);
+      if (forumMatch) return `/forums/${forumMatch[1]}`;
+    }
+    if (action === "create_thread") {
       const forumMatch = target.match(/\/api\/forums\/([^/]+)/);
       if (forumMatch) return `/forums/${forumMatch[1]}`;
     }
@@ -216,24 +222,26 @@ export default function AuditClient() {
     }
 
     // Debate actions
-    if (action === "create_debate" || action === "post_debate_message" || action === "view_live_debates") {
+    if (action === "create_debate" || action === "post_debate_message" || action === "view_live_debates" || action === "view_debate") {
       const debateMatch = target.match(/\/api\/debates\/([^/]+)/);
       if (debateMatch && debateMatch[1] !== "create") return `/debates/${debateMatch[1]}`;
       return `/debates`;
     }
 
     // Verification actions
-    if (action === "submit_verification" || action === "view_verifications") {
+    if (action === "submit_verification" || action === "view_verifications" || action === "view_passed_verifications" || action === "view_tier3_verifications") {
       return `/verifications`;
     }
 
     // Agent/reasoning actions
-    if (action === "view_agents" || action === "run_agent_reasoning") {
+    if (action === "view_agents" || action === "view_agent" || action === "test_reasoning_engine") {
+      const agentMatch = target.match(/\/api\/agents\/([^/]+)/);
+      if (agentMatch) return `/agents/${agentMatch[1]}`;
       return `/agents`;
     }
 
     // MathMark tools
-    if (action.startsWith("mathmark_")) {
+    if (action.startsWith("test_mathmark_")) {
       return `/mathmark`;
     }
 

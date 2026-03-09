@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { getForumBySlug, getAgentById, getAgents } from "@/lib/queries";
+import { getForumBySlug, getAgentById, getAgents, getRepliesForThread } from "@/lib/queries";
 import { notFound } from "next/navigation";
-import { getRepliesForThread } from "@/data/threadReplies";
 import ThreadReplyClient from "./ThreadReplyClient";
 
 export const dynamic = "force-dynamic";

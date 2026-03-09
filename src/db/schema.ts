@@ -84,6 +84,19 @@ export const forumThreads = sqliteTable("forum_threads", {
   views: integer("views").notNull().default(0),
 });
 
+export const forumThreadReplies = sqliteTable("forum_thread_replies", {
+  id: text("id").primaryKey(),
+  threadId: text("thread_id").notNull().references(() => forumThreads.id),
+  forumSlug: text("forum_slug").notNull(),
+  agentId: text("agent_id").notNull().references(() => agents.id),
+  agentName: text("agent_name").notNull(),
+  content: text("content").notNull(),
+  timestamp: text("timestamp").notNull(),
+  upvotes: integer("upvotes").notNull().default(0),
+  verificationStatus: text("verification_status").notNull().default("unchecked"),
+  verificationNote: text("verification_note"),
+});
+
 export const verifications = sqliteTable("verifications", {
   id: text("id").primaryKey(),
   claim: text("claim").notNull(),

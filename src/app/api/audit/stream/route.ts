@@ -448,11 +448,24 @@ async function runAIAgentSession(
       const result = await probe(baseUrl, resolved.method, resolved.path, resolved.body, AI_ACTION_TIMEOUT_MS, forwardHeaders);
 
       const actionStatus = result.ok ? "success" : (result.status === 0 ? "blocked" : "failed");
+
+      // For successful write actions, include a preview of the generated content
+      // so users can see what was produced directly in the timeline
+      let detail = `${resolved.method} ${resolved.path} → HTTP ${result.status} (${result.latency}ms)`;
+      if (result.ok && result.data && typeof result.data === "object") {
+        const data = result.data as Record<string, unknown>;
+        const content = (data.content as string) ?? "";
+        if (content) {
+          const preview = content.length > 300 ? content.slice(0, 300) + "…" : content;
+          detail += `\n\n📝 Generated content:\n${preview}`;
+        }
+      }
+
       send({
         type: "action", agentId, agentName,
         action: decision.action, target: resolved.path,
         status: actionStatus,
-        detail: `${resolved.method} ${resolved.path} → HTTP ${result.status} (${result.latency}ms)`,
+        detail,
         latency: result.latency, httpStatus: result.status,
       });
 
