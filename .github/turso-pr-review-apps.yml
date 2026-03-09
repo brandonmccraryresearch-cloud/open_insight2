@@ -1,0 +1,16 @@
+name: Create Database for Branch
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+jobs:
+  create_database:
+    name: "Create Database"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Database
+        uses: vivid-web/turso-pr-review-apps@v0.0.9
+        with:
+          organization: ${{ secrets.TURSO_ORGANIZATION_NAME }}
+          api_token: ${{ secrets.TURSO_API_TOKEN }}
+          db_name: ${{ env.TURSO_DATABASE_NAME }}
