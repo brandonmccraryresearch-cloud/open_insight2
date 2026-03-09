@@ -2,22 +2,22 @@
 
 :root {
   /* ─── Base Surfaces ─── */
-  --bg-primary: #060810;
-  --bg-secondary: #0a0d18;
-  --bg-card: #0d1020;
-  --bg-card-hover: #111428;
-  --bg-elevated: #161a30;
-  --border-primary: rgba(45, 55, 95, 0.3);
-  --border-accent: rgba(20, 184, 166, 0.2);
+  --bg-primary: #eef2f5;
+  --bg-secondary: #e6ecef;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f7fafc;
+  --bg-elevated: #f2f6f9;
+  --border-primary: rgba(25, 52, 77, 0.14);
+  --border-accent: rgba(17, 153, 142, 0.28);
 
   /* ─── Typography ─── */
-  --text-primary: #e8ecf4;
-  --text-secondary: #94a3b8;
-  --text-muted: #5a6580;
+  --text-primary: #22364d;
+  --text-secondary: #4c627a;
+  --text-muted: #7e90a4;
 
   /* ─── Accent Palette ─── */
-  --accent-teal: #14b8a6;
-  --accent-gold: #d4a017;
+  --accent-teal: #0ea596;
+  --accent-gold: #d18a2f;
   --accent-violet: #8b5cf6;
   --accent-indigo: #14b8a6;          /* Mapped → teal for backward compat */
   --accent-cyan: #22d3ee;
@@ -32,9 +32,9 @@
   --pending: #eab308;
 
   /* ─── Glows ─── */
-  --glow-teal: rgba(20, 184, 166, 0.12);
-  --glow-gold: rgba(212, 160, 23, 0.10);
-  --glow-violet: rgba(139, 92, 246, 0.10);
+  --glow-teal: rgba(14, 165, 150, 0.10);
+  --glow-gold: rgba(209, 138, 47, 0.08);
+  --glow-violet: rgba(139, 92, 246, 0.08);
   --glow-indigo: rgba(20, 184, 166, 0.12);  /* Alias → teal */
 }
 
@@ -60,34 +60,34 @@ body {
 /* ─── Animated Mesh Background ─── */
 .bg-mesh {
   background:
-    radial-gradient(ellipse at 15% 45%, rgba(20, 184, 166, 0.06) 0%, transparent 55%),
-    radial-gradient(ellipse at 85% 15%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 85%, rgba(212, 160, 23, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 70% 50%, rgba(20, 184, 166, 0.02) 0%, transparent 60%),
+    radial-gradient(ellipse at 15% 45%, rgba(14, 165, 150, 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 15%, rgba(109, 130, 168, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 85%, rgba(209, 138, 47, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 50%, rgba(14, 165, 150, 0.03) 0%, transparent 60%),
     var(--bg-primary);
 }
 
 /* ─── Glass Card — Core Component ─── */
 .glass-card {
-  background: rgba(10, 14, 28, 0.55);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(139, 92, 246, 0.06);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  border: 1px solid rgba(25, 52, 77, 0.10);
   border-radius: 16px;
   box-shadow:
-    0 0 0 1px rgba(139, 92, 246, 0.03),
-    0 4px 24px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 8px 24px rgba(39, 67, 101, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
-  background: rgba(14, 18, 36, 0.65);
-  border-color: rgba(20, 184, 166, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(14, 165, 150, 0.18);
   box-shadow:
-    0 0 24px rgba(139, 92, 246, 0.06),
-    0 8px 40px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 0 20px rgba(14, 165, 150, 0.05),
+    0 14px 36px rgba(39, 67, 101, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
   transform: translateY(-2px);
 }
 

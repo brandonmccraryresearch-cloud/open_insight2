@@ -1,41 +1,52 @@
-# Copilot Instructions — Open Insight Platform
+# Open Insight — Autonomous Overhaul Phases
 
-## Non-Negotiable Rules
+This repository is being migrated from seed-heavy demo behavior to fully autonomous, persistent, production behavior.
 
-### 1. No Mock / Fake / Hardcoded Agent Behavior
+## Non-negotiable runtime requirements
 
-- **NEVER** hardcode agent actions, responses, thoughts, or interpretations.
-- **NEVER** create stub/placeholder implementations that pretend to be functional.
-- **NEVER** use template strings or pre-scripted outputs where AI reasoning should be.
-- ALL agent intelligence MUST come from real Gemini API calls.
-- If a feature can't be made real, say so — don't fake it.
+- No fake/stubbed agent behavior. Agent reasoning and outputs must come from real Gemini calls.
+- Required Gemini model: `gemini-3.1-pro-preview` only.
+- Required Gemini config for all agent calls:
+  - `temperature: 1`
+  - `topP: 1`
+  - `thinkingLevel: HIGH`
+  - tools enabled: `codeExecution`, `urlContext`, `googleSearch`
+- Use centralized model/config constants and enforce runtime validation.
 
-### 2. Model Mandate: `gemini-3.1-pro-preview` — No Exceptions
+## Delivery approach
 
-Every Gemini API call MUST use:
+- ship in **phases** so each session lands a coherent, testable slice.
+- Prioritize **real persistence + real metrics + real agent actions** before visual polish.
+- Keep all agent generation real (Gemini), no scripted/fake agent behavior.
 
-```typescript
-model: "gemini-3.1-pro-preview"
-config: {
-  temperature: 1,
-  topP: 1,
-  thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-  tools: [
-    { codeExecution: {} },
-    { urlContext: {} },
-    { googleSearch: {} },
-  ],
-}
-```
+## Phase plan
 
-- **No other model** (`gemini-2.0-flash`, `gemini-pro`, etc.) is acceptable.
-- **Temperature MUST be 1** — full creative range.
-- **Top P MUST be 1** — no probability truncation.
-- **Thinking level MUST be HIGH** — maximum reasoning depth.
-- **All tools MUST be enabled** — code execution, URL context, Google Search.
+### Phase 1 — Foundation hardening (in progress)
+- [x] Neon mirror persistence for autonomous write actions (threads, replies, debate messages)
+- [x] Debate/thread pages read merged persisted content
+- [x] Session continuity and bounded context transfer improvements
+- [x] Initial DNS-aware SSRF hardening for browse tool
+- [ ] Continue migrating UI messaging away from “starter/demo” framing
+- [ ] Fully replace any remaining seeded-only read paths in primary user flows
 
-Use the centralized `REQUIRED_MODEL` and `REQUIRED_CONFIG` from `src/lib/gemini.ts`.
+### Phase 2 — Fully autonomous runtime behaviors
+- [ ] Expand agent tooling so agents can reliably execute cross-page workflows
+- [ ] Add robust “take me there” routing for every viewable write action type
+- [ ] Ensure notifications and timeline are driven by real persisted events only
+- [ ] Add stronger conflict/idempotency handling for autonomous concurrent writes
 
-### 3. This Is a Real Platform
+### Phase 3 — Playwright-backed interaction tooling
+- [ ] Add server-side Playwright capability behind controlled API/tool surfaces
+- [ ] Expose safe action primitives to autonomous agents (navigate/read/click/fill/screenshot)
+- [ ] Add permission and target allowlists for safe autonomous browser automation
 
-Open Insight is a production research platform, not a demo. Every feature must be fully functional with real data persistence, real AI responses, and real computation. See `AGENTS.md` for the full mandate.
+### Phase 4 — Full visual + UX overhaul
+- [ ] Apply unified design token system based on target aesthetic
+- [ ] Replace inconsistent colors/spacing with coherent visual language
+- [ ] Finalize UI polish once functional/autonomous foundations are complete
+
+## Continuation notes for next sessions
+
+- Always validate with build/tests after each phase slice.
+- Prefer minimal, shippable increments over large risky refactors.
+- Keep this file updated with checked progress after each completed slice.
