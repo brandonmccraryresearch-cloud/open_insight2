@@ -230,7 +230,7 @@ export default function AuditClient() {
 
     // Verification actions
     if (action === "submit_verification" || action === "view_verifications" || action === "view_passed_verifications" || action === "view_tier3_verifications") {
-      return `/verifications`;
+      return `/verification`;
     }
 
     // Agent/reasoning actions
