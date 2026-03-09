@@ -20,15 +20,16 @@ function isPrivateOrLocalIp(ip: string): boolean {
   }
   if (family === 6) {
     const normalized = ip.toLowerCase();
+    const mappedV4 = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+    if (mappedV4 && net.isIP(mappedV4) === 4) {
+      return isPrivateOrLocalIp(mappedV4);
+    }
     return (
       normalized === "::1" ||
       normalized.startsWith("fc") ||
       normalized.startsWith("fd") ||
       normalized.startsWith("fe80") ||
-      normalized.startsWith("::ffff:127.") ||
-      normalized.startsWith("::ffff:10.") ||
-      normalized.startsWith("::ffff:192.168.") ||
-      normalized.startsWith("::ffff:172.")
+      normalized.startsWith("::ffff:127.")
     );
   }
   return false;

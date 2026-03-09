@@ -37,7 +37,9 @@ export default async function ThreadDetailPage({
       verificationNote: reply.verification_note ?? undefined,
     });
   }
-  const replies = Array.from(repliesById.values());
+  const replies = Array.from(repliesById.values()).sort(
+    (a, b) => a.timestamp.localeCompare(b.timestamp) || a.id.localeCompare(b.id),
+  );
 
   const verificationColors: Record<string, { bg: string; text: string; label: string }> = {
     verified: { bg: "rgba(16,185,129,0.1)", text: "#10b981", label: "Verified" },
