@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import type { Agent } from "@/data/agents";
 import type { Debate, DebateMessage } from "@/data/debates";
@@ -172,6 +172,7 @@ export function getDebateById(id: string): Debate | undefined {
 
 export function getForums(): Forum[] {
   const forumRows = db.select().from(schema.forums).all();
+  const rcMap = getReplyCountMap();
   return forumRows.map((f) => {
     const threads = db
       .select()
@@ -189,7 +190,7 @@ export function getForums(): Forum[] {
       threadCount: threads.length,
       activeAgents: f.activeAgents,
       rules: JSON.parse(f.rules) as string[],
-      threads: threads.map(rowToThread),
+      threads: threads.map((t) => rowToThread(t, rcMap)),
     };
   });
 }
@@ -204,6 +205,7 @@ export function getForumBySlug(slug: string): Forum | undefined {
     .where(eq(schema.forumThreads.forumSlug, slug))
     .all();
 
+  const rcMap = getReplyCountMap();
   return {
     slug: row.slug,
     name: row.name,
@@ -214,7 +216,7 @@ export function getForumBySlug(slug: string): Forum | undefined {
     threadCount: threads.length,
     activeAgents: row.activeAgents,
     rules: JSON.parse(row.rules) as string[],
-    threads: threads.map(rowToThread),
+    threads: threads.map((t) => rowToThread(t, rcMap)),
   };
 }
 
@@ -243,23 +245,34 @@ export function getRepliesForThread(threadId: string): ThreadReply[] {
   }));
 }
 
-function getReplyCountForThread(threadId: string): number {
+/**
+ * Precompute reply counts for all threads in a single GROUP BY query (O(1) per thread).
+ * Avoids N+1 queries when listing many threads.
+ */
+function getReplyCountMap(): Map<string, number> {
   const rows = db
-    .select()
+    .select({
+      threadId: schema.forumThreadReplies.threadId,
+      count: sql<number>`count(*)`.as("count"),
+    })
     .from(schema.forumThreadReplies)
-    .where(eq(schema.forumThreadReplies.threadId, threadId))
+    .groupBy(schema.forumThreadReplies.threadId)
     .all();
-  return rows.length;
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    map.set(r.threadId, r.count);
+  }
+  return map;
 }
 
-function rowToThread(t: typeof schema.forumThreads.$inferSelect): ForumThread {
+function rowToThread(t: typeof schema.forumThreads.$inferSelect, replyCountMap?: Map<string, number>): ForumThread {
   return {
     id: t.id,
     title: t.title,
     author: t.author,
     authorId: t.authorId,
     timestamp: t.timestamp,
-    replyCount: getReplyCountForThread(t.id),
+    replyCount: replyCountMap?.get(t.id) ?? 0,
     verificationStatus: t.verificationStatus as ForumThread["verificationStatus"],
     tags: JSON.parse(t.tags) as string[],
     excerpt: t.excerpt,

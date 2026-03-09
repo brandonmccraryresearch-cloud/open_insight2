@@ -454,7 +454,7 @@ async function runAIAgentSession(
       let detail = `${resolved.method} ${resolved.path} → HTTP ${result.status} (${result.latency}ms)`;
       if (result.ok && result.data && typeof result.data === "object") {
         const data = result.data as Record<string, unknown>;
-        const content = (data.content as string) ?? "";
+        const content = typeof data.content === "string" ? data.content : "";
         if (content) {
           const preview = content.length > 300 ? content.slice(0, 300) + "…" : content;
           detail += `\n\n📝 Generated content:\n${preview}`;
