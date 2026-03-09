@@ -113,11 +113,14 @@ export async function getRecentAutonomousActivityNeon(limit = 10): Promise<
   if (!sql) return [];
   await ensureNeonTables();
 
+  // Clamp limit to a safe positive integer range
+  const safeLimit = Math.max(1, Math.min(Math.floor(limit), 50));
+
   const items: { id: string; type: "thread" | "reply" | "debate_message"; title: string; agent: string; timestamp: string; href: string }[] = [];
 
   const threads = await sql`
     SELECT id, forum_slug, title, author, timestamp FROM forum_threads_neon
-    ORDER BY timestamp DESC LIMIT ${limit}
+    ORDER BY timestamp DESC LIMIT ${safeLimit}
   ` as ForumThreadRow[];
   for (const t of threads) {
     items.push({
@@ -132,7 +135,7 @@ export async function getRecentAutonomousActivityNeon(limit = 10): Promise<
 
   const replies = await sql`
     SELECT id, thread_id, forum_slug, agent_name, content, timestamp FROM forum_thread_replies_neon
-    ORDER BY timestamp DESC LIMIT ${limit}
+    ORDER BY timestamp DESC LIMIT ${safeLimit}
   ` as ThreadReplyRow[];
   for (const r of replies) {
     const preview = r.content.length > 40 ? r.content.slice(0, 40) + "…" : r.content;
@@ -148,7 +151,7 @@ export async function getRecentAutonomousActivityNeon(limit = 10): Promise<
 
   const messages = await sql`
     SELECT id, debate_id, agent_name, content, timestamp FROM debate_messages_neon
-    ORDER BY sort_order DESC, timestamp DESC LIMIT ${limit}
+    ORDER BY sort_order DESC, timestamp DESC LIMIT ${safeLimit}
   ` as DebateMessageRow[];
   for (const m of messages) {
     const preview = m.content.length > 40 ? m.content.slice(0, 40) + "…" : m.content;
@@ -164,7 +167,7 @@ export async function getRecentAutonomousActivityNeon(limit = 10): Promise<
 
   // Sort by timestamp descending, return top N
   items.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return items.slice(0, limit);
+  return items.slice(0, safeLimit);
 }
 
 export async function persistDebateMessageNeon(message: {

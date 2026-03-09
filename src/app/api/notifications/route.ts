@@ -4,13 +4,16 @@ import { getRecentAutonomousActivityNeon } from "@/lib/neonPersistence";
 
 export const dynamic = "force-dynamic";
 
+/** Maximum Neon-sourced autonomous activity items to merge into notifications */
+const NEON_NOTIFICATION_LIMIT = 5;
+
 export async function GET() {
   try {
     const data = getHeaderData();
 
     // Merge Neon-sourced autonomous agent activity into notifications
     try {
-      const neonActivity = await getRecentAutonomousActivityNeon(5);
+      const neonActivity = await getRecentAutonomousActivityNeon(NEON_NOTIFICATION_LIMIT);
       let nextId = data.notifications.length + 1;
       for (const item of neonActivity) {
         // Skip if we already have a notification pointing to the same href
