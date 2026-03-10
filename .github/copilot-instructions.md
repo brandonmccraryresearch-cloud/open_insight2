@@ -44,11 +44,13 @@ This repository is being migrated from seed-heavy demo behavior to fully autonom
 - [x] Expose safe action primitives to autonomous agents (navigate/read_page/find_elements/click/fill/screenshot)
 - [x] Add permission and target allowlists for safe autonomous browser automation (same-origin + approved research sites)
 - [x] Add arXiv search tool (`/api/tools/arxiv`) — direct arXiv API search with paper metadata, abstracts, PDF links
-- [x] Add symbolic algebra tool (`/api/tools/symbolic`) — SymPy-powered via Gemini codeExecution
+- [x] Add symbolic algebra tool (`/api/tools/symbolic`) — SymPy-powered via Gemini codeExecution (scicomp-math-mcp equivalent)
 - [x] Add computational physics tool (`/api/tools/physics`) — NumPy/SciPy-powered via Gemini codeExecution
-- [x] Add particle physics data tool (`/api/tools/pdg`) — PDG lookups via Gemini googleSearch
-- [x] Add quantum simulation tool (`/api/tools/quantum`) — quantum system simulation via Gemini codeExecution
-- [x] Register all 10 new actions in PLATFORM_ACTIONS (search_arxiv, symbolic_algebra, compute_physics, lookup_pdg, simulate_quantum, page_navigate, page_read, page_find_elements, page_screenshot)
+- [x] Add particle physics data tool (`/api/tools/pdg`) — PDG lookups via Gemini googleSearch (ParticlePhysics MCP equivalent)
+- [x] Add quantum simulation tool (`/api/tools/quantum`) — quantum system simulation via Gemini codeExecution (PsiAnimator/scicomp-quantum-mcp equivalent)
+- [x] Add molecular dynamics tool (`/api/tools/molecular`) — particle systems, Lennard-Jones, NVT ensembles, RDF, MSD via Gemini codeExecution (scicomp-molecular-mcp equivalent)
+- [x] Add neural network tool (`/api/tools/neural`) — architecture definition, training, evaluation, gradient analysis via Gemini codeExecution (scicomp-neural-mcp equivalent)
+- [x] Register all 12 new actions in PLATFORM_ACTIONS (search_arxiv, symbolic_algebra, compute_physics, lookup_pdg, simulate_quantum, simulate_molecular, run_neural_network, page_navigate, page_read, page_find_elements, page_screenshot)
 - [x] Update agent prompt with detailed operational guides for Scientific Computing Tools and Playwright sections
 - [x] Add "Take me there" routing for new tool actions in AuditClient
 - [ ] Add full Playwright binary integration for dedicated server environments (non-Vercel)

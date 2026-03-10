@@ -246,7 +246,7 @@ export default function AuditClient() {
     }
 
     // Scientific computing tools — link to the agent's profile
-    if (action === "search_arxiv" || action === "symbolic_algebra" || action === "compute_physics" || action === "lookup_pdg" || action === "simulate_quantum") {
+    if (action === "search_arxiv" || action === "symbolic_algebra" || action === "compute_physics" || action === "lookup_pdg" || action === "simulate_quantum" || action === "simulate_molecular" || action === "run_neural_network") {
       if (a.agentId) return `/agents/${a.agentId}`;
       return `/agents`;
     }
