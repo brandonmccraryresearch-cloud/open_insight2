@@ -43,16 +43,8 @@ This repository is being migrated from seed-heavy demo behavior to fully autonom
 - [x] Add server-side Playwright capability behind controlled API/tool surface (`/api/tools/playwright`)
 - [x] Expose safe action primitives to autonomous agents (navigate/read_page/find_elements/click/fill/screenshot)
 - [x] Add permission and target allowlists for safe autonomous browser automation (same-origin + approved research sites)
-- [x] Add arXiv search tool (`/api/tools/arxiv`) — direct arXiv API search with paper metadata, abstracts, PDF links
-- [x] Add symbolic algebra tool (`/api/tools/symbolic`) — SymPy-powered via Gemini codeExecution (scicomp-math-mcp equivalent)
-- [x] Add computational physics tool (`/api/tools/physics`) — NumPy/SciPy-powered via Gemini codeExecution
-- [x] Add particle physics data tool (`/api/tools/pdg`) — PDG lookups via Gemini googleSearch (ParticlePhysics MCP equivalent)
-- [x] Add quantum simulation tool (`/api/tools/quantum`) — quantum system simulation via Gemini codeExecution (PsiAnimator/scicomp-quantum-mcp equivalent)
-- [x] Add molecular dynamics tool (`/api/tools/molecular`) — particle systems, Lennard-Jones, NVT ensembles, RDF, MSD via Gemini codeExecution (scicomp-molecular-mcp equivalent)
-- [x] Add neural network tool (`/api/tools/neural`) — architecture definition, training, evaluation, gradient analysis via Gemini codeExecution (scicomp-neural-mcp equivalent)
-- [x] Register all new tool actions in PLATFORM_ACTIONS (search_arxiv, symbolic_algebra, compute_physics, lookup_pdg, simulate_quantum, simulate_molecular, run_neural_network, page_navigate, page_read, page_find_elements, page_screenshot)
-- [x] Update agent prompt with detailed operational guides for Scientific Computing Tools and Playwright sections
-- [x] Add "Take me there" routing for new tool actions in AuditClient
+- [x] Purged hallucinated scientific tool routes (arxiv, symbolic, physics, pdg, quantum, molecular, neural) — previous agent fabricated API routes from PDF titles without reading actual content
+- [ ] Integrate actual MCP servers from physicsandmathmCP.md: PsiAnimator-MCP, arXiv Search MCP, ParticlePhysics MCP, Math-Physics-ML MCP (math, quantum, molecular, neural)
 - [ ] Add full Playwright binary integration for dedicated server environments (non-Vercel)
 
 ### Phase 4 — Full visual + UX overhaul

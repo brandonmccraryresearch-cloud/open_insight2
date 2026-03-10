@@ -245,12 +245,6 @@ export default function AuditClient() {
       return `/mathmark`;
     }
 
-    // Scientific computing tools — link to the agent's profile
-    if (action === "search_arxiv" || action === "symbolic_algebra" || action === "compute_physics" || action === "lookup_pdg" || action === "simulate_quantum" || action === "simulate_molecular" || action === "run_neural_network") {
-      if (a.agentId) return `/agents/${a.agentId}`;
-      return `/agents`;
-    }
-
     // Playwright browser interaction tools — link to the browsed URL or agent
     if (action === "page_navigate" || action === "page_read" || action === "page_find_elements" || action === "page_screenshot") {
       if (a.agentId) return `/agents/${a.agentId}`;

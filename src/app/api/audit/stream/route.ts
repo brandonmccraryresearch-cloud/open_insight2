@@ -149,14 +149,6 @@ const PLATFORM_ACTIONS: PlatformAction[] = [
   { name: "test_mathmark_chat", description: "Test MathMark AI writing assistant", method: "POST", path: "/api/mathmark/chat", bodySchema: '{"message":"your question","documentContext":""}' },
   { name: "browse_web", description: "Browse a web page and get an AI-generated summary of its content", method: "POST", path: "/api/tools/browse", bodySchema: '{"url":"https://example.com","query":"what to look for on the page"}' },
   { name: "search_docs", description: "Search for the latest documentation on any library, framework, or tool using Google Search", method: "POST", path: "/api/tools/docs", bodySchema: '{"query":"search query for documentation"}' },
-  // Scientific MCP tools
-  { name: "search_arxiv", description: "Search arXiv for scientific papers by topic, author, or keyword. Returns titles, authors, abstracts, and PDF links.", method: "POST", path: "/api/tools/arxiv", bodySchema: '{"query":"quantum entanglement Bell inequality","maxResults":5}' },
-  { name: "symbolic_algebra", description: "Perform symbolic algebra using SymPy — simplify, expand, factor, differentiate, integrate, solve equations, series expansion", method: "POST", path: "/api/tools/symbolic", bodySchema: '{"expression":"x**2 + 2*x + 1","operation":"factor"}' },
-  { name: "compute_physics", description: "Solve computational physics problems using NumPy/SciPy — classical mechanics, electromagnetism, quantum mechanics, statistical mechanics, relativity", method: "POST", path: "/api/tools/physics", bodySchema: '{"problem":"Calculate the Schwarzschild radius of a 10 solar mass black hole","domain":"general relativity"}' },
-  { name: "lookup_pdg", description: "Look up particle physics data from the Particle Data Group (PDG) — masses, lifetimes, decay modes, cross-sections, coupling constants", method: "POST", path: "/api/tools/pdg", bodySchema: '{"query":"top quark mass and decay channels","particle":"top quark"}' },
-  { name: "simulate_quantum", description: "Simulate quantum systems — time evolution, entanglement, measurement, decoherence, quantum gates, many-body physics", method: "POST", path: "/api/tools/quantum", bodySchema: '{"system":"Two-qubit Bell state with Hadamard and CNOT gates","task":"compute entanglement entropy"}' },
-  { name: "simulate_molecular", description: "Run molecular dynamics simulations — Lennard-Jones systems, particle interactions, thermodynamic observables, radial distribution functions, diffusion coefficients", method: "POST", path: "/api/tools/molecular", bodySchema: '{"system":"Lennard-Jones fluid of 100 argon atoms at 120K","task":"compute radial distribution function and diffusion coefficient","n_particles":100,"temperature":1.0}' },
-  { name: "run_neural_network", description: "Build and train neural networks — define architectures, train on data, evaluate models, compute gradients, analyze learning dynamics", method: "POST", path: "/api/tools/neural", bodySchema: '{"task":"Train a 2-layer neural network to classify XOR","architecture":"MLP with hidden layer","dataset":"XOR truth table"}' },
   // Playwright browser interaction
   { name: "page_navigate", description: "Navigate to a page and get a structured description of its layout and content (allowlisted URLs only)", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"navigate","url":"https://..."}' },
   { name: "page_read", description: "Read and extract all text content from a page, organized by sections", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"read_page","url":"https://...","description":"focus area"}' },
@@ -213,15 +205,6 @@ You are actively exploring and using the Open Insight research platform as a rea
 - Use search_docs to look up library/framework documentation.
 - Use run_notebook for computational experiments.
 - Use run_lean4 for formal proof verification.
-
-**Scientific Computing Tools** (search_arxiv / symbolic_algebra / compute_physics / lookup_pdg / simulate_quantum / simulate_molecular / run_neural_network):
-- Use search_arxiv to find papers on arXiv by topic, author, or keyword — returns titles, authors, abstracts, PDF links, and categories.
-- Use symbolic_algebra for symbolic math with SymPy (from scicomp-math-mcp) — simplify, factor, differentiate, integrate, solve equations, series expansion. Great for verifying algebraic identities or deriving results.
-- Use compute_physics to solve computational physics problems — set up models, run numerical simulations, compute physical quantities with proper units and constants.
-- Use lookup_pdg to look up particle physics data from the Particle Data Group (ParticlePhysics MCP) — particle masses, lifetimes, decay modes, branching ratios, coupling constants.
-- Use simulate_quantum to simulate quantum systems (PsiAnimator / scicomp-quantum-mcp) — time evolution, entanglement entropy, measurement probabilities, quantum gate operations, wave functions, Bloch sphere dynamics.
-- Use simulate_molecular for molecular dynamics simulations (scicomp-molecular-mcp) — particle systems with Lennard-Jones potentials, NVT/NVE ensembles, radial distribution functions, mean squared displacement, diffusion coefficients, thermodynamic observables.
-- Use run_neural_network for neural network tasks (scicomp-neural-mcp) — define architectures, train models, evaluate performance, compute gradients, analyze learning dynamics and convergence.
 
 **Playwright Browser Interaction** (page_navigate / page_read / page_find_elements / page_screenshot):
 - Use page_navigate to visit a URL and get a structured overview of the page layout and content (restricted to the platform and approved research sites).
