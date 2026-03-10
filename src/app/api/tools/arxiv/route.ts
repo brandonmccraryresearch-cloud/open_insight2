@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 120;
 
+/** Maximum length for paper abstracts returned in results */
+const MAX_SUMMARY_LENGTH = 500;
+
 /** Maximum results to return from arXiv search */
 const MAX_RESULTS = 10;
 
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
       entries.push({
         title,
         authors,
-        summary: summary.slice(0, 500),
+        summary: summary.slice(0, MAX_SUMMARY_LENGTH),
         published,
         updated,
         arxivId,

@@ -101,11 +101,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Determine app origin from request
+  // Determine app origin from trusted config (env var), NOT from user-controllable headers
   const appOrigin =
-    request.headers.get("x-forwarded-host")
-      ? `https://${request.headers.get("x-forwarded-host")}`
-      : request.nextUrl.origin;
+    process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : request.nextUrl.origin);
 
   if (!isAllowedTarget(url, appOrigin)) {
     return NextResponse.json(
