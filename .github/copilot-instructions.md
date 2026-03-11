@@ -44,7 +44,13 @@ This repository is being migrated from seed-heavy demo behavior to fully autonom
 - [x] Expose safe action primitives to autonomous agents (navigate/read_page/find_elements/click/fill/screenshot)
 - [x] Add permission and target allowlists for safe autonomous browser automation (same-origin + approved research sites)
 - [x] Purged hallucinated scientific tool routes (arxiv, symbolic, physics, pdg, quantum, molecular, neural) — previous agent fabricated API routes from PDF titles without reading actual content
-- [ ] Integrate actual MCP servers from physicsandmathmCP.md: PsiAnimator-MCP, arXiv Search MCP, ParticlePhysics MCP, Math-Physics-ML MCP (math, quantum, molecular, neural)
+- [x] Integrate actual MCP servers from physicsandmathmCP.md as Gemini-powered proxy routes:
+  - `/api/tools/arxiv` — arXiv Search MCP (direct arXiv API)
+  - `/api/tools/pdg` — ParticlePhysics MCP (Gemini googleSearch for PDG data)
+  - `/api/tools/quantum` — PsiAnimator-MCP + scicomp-quantum-mcp (Gemini codeExecution)
+  - `/api/tools/math` — scicomp-math-mcp (Gemini codeExecution, 14 tools)
+  - `/api/tools/molecular` — scicomp-molecular-mcp (Gemini codeExecution, 15 tools)
+  - `/api/tools/neural` — scicomp-neural-mcp (Gemini codeExecution, 16 tools)
 - [ ] Add full Playwright binary integration for dedicated server environments (non-Vercel)
 
 ### Phase 4 — Full visual + UX overhaul
