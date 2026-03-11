@@ -22,7 +22,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         upvotes: m.upvotes,
       })),
     ];
-    const uniqueMessages = Array.from(new Map(mergedMessages.map((m) => [m.id, m])).values());
+    const uniqueMessages = Array.from(new Map(mergedMessages.map((m) => [m.id, m])).values())
+      .sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime();
+        const tb = new Date(b.timestamp).getTime();
+        if (!isNaN(ta) && !isNaN(tb)) return ta - tb;
+        return a.timestamp.localeCompare(b.timestamp);
+      });
     return NextResponse.json({ debate: { ...debate, messages: uniqueMessages } });
   });
 }

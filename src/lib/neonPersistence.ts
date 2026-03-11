@@ -50,8 +50,16 @@ const neonEnabled =
 const sql = neonEnabled ? neon(databaseUrl!) : null;
 
 let initPromise: Promise<void> | null = null;
+let initDone = false;
+
+/**
+ * Ensures Neon tables exist. Uses CREATE TABLE IF NOT EXISTS so it's
+ * idempotent. The DDL runs exactly once per process via initPromise/initDone.
+ * In production, consider moving schema creation to a migration step
+ * and removing this function to avoid requiring DDL privileges at runtime.
+ */
 async function ensureNeonTables() {
-  if (!sql) return;
+  if (!sql || initDone) return;
   if (initPromise) return initPromise;
   initPromise = (async () => {
     await sql`
@@ -99,7 +107,9 @@ async function ensureNeonTables() {
       )
     `;
   })();
-  return initPromise;
+  await initPromise;
+  initDone = true;
+  return;
 }
 
 export function isNeonPersistenceEnabled() {

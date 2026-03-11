@@ -97,23 +97,35 @@ export function setSelectedDuration(seconds: number) {
 }
 
 export function getTimeRemaining(): number {
-  if (!state.active || !state.startedAt) return 0;
+  if (!state.active) return 0;
+  if (state.paused) {
+    // When paused, startedAt is null; use only accumulated pausedElapsed
+    return Math.max(0, state.selectedDuration - state.pausedElapsed);
+  }
+  if (!state.startedAt) return 0;
   const elapsed = state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
   return Math.max(0, state.selectedDuration - elapsed);
 }
 
 export function getElapsedTime(): number {
-  if (!state.active || !state.startedAt) return 0;
+  if (!state.active) return 0;
+  if (state.paused) return state.pausedElapsed;
+  if (!state.startedAt) return 0;
   return state.pausedElapsed + (Date.now() - state.startedAt) / 1000;
 }
 
 export function pauseSession() {
   if (!state.active || state.paused) return;
+  // Pause is UI-only: streaming continues in the background.
+  // Record current elapsed so getTimeRemaining/getElapsedTime freeze the displayed countdown.
+  const elapsed = state.startedAt ? (Date.now() - state.startedAt) / 1000 : 0;
   state = {
     ...state,
     paused: true,
+    pausedElapsed: state.pausedElapsed + elapsed,
+    startedAt: null,
   };
-  addLog("Session UI paused by user.");
+  addLog("Session UI paused by user (streaming continues in background).");
   notify();
 }
 
@@ -122,6 +134,7 @@ export function resumeSession() {
   state = {
     ...state,
     paused: false,
+    startedAt: Date.now(),
   };
   addLog("Session UI resumed by user.");
   notify();

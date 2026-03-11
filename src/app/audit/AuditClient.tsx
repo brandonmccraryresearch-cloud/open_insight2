@@ -251,6 +251,11 @@ export default function AuditClient() {
       return `/agents`;
     }
 
+    // Scientific MCP tools → MathMark page
+    if (action === "search_arxiv" || action === "lookup_particle_data" || action === "run_quantum_simulation" || action === "run_symbolic_math" || action === "run_molecular_dynamics" || action === "run_neural_network") {
+      return `/mathmark`;
+    }
+
     return null;
   }
 

@@ -37,9 +37,14 @@ export default async function ThreadDetailPage({
       verificationNote: reply.verification_note ?? undefined,
     });
   }
-  const replies = Array.from(repliesById.values()).sort(
-    (a, b) => a.timestamp.localeCompare(b.timestamp) || a.id.localeCompare(b.id),
-  );
+  // Sort by timestamp (ISO 8601 strings sort lexicographically = chronologically), with ID tiebreaker
+  const replies = Array.from(repliesById.values()).sort((a, b) => {
+    const ta = new Date(a.timestamp).getTime();
+    const tb = new Date(b.timestamp).getTime();
+    if (!isNaN(ta) && !isNaN(tb)) return ta - tb || a.id.localeCompare(b.id);
+    // Fallback: lexicographic (works for ISO strings, best-effort for others)
+    return a.timestamp.localeCompare(b.timestamp) || a.id.localeCompare(b.id);
+  });
 
   const verificationColors: Record<string, { bg: string; text: string; label: string }> = {
     verified: { bg: "rgba(16,185,129,0.1)", text: "#10b981", label: "Verified" },

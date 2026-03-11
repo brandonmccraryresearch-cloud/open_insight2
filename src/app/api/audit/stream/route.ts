@@ -154,6 +154,13 @@ const PLATFORM_ACTIONS: PlatformAction[] = [
   { name: "page_read", description: "Read and extract all text content from a page, organized by sections", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"read_page","url":"https://...","description":"focus area"}' },
   { name: "page_find_elements", description: "Find interactive elements (buttons, links, forms) on a page", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"find_elements","url":"https://...","selector":"submit buttons"}' },
   { name: "page_screenshot", description: "Get a detailed visual description of a page as if viewing a screenshot", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"screenshot","url":"https://..."}' },
+  // Scientific & Research MCP Server Tools
+  { name: "search_arxiv", description: "Search arXiv for scientific papers by query and/or category (arxiv-search-mcp)", method: "POST", path: "/api/tools/arxiv", bodySchema: '{"query":"search terms","category":"cs.AI","maxResults":5}' },
+  { name: "lookup_particle_data", description: "Look up particle physics data from PDG — masses, lifetimes, decay modes, quantum numbers (particlephysics-mcp)", method: "POST", path: "/api/tools/pdg", bodySchema: '{"particle":"Higgs boson","property":"mass","query":""}' },
+  { name: "run_quantum_simulation", description: "Run quantum physics simulations — state evolution, measurements, entanglement (psianimator-mcp / scicomp-quantum-mcp)", method: "POST", path: "/api/tools/quantum", bodySchema: '{"task":"simulate a 2-qubit Bell state and compute entanglement entropy","systemType":"qubit"}' },
+  { name: "run_symbolic_math", description: "Perform symbolic algebra and numerical computing — differentiation, integration, solving (scicomp-math-mcp)", method: "POST", path: "/api/tools/math", bodySchema: '{"operation":"integrate","expression":"sin(x)*exp(-x)","task":""}' },
+  { name: "run_molecular_dynamics", description: "Run molecular dynamics simulations — particle systems, potentials, thermodynamics (scicomp-molecular-mcp)", method: "POST", path: "/api/tools/molecular", bodySchema: '{"task":"simulate 100 particles with Lennard-Jones potential at T=1.0","systemType":"LJ fluid"}' },
+  { name: "run_neural_network", description: "Neural network training, evaluation, and analysis (scicomp-neural-mcp)", method: "POST", path: "/api/tools/neural", bodySchema: '{"task":"train a simple classifier on XOR data","architecture":"feedforward"}' },
 ];
 
 function buildActionListForPrompt(): string {
@@ -211,6 +218,14 @@ You are actively exploring and using the Open Insight research platform as a rea
 - Use page_read to extract and read all text content from a page, organized by sections.
 - Use page_find_elements to identify interactive elements (buttons, links, forms) on a page.
 - Use page_screenshot to get a detailed visual description of a page.
+
+**Scientific & Research MCP Tools** (search_arxiv / lookup_particle_data / run_quantum_simulation / run_symbolic_math / run_molecular_dynamics / run_neural_network):
+- search_arxiv: Search arXiv.org for scientific papers by keyword or category. Returns titles, authors, abstracts, PDF links. Based on arxiv-search-mcp.
+- lookup_particle_data: Query particle physics properties (mass, lifetime, decay modes, quantum numbers) from the Particle Data Group. Based on ParticlePhysics MCP Server.
+- run_quantum_simulation: Simulate quantum systems — state evolution, measurements, entanglement entropy, gate operations. Based on PsiAnimator-MCP and scicomp-quantum-mcp.
+- run_symbolic_math: Perform symbolic algebra (SymPy) and numerical computing — differentiation, integration, equation solving, series expansion, matrix ops. Based on scicomp-math-mcp (14 tools).
+- run_molecular_dynamics: Run classical molecular dynamics simulations — particle systems, Lennard-Jones potentials, RDF, MSD, thermodynamics. Based on scicomp-molecular-mcp (15 tools).
+- run_neural_network: Train and evaluate neural networks — architecture definition, training loops, gradient analysis, model evaluation. Based on scicomp-neural-mcp (16 tools).
 
 **MathMark** (test_mathmark_chat / test_mathmark_detect / test_mathmark_analyze / test_mathmark_humanize / test_mathmark_figure):
 - Use MathMark tools for document analysis, AI-content detection, figure generation, and writing assistance.
