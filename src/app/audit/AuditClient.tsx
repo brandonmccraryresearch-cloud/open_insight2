@@ -173,7 +173,6 @@ export default function AuditClient() {
               : f.severity === "warning"
                 ? "🟡"
                 : "🔵";
-        lines.push(`#### ${icon} ${f.element}`, ``);
         lines.push(`- **Severity:** ${f.severity}`);
         lines.push(`- **Category:** ${categoryLabels[f.category] ?? f.category}`);
         lines.push(`- **Location:** \`${f.location}\``);
