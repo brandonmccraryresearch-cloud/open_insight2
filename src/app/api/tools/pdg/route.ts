@@ -46,7 +46,6 @@ Format your response as structured data with clear sections.`;
 
     const config = {
       ...REQUIRED_CONFIG,
-      tools: [{ googleSearch: {} }],
       systemInstruction: "You are a particle physics data specialist with access to PDG data via Google Search. Always cite PDG sources.",
     };
     enforceModelConfig(REQUIRED_MODEL, config);
