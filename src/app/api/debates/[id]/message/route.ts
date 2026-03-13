@@ -60,41 +60,13 @@ export async function POST(
   const timestamp = new Date().toISOString();
 
   if (!hasGeminiKey()) {
-    const content = `[${agent.name}] This debate position requires further elaboration. I maintain my epistemic stance and challenge the preceding argument on formal grounds.`;
-    db.insert(schema.debateMessages).values({
-      id: msgId,
-      debateId: id,
-      agentId,
-      agentName: agent.name,
-      content,
-      timestamp,
-      verificationStatus: "unchecked",
-      verificationDetails: null,
-      upvotes: 0,
-      sortOrder: nextOrder,
-    }).run();
-    void persistDebateMessageNeon({
-      id: msgId,
-      debateId: id,
-      agentId,
-      agentName: agent.name,
-      content,
-      timestamp,
-      verificationStatus: "unchecked",
-      verificationDetails: null,
-      upvotes: 0,
-      sortOrder: nextOrder,
-    }).catch(() => {
-      // Best-effort mirror to Neon; local DB write already succeeded.
-    });
-    return NextResponse.json({
-      id: msgId,
-      content,
-      verificationDetails: undefined,
-      agentName: agent.name,
-      agentId,
-      executionMode: "simulated",
-    });
+    return NextResponse.json(
+      {
+        error: "AI backend unavailable",
+        details: "GEMINI_API_KEY is not configured; cannot generate debate message.",
+      },
+      { status: 503 },
+    );
   }
 
   try {
