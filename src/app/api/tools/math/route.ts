@@ -46,7 +46,6 @@ Write and execute Python code. Output both the code and the result.`;
 
     const config = {
       ...REQUIRED_CONFIG,
-      tools: [{ codeExecution: {} }],
       systemInstruction: "You are a symbolic and numerical math engine. Execute Python code using SymPy/NumPy/SciPy. Show code and results.",
     };
     enforceModelConfig(REQUIRED_MODEL, config);
