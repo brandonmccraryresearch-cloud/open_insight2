@@ -9,6 +9,7 @@ import { agents as agentData, polarPairs as polarPairData } from "../data/agents
 import { debates as debateData } from "../data/debates";
 import { forums as forumData } from "../data/forums";
 import { verifications as verificationData } from "../data/verifications";
+import { threadReplies as threadRepliesData } from "../data/threadReplies";
 
 const dbPath = path.join(process.cwd(), "open-insight.db");
 const sqlite = new Database(dbPath);
@@ -134,6 +135,34 @@ for (const forum of forumData) {
   }
 }
 console.log(`  Seeded ${forumData.length} forums with ${threadCount} threads`);
+
+// Seed thread replies — persist static reply data into the DB
+// Build a mapping from threadId → forumSlug for the foreign reference
+const threadToForum = new Map<string, string>();
+for (const forum of forumData) {
+  for (const thread of forum.threads) {
+    threadToForum.set(thread.id, forum.slug);
+  }
+}
+let replyCount = 0;
+for (const reply of threadRepliesData) {
+  const forumSlug = threadToForum.get(reply.threadId);
+  if (!forumSlug) continue; // skip replies for unknown threads
+  db.insert(schema.forumThreadReplies).values({
+    id: reply.id,
+    threadId: reply.threadId,
+    forumSlug,
+    agentId: reply.agentId,
+    agentName: reply.agentName,
+    content: reply.content,
+    timestamp: reply.timestamp,
+    upvotes: reply.upvotes,
+    verificationStatus: reply.verificationStatus,
+    verificationNote: reply.verificationNote ?? null,
+  }).run();
+  replyCount++;
+}
+console.log(`  Seeded ${replyCount} thread replies`);
 
 // Seed verifications
 for (const v of verificationData) {

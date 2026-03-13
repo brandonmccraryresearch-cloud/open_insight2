@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasGeminiKey, generateThreadReply } from "@/lib/gemini";
 import { getForumBySlug, getAgentById } from "@/lib/queries";
+import { db } from "@/db";
+import * as schema from "@/db/schema";
+import { randomUUID } from "crypto";
+import { persistThreadReplyNeon } from "@/lib/neonPersistence";
+
+export const maxDuration = 120;
 
 export async function POST(
   request: NextRequest,
@@ -28,20 +34,48 @@ export async function POST(
   if (!agent) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
 
   if (!hasGeminiKey()) {
-    // Fallback: return a brief simulated reply
-    return NextResponse.json({
-      content: `As ${agent.name}, I would note that this conjecture requires more rigorous formalisation before it can be accepted. Specifically, the dimensional analysis needs to be checked and the falsifiability conditions made explicit.`,
-      verificationNote: undefined,
-      agentName: agent.name,
-      agentId: agent.id,
-      executionMode: "simulated",
-    });
+    return NextResponse.json(
+      { error: "Agent reply service unavailable: missing GEMINI_API_KEY" },
+      { status: 503 },
+    );
   }
 
   try {
     const result = await generateThreadReply(agentId, thread.title, thread.excerpt, previousReplies);
+
+    // Persist the AI-generated reply to the database
+    const replyId = `reply-${randomUUID()}`;
+    const timestamp = new Date().toISOString();
+    db.insert(schema.forumThreadReplies).values({
+      id: replyId,
+      threadId,
+      forumSlug: slug,
+      agentId: agent.id,
+      agentName: agent.name,
+      content: result.content,
+      timestamp,
+      upvotes: 0,
+      verificationStatus: "unchecked",
+      verificationNote: result.verificationNote ?? null,
+    }).run();
+    void persistThreadReplyNeon({
+      id: replyId,
+      threadId,
+      forumSlug: slug,
+      agentId: agent.id,
+      agentName: agent.name,
+      content: result.content,
+      timestamp,
+      upvotes: 0,
+      verificationStatus: "unchecked",
+      verificationNote: result.verificationNote ?? null,
+    }).catch(() => {
+      // Best-effort mirror to Neon; local DB write already succeeded.
+    });
+
     return NextResponse.json({
       ...result,
+      id: replyId,
       agentName: agent.name,
       agentId: agent.id,
       executionMode: "gemini",

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI, MediaResolution, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import { REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
+
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,14 +31,14 @@ export async function POST(req: NextRequest) {
       { role: "user", parts: [{ text: message }] },
     ];
 
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction: systemPrompt,
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
     const response = await genai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      config: {
-        topP: 1,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
-        systemInstruction: systemPrompt,
-      },
+      model: REQUIRED_MODEL,
+      config,
       contents,
     });
 

@@ -57,13 +57,14 @@ async function probe(
   path: string,
   body?: unknown,
   timeoutMs = 15000,
+  forwardHeaders?: Record<string, string>,
 ): Promise<ProbeResult> {
   const start = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...forwardHeaders };
     if (body) headers["Content-Type"] = "application/json";
 
     const res = await fetch(`${baseUrl}${path}`, {
@@ -71,6 +72,7 @@ async function probe(
       headers,
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
+      cache: "no-store",
     });
     clearTimeout(timer);
     const latency = Date.now() - start;
@@ -261,8 +263,35 @@ function buildProbes(): EndpointProbe[] {
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  const requestOrigin = url.origin;
+  const canonicalOrigin = process.env.CANONICAL_ORIGIN;
+  let parsedCanonicalOrigin: string | null = null;
+  if (canonicalOrigin) {
+    try {
+      parsedCanonicalOrigin = new URL(canonicalOrigin).origin;
+    } catch {
+      parsedCanonicalOrigin = null;
+    }
+  }
 
+  // Prefer a canonical origin if configured and valid; otherwise fall back to the computed origin.
+  // This is used as the base URL for internal self-probes.
+  const baseUrl = parsedCanonicalOrigin || requestOrigin;
+
+  // Forward auth-related headers so self-probes pass deployment protection.
+  // When no CANONICAL_ORIGIN is configured, we probe our own origin (same-host),
+  // so forwarding is always safe. When an explicit origin IS configured,
+  // only forward if it matches the request's own origin to avoid credential leak.
+  const forwardHeaders: Record<string, string> = {};
+  const shouldForward =
+    !canonicalOrigin ||
+    (parsedCanonicalOrigin !== null && parsedCanonicalOrigin === requestOrigin);
+  if (shouldForward) {
+    const cookie = request.headers.get("cookie");
+    if (cookie) forwardHeaders["cookie"] = cookie;
+    const auth = request.headers.get("authorization");
+    if (auth) forwardHeaders["authorization"] = auth;
+  }
   const actions: AgentAction[] = [];
   const findings: AuditFinding[] = [];
   let findingId = 0;
@@ -270,7 +299,7 @@ export async function GET(request: NextRequest) {
   const probes = buildProbes();
 
   for (const p of probes) {
-    const result = await probe(baseUrl, p.method, p.path, p.body);
+    const result = await probe(baseUrl, p.method, p.path, p.body, 15000, forwardHeaders);
     const interpreted = p.interpret(result);
 
     actions.push({

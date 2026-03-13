@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasGeminiKey } from "@/lib/gemini";
-import { GoogleGenAI, MediaResolution, ThinkingLevel } from "@google/genai";
+import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
+import { GoogleGenAI } from "@google/genai";
+
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,16 +52,15 @@ Return ONLY valid JSON:
   "markdown": "markdown to insert into the document (for SVG, use an inline data URI image; for code, use a fenced code block)"
 }`;
 
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction:
+        "You are an expert scientific figure generator. Create precise, publication-quality figures. Return ONLY valid JSON, no markdown fences or extra text.",
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
     const response = await genai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      config: {
-        topP: 1,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-        mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
-        tools: [{ codeExecution: {} }],
-        systemInstruction:
-          "You are an expert scientific figure generator. Create precise, publication-quality figures. Return ONLY valid JSON, no markdown fences or extra text.",
-      },
+      model: REQUIRED_MODEL,
+      config,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 

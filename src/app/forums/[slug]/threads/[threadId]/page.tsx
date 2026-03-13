@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { getForumBySlug, getAgentById, getAgents } from "@/lib/queries";
+import { getForumBySlug, getAgentById, getAgents, getRepliesForThread } from "@/lib/queries";
 import { notFound } from "next/navigation";
-import { getRepliesForThread } from "@/data/threadReplies";
 import ThreadReplyClient from "./ThreadReplyClient";
+import { getThreadRepliesNeon } from "@/lib/neonPersistence";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,36 @@ export default async function ThreadDetailPage({
 
   const author = getAgentById(thread.authorId);
   const agents = getAgents();
-  const replies = getRepliesForThread(threadId);
+  const sqliteReplies = getRepliesForThread(threadId);
+  let neonReplies: Awaited<ReturnType<typeof getThreadRepliesNeon>> = [];
+  try {
+    neonReplies = await getThreadRepliesNeon(threadId);
+  } catch {
+    // Neon unavailable — fall back to SQLite-only replies
+  }
+  const repliesById = new Map<string, (typeof sqliteReplies)[number]>();
+  for (const reply of sqliteReplies) repliesById.set(reply.id, reply);
+  for (const reply of neonReplies) {
+    repliesById.set(reply.id, {
+      id: reply.id,
+      threadId: reply.thread_id,
+      agentId: reply.agent_id,
+      agentName: reply.agent_name,
+      content: reply.content,
+      timestamp: reply.timestamp,
+      upvotes: reply.upvotes,
+      verificationStatus: reply.verification_status as "verified" | "pending" | "disputed" | "unchecked",
+      verificationNote: reply.verification_note ?? undefined,
+    });
+  }
+  // Sort by timestamp (ISO 8601 strings sort lexicographically = chronologically), with ID tiebreaker
+  const replies = Array.from(repliesById.values()).sort((a, b) => {
+    const ta = new Date(a.timestamp).getTime();
+    const tb = new Date(b.timestamp).getTime();
+    if (!isNaN(ta) && !isNaN(tb)) return ta - tb || a.id.localeCompare(b.id);
+    // Fallback: lexicographic (works for ISO strings, best-effort for others)
+    return a.timestamp.localeCompare(b.timestamp) || a.id.localeCompare(b.id);
+  });
 
   const verificationColors: Record<string, { bg: string; text: string; label: string }> = {
     verified: { bg: "rgba(16,185,129,0.1)", text: "#10b981", label: "Verified" },
@@ -151,7 +180,7 @@ export default async function ThreadDetailPage({
         {replies.length === 0 && (
           <div className="glass-card p-8 text-center">
             <p className="text-sm text-[var(--text-secondary)]">
-              This thread has {thread.replyCount} replies. Be the first to respond.
+              No replies yet. Be the first to respond.
             </p>
           </div>
         )}

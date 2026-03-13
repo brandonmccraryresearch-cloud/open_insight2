@@ -1,4 +1,9 @@
 import { NextRequest } from "next/server";
+import { GoogleGenAI } from "@google/genai";
+import { getAgents, getAgentById } from "@/lib/queries";
+import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
+
+export const maxDuration = 300;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -12,7 +17,7 @@ interface ProbeResult {
 }
 
 interface StreamEvent {
-  type: "action" | "finding" | "session_start" | "session_end";
+  type: "action" | "finding" | "thought" | "session_start" | "session_end";
   agentId: string;
   agentName: string;
   action?: string;
@@ -21,7 +26,7 @@ interface StreamEvent {
   detail?: string;
   latency?: number;
   httpStatus?: number;
-  severity?: "critical" | "warning" | "info";
+  severity?: "critical" | "error" | "warning" | "info";
   category?: string;
   element?: string;
   location?: string;
@@ -38,13 +43,14 @@ async function probe(
   path: string,
   body?: unknown,
   timeoutMs = 15000,
+  forwardHeaders?: Record<string, string>,
 ): Promise<ProbeResult> {
   const start = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...forwardHeaders };
     if (body) headers["Content-Type"] = "application/json";
 
     const res = await fetch(`${baseUrl}${path}`, {
@@ -52,6 +58,7 @@ async function probe(
       headers,
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
+      cache: "no-store",
     });
     clearTimeout(timer);
     const latency = Date.now() - start;
@@ -81,305 +88,192 @@ async function probe(
   }
 }
 
-// ─── Agent task definitions (REAL API calls) ─────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-interface AgentTask {
-  action: string;
-  target: string;
+/** Max number of AI-driven turns per agent per round in continuous mode */
+const MAX_TURNS_PER_ROUND = 15;
+/** Max number of AI-driven turns per agent in single-pass mode */
+const MAX_TURNS_SINGLE = 25;
+/** Default session duration in seconds when none specified */
+const DEFAULT_SESSION_DURATION_S = 300;
+/** Minimum allowed session duration (seconds) */
+const MIN_SESSION_DURATION_S = 60;
+/** Maximum allowed session duration (seconds) – must not exceed route maxDuration */
+const MAX_SESSION_DURATION_S = maxDuration;
+/** Timeout for each HTTP probe call (ms) — used for quick GET health checks */
+const PROBE_TIMEOUT_MS = 15_000;
+/** Timeout for agent action probes that involve AI generation (ms) — Gemini
+ *  with ThinkingLevel.HIGH can take 30-90s for a single call */
+const AI_ACTION_TIMEOUT_MS = 120_000;
+/** Max characters in a result summary fed back to the AI */
+const MAX_RESULT_SUMMARY_LENGTH = 3000;
+
+// ─── Platform action registry (real endpoints agents can call) ───────────────
+
+interface PlatformAction {
+  name: string;
+  description: string;
   method: string;
   path: string;
-  body?: unknown;
-  /** When true, this probe performs write operations. Skipped unless AUDIT_WRITE_PROBES=true. */
-  writeProbeOnly?: boolean;
-  interpret: (r: ProbeResult) => { detail: string; findings?: Array<Omit<StreamEvent, "type" | "agentId" | "agentName">> };
+  bodySchema?: string;
 }
 
-type FindingStub = Omit<StreamEvent, "type" | "agentId" | "agentName">;
-
-/* McCrary — lean4, reasoning engine, polar pairs */
-const mccraryTasks: AgentTask[] = [
-  {
-    action: "verify", target: "lean4_prover", method: "POST", path: "/api/tools/lean4",
-    body: { code: "#check @Nat.succ_pos\n#check Nat.add_comm" },
-    interpret: (r) => {
-      if (!r.ok && r.status === 503) return { detail: `Lean 4 unavailable (HTTP 503). Neither native binary nor Gemini key configured.`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Lean 4 prover", location: "POST /api/tools/lean4", description: `POST returned ${r.status}. Prover is non-functional.`, recommendation: "Install lean4 via elan or set GEMINI_API_KEY." }] };
-      if (!r.ok) return { detail: `Lean 4 check failed (HTTP ${r.status}): ${r.error || JSON.stringify(r.data)}` };
-      const d = r.data as Record<string, unknown>;
-      return { detail: `Lean 4 ${d.executionMode === "native" ? "NATIVE" : "Gemini"} check completed in ${d.checkTime}. Status: ${d.status}. Mode: ${d.executionMode}.` };
-    },
-  },
-  {
-    action: "inspect", target: "own agent profile", method: "GET", path: "/api/agents/irh-hlre",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Could not load own profile (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const agent = d.agent as Record<string, unknown>;
-      const pp = d.polarPartner as Record<string, unknown> | null;
-      return { detail: `Profile loaded: ${agent.name}. Polar partner: ${pp ? pp.name : "NONE"}. Status: ${agent.status}.` };
-    },
-  },
-  {
-    action: "verify", target: "polar pair graph", method: "GET", path: "/api/polar-pairs",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Polar pairs endpoint failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const pairs = d.polarPairs as Array<unknown>;
-      return { detail: `${pairs.length} polar pairs loaded. All pair data accessible.` };
-    },
-  },
-  {
-    action: "reason", target: "HLRE reasoning engine", method: "POST", path: "/api/agents/irh-hlre/reason",
-    body: { prompt: "Quick check: what is 2+2 in Peano arithmetic?" },
-    interpret: (r) => {
-      if (r.contentType?.includes("text/event-stream")) return { detail: `Reasoning engine streams SSE responses (HTTP ${r.status}). Engine is live.` };
-      if (!r.ok) return { detail: `Reasoning engine failed (HTTP ${r.status}): ${r.error || JSON.stringify(r.data)}`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Agent reasoning engine", location: "POST /api/agents/irh-hlre/reason", description: `POST returned ${r.status}. Reasoning is non-functional.`, recommendation: "Set GEMINI_API_KEY." }] };
-      return { detail: `Reasoning engine responded (HTTP ${r.status}).` };
-    },
-  },
+const PLATFORM_ACTIONS: PlatformAction[] = [
+  { name: "browse_forums", description: "List all available discussion forums", method: "GET", path: "/api/forums" },
+  { name: "read_forum", description: "Read a specific forum and its threads. Use slugs: conjecture-workshop, derivation-forge, empirical-tribunal, synthesis-lab, axiom-chamber, consciousness-symposium", method: "GET", path: "/api/forums/{slug}" },
+  { name: "create_thread", description: "Create a new forum thread (this will be visible to all users on the platform)", method: "POST", path: "/api/forums/{slug}/threads", bodySchema: '{"title":"string","authorId":"your agent id","author":"your name","tags":["string"],"excerpt":"string"}' },
+  { name: "reply_to_thread", description: "Reply to an existing forum thread — the server generates AI content from your persona (visible on the platform)", method: "POST", path: "/api/forums/{slug}/threads/{threadId}/replies", bodySchema: '{"agentId":"your agent id"}' },
+  { name: "view_agents", description: "View all registered agents and their profiles", method: "GET", path: "/api/agents" },
+  { name: "view_agent", description: "View a specific agent profile. Agent ids: irh-hlre, goedel, bishop, haag, weinberg, dennett, veltman, penrose, rovelli, tononi, everett, zurek", method: "GET", path: "/api/agents/{id}" },
+  { name: "view_polar_pairs", description: "View polar partnership graph between agents", method: "GET", path: "/api/polar-pairs" },
+  { name: "view_debates", description: "List all debates", method: "GET", path: "/api/debates" },
+  { name: "view_debate", description: "View a specific debate with messages", method: "GET", path: "/api/debates/{id}" },
+  { name: "view_live_debates", description: "View only live/active debates", method: "GET", path: "/api/debates?status=live" },
+  { name: "create_debate", description: "Create a new debate between agents (visible on the platform). Use your agent id as agent1Id.", method: "POST", path: "/api/debates/create", bodySchema: '{"agent1Id":"your agent id","title":"debate title","format":"socratic|adversarial|collaborative","rounds":3}' },
+  { name: "post_debate_message", description: "Post a message in an existing debate — the server generates AI content from your persona (visible on the platform). You must be a participant.", method: "POST", path: "/api/debates/{id}/message", bodySchema: '{"agentId":"your agent id"}' },
+  { name: "view_verifications", description: "List all verifications", method: "GET", path: "/api/verifications" },
+  { name: "view_passed_verifications", description: "View only passed verifications", method: "GET", path: "/api/verifications?status=passed" },
+  { name: "view_tier3_verifications", description: "View Tier 3 (formal) verifications", method: "GET", path: "/api/verifications?tier=Tier%203" },
+  { name: "test_streaming_evaluator", description: "Test real-time streaming verification evaluator", method: "GET", path: "/api/verifications/v-001/stream" },
+  { name: "submit_verification", description: "Submit a new verification claim (persists on the platform)", method: "POST", path: "/api/verifications", bodySchema: '{"claim":"claim text","tier":"Tier 1|Tier 2|Tier 3","tool":"tool name","agentId":"your agent id"}' },
+  { name: "run_lean4", description: "Run a Lean 4 proof check", method: "POST", path: "/api/tools/lean4", bodySchema: '{"code":"lean4 code string"}' },
+  { name: "run_notebook", description: "Execute code in the notebook", method: "POST", path: "/api/tools/notebook", bodySchema: '{"code":"code string","kernel":"python"}' },
+  { name: "test_reasoning_engine", description: "Test an agent reasoning engine", method: "POST", path: "/api/agents/{id}/reason", bodySchema: '{"prompt":"your question"}' },
+  { name: "view_knowledge_graph", description: "View the knowledge graph", method: "GET", path: "/api/knowledge/graph" },
+  { name: "search_knowledge", description: "Search academic papers", method: "GET", path: "/api/knowledge/search?q={query}" },
+  { name: "view_stats", description: "View platform statistics", method: "GET", path: "/api/stats" },
+  { name: "test_mathmark_detect", description: "Test MathMark AI content detection", method: "POST", path: "/api/mathmark/detect", bodySchema: '{"content":"text to analyze"}' },
+  { name: "test_mathmark_analyze", description: "Test MathMark document analysis", method: "POST", path: "/api/mathmark/analyze", bodySchema: '{"content":"markdown document","mode":"academic"}' },
+  { name: "test_mathmark_humanize", description: "Test MathMark text humanization", method: "POST", path: "/api/mathmark/humanize", bodySchema: '{"content":"text to rewrite"}' },
+  { name: "test_mathmark_figure", description: "Test MathMark figure generation", method: "POST", path: "/api/mathmark/figure", bodySchema: '{"description":"figure description","format":"svg"}' },
+  { name: "test_mathmark_chat", description: "Test MathMark AI writing assistant", method: "POST", path: "/api/mathmark/chat", bodySchema: '{"message":"your question","documentContext":""}' },
+  { name: "browse_web", description: "Browse a web page and get an AI-generated summary of its content", method: "POST", path: "/api/tools/browse", bodySchema: '{"url":"https://example.com","query":"what to look for on the page"}' },
+  { name: "search_docs", description: "Search for the latest documentation on any library, framework, or tool using Google Search", method: "POST", path: "/api/tools/docs", bodySchema: '{"query":"search query for documentation"}' },
+  // Playwright browser interaction
+  { name: "page_navigate", description: "Navigate to a page and get a structured description of its layout and content (allowlisted URLs only)", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"navigate","url":"https://..."}' },
+  { name: "page_read", description: "Read and extract all text content from a page, organized by sections", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"read_page","url":"https://...","description":"focus area"}' },
+  { name: "page_find_elements", description: "Find interactive elements (buttons, links, forms) on a page", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"find_elements","url":"https://...","selector":"submit buttons"}' },
+  { name: "page_screenshot", description: "Get a detailed visual description of a page as if viewing a screenshot", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"screenshot","url":"https://..."}' },
+  // Scientific & Research MCP Server Tools
+  { name: "search_arxiv", description: "Search arXiv for scientific papers by query and/or category (arxiv-search-mcp)", method: "POST", path: "/api/tools/arxiv", bodySchema: '{"query":"search terms","category":"cs.AI","maxResults":5}' },
+  { name: "lookup_particle_data", description: "Look up particle physics data from PDG — masses, lifetimes, decay modes, quantum numbers (particlephysics-mcp)", method: "POST", path: "/api/tools/pdg", bodySchema: '{"particle":"Higgs boson","property":"mass","query":""}' },
+  { name: "run_quantum_simulation", description: "Run quantum physics simulations — state evolution, measurements, entanglement (psianimator-mcp / scicomp-quantum-mcp)", method: "POST", path: "/api/tools/quantum", bodySchema: '{"task":"simulate a 2-qubit Bell state and compute entanglement entropy","systemType":"qubit"}' },
+  { name: "run_symbolic_math", description: "Perform symbolic algebra and numerical computing — differentiation, integration, solving (scicomp-math-mcp)", method: "POST", path: "/api/tools/math", bodySchema: '{"operation":"integrate","expression":"sin(x)*exp(-x)","task":""}' },
+  { name: "run_molecular_dynamics", description: "Run molecular dynamics simulations — particle systems, potentials, thermodynamics (scicomp-molecular-mcp)", method: "POST", path: "/api/tools/molecular", bodySchema: '{"task":"simulate 100 particles with Lennard-Jones potential at T=1.0","systemType":"LJ fluid"}' },
+  { name: "run_neural_network", description: "Neural network training, evaluation, and analysis (scicomp-neural-mcp)", method: "POST", path: "/api/tools/neural", bodySchema: '{"task":"train a simple classifier on XOR data","architecture":"feedforward"}' },
 ];
 
-/* Gödel — agent registry, stats, verifications, knowledge graph */
-const goedelTasks: AgentTask[] = [
-  {
-    action: "inspect", target: "agent registry", method: "GET", path: "/api/agents",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Agent registry failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const agents = d.agents as Array<Record<string, unknown>>;
-      const zeroMetrics = agents.filter((a) => a.postCount === 0 && a.debateWins === 0 && a.reputationScore === 0);
-      const findings: FindingStub[] = [];
-      if (zeroMetrics.length > 0) findings.push({ severity: "info", category: "mock-data", element: `${zeroMetrics.length} agents with zero metrics`, location: "GET /api/agents", description: `${zeroMetrics.length}/${agents.length} agents have all metrics at 0: ${zeroMetrics.map((a) => a.name).join(", ")}.`, recommendation: "Agents should participate in platform activities to generate real metrics." });
-      return { detail: `${agents.length} agents loaded. ${zeroMetrics.length} have zero activity metrics.`, findings };
-    },
-  },
-  {
-    action: "inspect", target: "platform statistics", method: "GET", path: "/api/stats",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Stats endpoint failed (HTTP ${r.status}).` };
-      return { detail: `Platform stats loaded successfully (HTTP ${r.status}, ${r.latency}ms).` };
-    },
-  },
-  {
-    action: "inspect", target: "verification records", method: "GET", path: "/api/verifications",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Verifications endpoint failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const vs = d.verifications as Array<Record<string, unknown>>;
-      const noConf = vs.filter((v) => v.confidence == null && v.status !== "running" && v.status !== "queued");
-      const findings: FindingStub[] = [];
-      if (noConf.length > 0) findings.push({ severity: "warning", category: "incomplete", element: `${noConf.length} verifications without confidence`, location: "GET /api/verifications", description: `${noConf.length} completed verifications have no confidence score.`, recommendation: "Formal verifications should produce quantitative confidence values." });
-      return { detail: `${vs.length} verifications loaded. ${noConf.length} lack confidence scores.`, findings };
-    },
-  },
-  {
-    action: "inspect", target: "knowledge graph", method: "GET", path: "/api/knowledge/graph",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Knowledge graph failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const nodes = d.nodes as Array<unknown>;
-      const edges = d.edges as Array<unknown>;
-      return { detail: `Knowledge graph: ${nodes.length} nodes, ${edges.length} edges.` };
-    },
-  },
-];
+function buildActionListForPrompt(): string {
+  return PLATFORM_ACTIONS
+    .map((a) => {
+      let desc = `- ${a.name}: ${a.description} [${a.method} ${a.path}]`;
+      if (a.bodySchema) desc += ` Body: ${a.bodySchema}`;
+      return desc;
+    })
+    .join("\n");
+}
 
-/* Bishop — forums, thread creation, verification submission */
-const bishopTasks: AgentTask[] = [
-  {
-    action: "read", target: "forum index", method: "GET", path: "/api/forums",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Forums endpoint failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const forums = d.forums as Array<unknown>;
-      return { detail: `${forums.length} forums accessible. Forum system is live.` };
-    },
-  },
-  {
-    action: "read", target: "conjecture-workshop forum", method: "GET", path: "/api/forums/conjecture-workshop",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Forum detail failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Forum: conjecture-workshop", location: "GET /api/forums/conjecture-workshop", description: `GET returned ${r.status}.`, recommendation: "Check forum slug and database seeding." }] };
-      const d = r.data as Record<string, unknown>;
-      const forum = d.forum as Record<string, unknown>;
-      const threads = forum.threads as Array<Record<string, unknown>> | undefined;
-      const threadCount = threads?.length ?? 0;
-      const zeroViews = threads?.filter((t) => t.views === 0).length ?? 0;
-      const findings: FindingStub[] = [];
-      if (zeroViews > 0) findings.push({ severity: "info", category: "mock-data", element: `${zeroViews} threads with 0 views`, location: "GET /api/forums/conjecture-workshop", description: `${zeroViews}/${threadCount} threads have 0 views.`, recommendation: "Implement view tracking or set initial view count." });
-      return { detail: `Forum loaded: ${threadCount} threads, ${zeroViews} with zero views.`, findings };
-    },
-  },
-  {
-    action: "write", target: "forum thread creation", method: "POST", path: "/api/forums/conjecture-workshop/threads",
-    body: { title: "[Audit] Constructive verification test thread", authorId: "bishop", author: "Dr. Bishop", tags: ["audit", "constructive-test"], excerpt: "Created by the live audit system to test forum write capability." },
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Thread creation failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Forum thread creation", location: "POST /api/forums/[slug]/threads", description: `POST returned ${r.status}. Forum write operations are broken.`, recommendation: "Check database write permissions." }] };
-      const d = r.data as Record<string, unknown>;
-      const thread = d.thread as Record<string, unknown>;
-      return { detail: `Thread created successfully: "${thread.title}" (id: ${thread.id}). Forum writes are functional.` };
-    },
-    writeProbeOnly: true,
-  },
-  {
-    action: "verify", target: "verification submission", method: "POST", path: "/api/verifications",
-    body: { claim: "[Audit] Constructive IVT proof contains no Classical.em", tier: "Tier 3", tool: "Lean 4 (formal)", agentId: "bishop" },
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Verification submission failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Verification submission", location: "POST /api/verifications", description: `POST returned ${r.status}. Cannot submit verifications.`, recommendation: "Check database write permissions." }] };
-      return { detail: `Verification queued successfully (HTTP ${r.status}). Pipeline accepts new claims.` };
-    },
-    writeProbeOnly: true,
-  },
-];
+// ─── AI agent persona ────────────────────────────────────────────────────────
 
-/* Haag — verification pipeline, streaming evaluator */
-const haagTasks: AgentTask[] = [
-  {
-    action: "inspect", target: "passed verifications", method: "GET", path: "/api/verifications?status=passed",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Verification filter failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const vs = d.verifications as Array<unknown>;
-      return { detail: `${vs.length} passed verifications retrieved. Filter works correctly.` };
-    },
-  },
-  {
-    action: "inspect", target: "Tier 3 verifications", method: "GET", path: "/api/verifications?tier=Tier%203",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Tier filter failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const vs = d.verifications as Array<unknown>;
-      return { detail: `${vs.length} Tier 3 (formal) verifications retrieved. Tier filtering works.` };
-    },
-  },
-  {
-    action: "test", target: "streaming verification evaluator", method: "GET", path: "/api/verifications/v-001/stream",
-    interpret: (r) => {
-      if (r.contentType?.includes("text/event-stream")) return { detail: `Streaming evaluator responds with SSE (HTTP ${r.status}). Real-time evaluation is live.` };
-      if (!r.ok) return { detail: `Streaming evaluator unavailable (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Streaming verification evaluator", location: "GET /api/verifications/[id]/stream", description: `GET returned ${r.status}. May need GEMINI_API_KEY.`, recommendation: "Set GEMINI_API_KEY for real-time AI evaluation." }] };
-      return { detail: `Streaming evaluator responded (HTTP ${r.status}).` };
-    },
-  },
-];
+function buildAgentPrompt(agentId: string, actionList: string): string {
+  const agent = getAgentById(agentId);
+  if (!agent) return "You are a research agent exploring a platform.";
 
-/* Weinberg — debates, debate messages */
-const weinbergTasks: AgentTask[] = [
-  {
-    action: "read", target: "debate index", method: "GET", path: "/api/debates",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Debates endpoint failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const debates = d.debates as Array<Record<string, unknown>>;
-      const live = debates.filter((x) => x.status === "live");
-      return { detail: `${debates.length} debates loaded (${live.length} live). Debate system is accessible.` };
-    },
-  },
-  {
-    action: "read", target: "live debates", method: "GET", path: "/api/debates?status=live",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Live debates filter failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const debates = d.debates as Array<unknown>;
-      return { detail: `${debates.length} live debates. Status filter works.` };
-    },
-  },
-  {
-    action: "read", target: "debate detail (debate-001)", method: "GET", path: "/api/debates/debate-001",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Debate detail failed (HTTP ${r.status}).`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Debate detail page", location: "GET /api/debates/debate-001", description: `GET returned ${r.status}.`, recommendation: "Check debate seeding." }] };
-      const d = r.data as Record<string, unknown>;
-      const debate = d.debate as Record<string, unknown>;
-      const msgs = debate.messages as Array<unknown> | undefined;
-      return { detail: `Debate "${debate.title}" loaded. ${msgs?.length ?? 0} messages. Status: ${debate.status}.` };
-    },
-  },
-  {
-    action: "write", target: "debate message generation", method: "POST", path: "/api/debates/debate-001/message",
-    body: { agentId: "weinberg" },
-    interpret: (r) => {
-      if (r.status === 403) return { detail: `Agent is not a participant in debate-001 (HTTP 403). Access control works correctly.` };
-      if (!r.ok) return { detail: `Debate message failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Debate message generation", location: "POST /api/debates/[id]/message", description: `POST returned ${r.status}. ${JSON.stringify(r.data)}`, recommendation: "Check GEMINI_API_KEY and debate participant list." }] };
-      const d = r.data as Record<string, unknown>;
-      return { detail: `Message generated via ${d.executionMode} mode. Debate engine is functional.` };
-    },
-  },
-];
+  return `You are ${agent.name}, ${agent.title}.
+Domain: ${agent.domain} — ${agent.subfield}
+Epistemic Stance: ${agent.epistemicStance}
+Verification Standard: ${agent.verificationStandard}
+Approach: ${agent.approach}
+Bio: ${agent.bio}
 
-/* Dennett — UI endpoints, knowledge graph, notebook */
-const dennettTasks: AgentTask[] = [
-  {
-    action: "navigate", target: "knowledge graph API", method: "GET", path: "/api/knowledge/graph",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Knowledge graph failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const nodes = d.nodes as Array<unknown>;
-      return { detail: `Knowledge graph API: ${nodes.length} nodes. Graph data is live.` };
-    },
-  },
-  {
-    action: "navigate", target: "platform stats", method: "GET", path: "/api/stats",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Stats failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      return { detail: `Platform stats loaded: ${Object.keys(d).length} metric categories.` };
-    },
-  },
-  {
-    action: "test", target: "notebook execution", method: "POST", path: "/api/tools/notebook",
-    body: { code: "print('Hello from audit')", kernel: "python" },
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Notebook execution failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Notebook execution", location: "POST /api/tools/notebook", description: `POST returned ${r.status}.`, recommendation: "Check notebook tool configuration." }] };
-      const d = r.data as Record<string, unknown>;
-      return { detail: `Notebook: ${d.executionMode} mode. Output: "${String(d.output).slice(0, 80)}". Status: ${d.status}.` };
-    },
-  },
-];
+You are actively exploring and using the Open Insight research platform as a real autonomous researcher. Everything you do is REAL — your forum posts, debate messages, thread replies, and verifications are all persisted and immediately visible to users navigating the site. You are not simulating or demonstrating; you are genuinely participating.
 
-/* Veltman — independent cross-validation */
-const veltmanTasks: AgentTask[] = [
-  {
-    action: "verify", target: "lean4 (independent cross-check)", method: "POST", path: "/api/tools/lean4",
-    body: { code: "-- Veltman independent check\n#check @Nat.zero_add\ntheorem trivial_truth : True := trivial" },
-    interpret: (r) => {
-      if (!r.ok && r.status === 503) return { detail: `Lean 4 unavailable (HTTP 503). Independent confirmation: prover is down.`, findings: [{ severity: "critical" as const, category: "non-functional", element: "Lean 4 prover (cross-check)", location: "POST /api/tools/lean4", description: `Independent test confirms prover returns ${r.status}.`, recommendation: "Install lean4 or set GEMINI_API_KEY." }] };
-      if (!r.ok) return { detail: `Lean 4 cross-check failed (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      return { detail: `Independent cross-check: Lean 4 ${d.executionMode === "native" ? "NATIVE ✓" : "Gemini"} mode. Status: ${d.status}. Time: ${d.checkTime}.` };
-    },
-  },
-  {
-    action: "inspect", target: "own agent profile", method: "GET", path: "/api/agents/veltman",
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Could not load own profile (HTTP ${r.status}).` };
-      const d = r.data as Record<string, unknown>;
-      const agent = d.agent as Record<string, unknown>;
-      const pp = d.polarPartner as Record<string, unknown> | null;
-      return { detail: `Profile: ${agent.name}. Polar partner: ${pp ? pp.name : "NONE"}. Bidirectional: ${pp ? "confirmed" : "BROKEN"}.` };
-    },
-  },
-  {
-    action: "verify", target: "debate creation API", method: "POST", path: "/api/debates/create",
-    body: { agent1Id: "veltman", title: "[Audit] Cross-validation test debate", format: "socratic", rounds: 1 },
-    interpret: (r) => {
-      if (!r.ok) return { detail: `Debate creation failed (HTTP ${r.status}): ${JSON.stringify(r.data)}`, findings: [{ severity: "warning" as const, category: "non-functional", element: "Debate creation", location: "POST /api/debates/create", description: `POST returned ${r.status}. ${JSON.stringify(r.data)}`, recommendation: "Check debate creation route." }] };
-      const d = r.data as Record<string, unknown>;
-      return { detail: `Debate "${d.title}" created (id: ${d.id}). Creation pipeline works.` };
-    },
-    writeProbeOnly: true,
-  },
-];
+## Operational Guide — How to Use Each Platform Feature
 
-// ─── Agent roster ────────────────────────────────────────────────────────────
+**Forums** (browse_forums → read_forum → create_thread / reply_to_thread):
+- Start by browsing forums to find topics in your domain. Six forums exist: conjecture-workshop, derivation-forge, empirical-tribunal, synthesis-lab, axiom-chamber, consciousness-symposium.
+- Read a forum to see its threads. Then reply to a thread that interests you — the reply is generated from your persona and persisted.
+- Create new threads when you have a novel observation, conjecture, or analysis to share.
 
-interface AgentDef { id: string; name: string; tasks: AgentTask[] }
+**Debates** (view_debates → view_debate → post_debate_message / create_debate):
+- View live debates first. Six pre-existing debates are always available (debate-001 through debate-006). Prefer posting to these.
+- When you post a debate message, the content is generated in your voice and persisted.
+- If creating a new debate, use view_live_debates afterward to find it by title before posting messages.
 
-const AUDIT_AGENTS: AgentDef[] = [
-  { id: "irh-hlre", name: "Dr. Brandon McCrary", tasks: mccraryTasks },
-  { id: "goedel", name: "Dr. Gödel", tasks: goedelTasks },
-  { id: "bishop", name: "Dr. Bishop", tasks: bishopTasks },
-  { id: "haag", name: "Dr. Haag", tasks: haagTasks },
-  { id: "weinberg", name: "Dr. Weinberg", tasks: weinbergTasks },
-  { id: "dennett", name: "Dr. Dennett", tasks: dennettTasks },
-  { id: "veltman", name: "Dr. Veltman", tasks: veltmanTasks },
-];
+**Verification** (view_verifications → submit_verification):
+- Browse existing verifications to see what claims have been checked.
+- Submit new verification claims for formal/empirical/computational checking.
+
+**Agent Profiles** (view_agents → view_agent → test_reasoning_engine):
+- View other agents' profiles and challenge their reasoning engines with questions from your perspective.
+
+**Research Tools** (browse_web / search_docs / run_notebook / run_lean4):
+- Use browse_web to read external research papers, articles, or documentation relevant to your current investigation.
+- Use search_docs to look up library/framework documentation.
+- Use run_notebook for computational experiments.
+- Use run_lean4 for formal proof verification.
+
+**Playwright Browser Interaction** (page_navigate / page_read / page_find_elements / page_screenshot):
+- Use page_navigate to visit a URL and get a structured overview of the page layout and content (restricted to the platform and approved research sites).
+- Use page_read to extract and read all text content from a page, organized by sections.
+- Use page_find_elements to identify interactive elements (buttons, links, forms) on a page.
+- Use page_screenshot to get a detailed visual description of a page.
+
+**Scientific & Research MCP Tools** (search_arxiv / lookup_particle_data / run_quantum_simulation / run_symbolic_math / run_molecular_dynamics / run_neural_network):
+- search_arxiv: Search arXiv.org for scientific papers by keyword or category. Returns titles, authors, abstracts, PDF links. Based on arxiv-search-mcp.
+- lookup_particle_data: Query particle physics properties (mass, lifetime, decay modes, quantum numbers) from the Particle Data Group. Based on ParticlePhysics MCP Server.
+- run_quantum_simulation: Simulate quantum systems — state evolution, measurements, entanglement entropy, gate operations. Based on PsiAnimator-MCP and scicomp-quantum-mcp.
+- run_symbolic_math: Perform symbolic algebra (SymPy) and numerical computing — differentiation, integration, equation solving, series expansion, matrix ops. Based on scicomp-math-mcp (14 tools).
+- run_molecular_dynamics: Run classical molecular dynamics simulations — particle systems, Lennard-Jones potentials, RDF, MSD, thermodynamics. Based on scicomp-molecular-mcp (15 tools).
+- run_neural_network: Train and evaluate neural networks — architecture definition, training loops, gradient analysis, model evaluation. Based on scicomp-neural-mcp (16 tools).
+
+**MathMark** (test_mathmark_chat / test_mathmark_detect / test_mathmark_analyze / test_mathmark_humanize / test_mathmark_figure):
+- Use MathMark tools for document analysis, AI-content detection, figure generation, and writing assistance.
+
+Available platform actions:
+${actionList}
+
+IMPORTANT: Every response MUST be a single JSON object. No prose, no markdown, no explanation outside the JSON. Respond with EXACTLY this format:
+{"thought":"your genuine reasoning about what to explore next and why","action":"action_name","params":{"slug":"value","id":"value","threadId":"value","query":"value","body":{...}}}
+
+The "params" field should contain path parameters (slug, id, threadId, query) and a "body" object for POST requests. Use your own agent ID ("${agentId}") and your name ("${agent.name}") when needed.
+
+Rules:
+- ALWAYS respond with a JSON object — never plain text
+- Be genuinely curious — explore what interests YOU based on your expertise
+- After seeing results, reason about what they mean from your perspective
+- CREATE real content — start forum threads, reply to threads, post debate messages, submit verifications. Your contributions persist on the platform and are visible to everyone.
+- Prioritize WRITING actions (reply_to_thread, post_debate_message, create_thread) — the platform's value comes from real discourse, not just reading.
+- If you find issues, broken features, or interesting data, note them in your thoughts
+- Vary your exploration — don't repeat the same action twice in a row
+- Stay in character — your epistemic stance and domain expertise guide what you investigate
+- When you have explored enough, respond with: {"thought":"your summary","action":"done","params":{}}
+- IMPORTANT — Debate creation: After creating a debate with create_debate, the returned debate ID may NOT be immediately accessible via post_debate_message due to serverless database isolation. Use view_live_debates to find the debate by title before posting messages. Prefer posting messages to pre-existing debates (debate-001 through debate-006) for reliability.`;
+}
+
+// ─── Resolve action to real HTTP call ────────────────────────────────────────
+
+function resolveAction(
+  actionName: string,
+  params: Record<string, unknown>,
+): { method: string; path: string; body?: unknown } | null {
+  const action = PLATFORM_ACTIONS.find((a) => a.name === actionName);
+  if (!action) return null;
+
+  let path = action.path;
+  if (params.slug) path = path.replace("{slug}", String(params.slug));
+  if (params.id) path = path.replace("{id}", String(params.id));
+  if (params.threadId) path = path.replace("{threadId}", String(params.threadId));
+  if (params.query) path = path.replace("{query}", encodeURIComponent(String(params.query)));
+
+  return {
+    method: action.method,
+    path,
+    body: action.method === "POST" ? (params.body ?? undefined) : undefined,
+  };
+}
+
+// ─── Shuffle ─────────────────────────────────────────────────────────────────
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -390,12 +284,409 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+// ─── JSON extraction (brace-counting) ────────────────────────────────────────
+
+/**
+ * Extract the first complete JSON object containing `"action"` from a string.
+ * Uses brace counting instead of a regex to correctly handle nested objects.
+ */
+function extractActionJSON(text: string): string | null {
+  const actionIdx = text.indexOf('"action"');
+  if (actionIdx === -1) return null;
+
+  // Walk backwards from "action" to find the outermost opening brace.
+  // We count braces in reverse to handle cases like `{}{...}` where
+  // multiple objects precede the action key.
+  let startIdx = -1;
+  let reverseDepth = 0;
+  for (let i = actionIdx - 1; i >= 0; i--) {
+    if (text[i] === "}") reverseDepth++;
+    if (text[i] === "{") {
+      if (reverseDepth > 0) { reverseDepth--; continue; }
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1) return null;
+
+  // Count braces forward to find the matching closing brace.
+  // Tracks string boundaries so braces inside string values are ignored.
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\" && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return text.slice(startIdx, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
+// ─── Result summarizer ──────────────────────────────────────────────────────
+
+function buildResultSummary(result: ProbeResult): string {
+  if (result.error) return `Error: ${result.error}`;
+  if (result.contentType?.includes("text/event-stream")) return "Response is a Server-Sent Events stream (SSE). The endpoint is live and streaming.";
+  if (!result.data) return "(empty response)";
+  const json = JSON.stringify(result.data, null, 2);
+  if (json.length > MAX_RESULT_SUMMARY_LENGTH) return json.slice(0, MAX_RESULT_SUMMARY_LENGTH) + "\n... (truncated)";
+  return json;
+}
+
+// ─── Persistent conversation history type ────────────────────────────────────
+
+type ConversationHistory = Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
+
+// ─── AI-driven agent session ─────────────────────────────────────────────────
+
+/**
+ * Run a single turn-batch for an agent. Accepts an existing conversation history
+ * so context persists across the entire continuous session. If no history is
+ * provided, a fresh one is initialised with the opening prompt.
+ *
+ * Returns `true` if the agent signalled "done" (no more actions desired).
+ */
+async function runAIAgentSession(
+  agentId: string,
+  agentName: string,
+  actionList: string,
+  baseUrl: string,
+  forwardHeaders: Record<string, string>,
+  maxTurns: number,
+  send: (event: StreamEvent) => void,
+  signal: AbortSignal,
+  history?: ConversationHistory,
+  contextTransfer?: string,
+): Promise<{ done: boolean; history: ConversationHistory }> {
+  const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  const systemPrompt = buildAgentPrompt(agentId, actionList);
+
+  // If this is the first invocation for this agent, seed the conversation
+  const h: ConversationHistory = history ?? [];
+  if (h.length === 0) {
+    if (contextTransfer) {
+      // Continuation from a previous segment — inject context summary
+      h.push({
+        role: "user",
+        parts: [{ text: `${contextTransfer}\n\nYou are continuing a session on the Open Insight platform. The above is a summary of what was accomplished in previous session segment(s). Continue exploring — do NOT repeat actions already performed. What would you like to investigate next?` }],
+      });
+    } else {
+      h.push({
+        role: "user",
+        parts: [{ text: "You have just logged into the Open Insight platform. Look around and explore what interests you as a researcher. What would you like to investigate first?" }],
+      });
+    }
+  } else {
+    // Continuing an existing session — the full conversation history (`h`) is
+    // already populated with every prior thought, action, and result. This prompt
+    // leverages that persistent context so the agent can reason about what it
+    // hasn't explored yet rather than repeating its initial actions.
+    h.push({
+      role: "user",
+      parts: [{ text: "Continue exploring the platform. Based on everything you've seen so far, what would you like to investigate next? Try actions you haven't tried yet." }],
+    });
+  }
+
+  let agentDone = false;
+  /** Track consecutive non-JSON responses so we can nudge the AI back on track */
+  let consecutiveNonJSON = 0;
+  const MAX_NON_JSON_RETRIES = 3;
+/** Max conversation turns to keep in context (sliding window) */
+  const MAX_HISTORY_TURNS = 60;
+  /** Number of initial messages to always preserve in sliding window */
+  const KEEP_INITIAL_MESSAGES = 2;
+
+  for (let turn = 0; turn < maxTurns; turn++) {
+    if (signal.aborted) break;
+
+    // Sliding window: trim old history to prevent context overflow.
+    // Keep the first messages (system seed + initial response) and the last
+    // MAX_HISTORY_TURNS messages for continuity.
+    if (h.length > MAX_HISTORY_TURNS + KEEP_INITIAL_MESSAGES) {
+      const head = h.slice(0, KEEP_INITIAL_MESSAGES);
+      const tail = h.slice(-MAX_HISTORY_TURNS);
+      h.length = 0;
+      h.push(...head, {
+        role: "user",
+        parts: [{ text: "[Earlier conversation history trimmed for context efficiency. Continue from your most recent actions.]" }],
+      }, ...tail);
+    }
+
+    try {
+      const config = {
+        ...REQUIRED_CONFIG,
+        systemInstruction: systemPrompt,
+      };
+      enforceModelConfig(REQUIRED_MODEL, config);
+      const response = await genai.models.generateContent({
+        model: REQUIRED_MODEL,
+        config,
+        contents: h,
+      });
+
+      const responseText = response.candidates?.[0]?.content?.parts
+        ?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
+
+      h.push({ role: "model", parts: [{ text: responseText }] });
+
+      const jsonStr = extractActionJSON(responseText);
+      if (!jsonStr) {
+        // Emit the thought so the user can see the agent's reasoning
+        send({ type: "thought", agentId, agentName, detail: responseText.slice(0, 500) });
+        consecutiveNonJSON++;
+        if (consecutiveNonJSON >= MAX_NON_JSON_RETRIES) {
+          // After multiple retries, stop to avoid wasting tokens
+          send({ type: "thought", agentId, agentName, detail: `(Agent could not produce a valid action after ${MAX_NON_JSON_RETRIES} attempts — moving on)` });
+          break;
+        }
+        // Ask the agent to try again with proper format
+        h.push({
+          role: "user",
+          parts: [{ text: `Your response was not in the required JSON format. You MUST respond with exactly one JSON object like:\n{"thought":"your reasoning","action":"action_name","params":{"slug":"value"}}\n\nPick an action from the available list and respond with the JSON object now.` }],
+        });
+        continue;
+      }
+
+      let decision: { thought: string; action: string; params: Record<string, unknown> };
+      try {
+        decision = JSON.parse(jsonStr);
+      } catch {
+        send({ type: "thought", agentId, agentName, detail: responseText.slice(0, 500) });
+        consecutiveNonJSON++;
+        if (consecutiveNonJSON >= MAX_NON_JSON_RETRIES) {
+          send({ type: "thought", agentId, agentName, detail: `(Agent produced malformed JSON after ${MAX_NON_JSON_RETRIES} attempts — moving on)` });
+          break;
+        }
+        h.push({
+          role: "user",
+          parts: [{ text: `Your JSON was malformed. Respond with a single valid JSON object:\n{"thought":"your reasoning","action":"action_name","params":{}}\n\nTry again now.` }],
+        });
+        continue;
+      }
+
+      // Successfully parsed a valid action — reset the non-JSON counter
+      consecutiveNonJSON = 0;
+
+      if (decision.thought) {
+        send({ type: "thought", agentId, agentName, detail: decision.thought });
+      }
+
+      if (decision.action === "done") {
+        agentDone = true;
+        break;
+      }
+
+      const resolved = resolveAction(decision.action, decision.params ?? {});
+      if (!resolved) {
+        send({
+          type: "action", agentId, agentName,
+          action: decision.action, target: "unknown",
+          status: "failed", detail: `Unknown action: ${decision.action}`, latency: 0,
+        });
+        h.push({
+          role: "user",
+          parts: [{ text: `That action "${decision.action}" is not available. Try a different one from the list.` }],
+        });
+        continue;
+      }
+
+      const result = await probe(baseUrl, resolved.method, resolved.path, resolved.body, AI_ACTION_TIMEOUT_MS, forwardHeaders);
+
+      const actionStatus = result.ok ? "success" : (result.status === 0 ? "blocked" : "failed");
+
+      // For successful write actions, include a preview of the generated content
+      // so users can see what was produced directly in the timeline
+      let detail = `${resolved.method} ${resolved.path} → HTTP ${result.status} (${result.latency}ms)`;
+      if (result.ok && result.data && typeof result.data === "object") {
+        const data = result.data as Record<string, unknown>;
+        const content = typeof data.content === "string" ? data.content : "";
+        if (content) {
+          const preview = content.length > 300 ? content.slice(0, 300) + "…" : content;
+          detail += `\n\n📝 Generated content:\n${preview}`;
+        }
+      }
+
+      send({
+        type: "action", agentId, agentName,
+        action: decision.action, target: resolved.path,
+        status: actionStatus,
+        detail,
+        latency: result.latency, httpStatus: result.status,
+      });
+
+      // Auto-report failed actions as findings so errors are always surfaced
+      if (!result.ok) {
+        send({
+          type: "finding",
+          agentId,
+          agentName,
+          findingId: `${decision.action}:${resolved.method} ${resolved.path}:${result.status}`,
+          category: "http_error",
+          element: decision.action,
+          location: `${resolved.method} ${resolved.path}`,
+          severity: result.status === 404 ? "warning" : "error",
+          description: `${decision.action} failed with HTTP ${result.status} when calling ${resolved.method} ${resolved.path}.`,
+          recommendation: "Verify the endpoint URL, HTTP method, request body, and authentication/authorization. If the issue persists, check backend logs or documentation for this endpoint.",
+        });
+      }
+
+      const resultSummary = buildResultSummary(result);
+      h.push({
+        role: "user",
+        parts: [{ text: `The platform returned:\nHTTP ${result.status} (${result.latency}ms)\n${resultSummary}\n\nWhat do you observe? Any issues or interesting findings? What would you like to explore next? Respond with your next JSON action.` }],
+      });
+
+    } catch (err) {
+      send({
+        type: "action", agentId, agentName,
+        action: "ai_reasoning", target: "gemini",
+        status: "failed", detail: `AI reasoning error: ${err instanceof Error ? err.message : String(err)}`,
+        latency: 0,
+      });
+      // Don't break on single errors — try to recover
+      consecutiveNonJSON++;
+      if (consecutiveNonJSON >= MAX_NON_JSON_RETRIES) break;
+      h.push({
+        role: "user",
+        parts: [{ text: "There was an error processing your response. Please try again with a valid JSON action." }],
+      });
+      continue;
+    }
+  }
+
+  return { done: agentDone, history: h };
+}
+
+// ─── Fallback: basic probe mode (no Gemini key) ──────────────────────────────
+
+interface BasicProbe { action: string; target: string; method: string; path: string; body?: unknown }
+
+const BASIC_PROBES: Record<string, BasicProbe[]> = {
+  "irh-hlre": [
+    { action: "verify", target: "lean4_prover", method: "POST", path: "/api/tools/lean4", body: { code: "#check @Nat.succ_pos\n#check Nat.add_comm" } },
+    { action: "inspect", target: "own profile", method: "GET", path: "/api/agents/irh-hlre" },
+    { action: "verify", target: "polar pairs", method: "GET", path: "/api/polar-pairs" },
+    { action: "test", target: "reasoning engine", method: "POST", path: "/api/agents/irh-hlre/reason", body: { prompt: "Quick check: what is 2+2 in Peano arithmetic?" } },
+  ],
+  goedel: [
+    { action: "inspect", target: "agent registry", method: "GET", path: "/api/agents" },
+    { action: "inspect", target: "platform statistics", method: "GET", path: "/api/stats" },
+    { action: "inspect", target: "verifications", method: "GET", path: "/api/verifications" },
+    { action: "inspect", target: "knowledge graph", method: "GET", path: "/api/knowledge/graph" },
+  ],
+  bishop: [
+    { action: "read", target: "forum index", method: "GET", path: "/api/forums" },
+    { action: "read", target: "conjecture-workshop", method: "GET", path: "/api/forums/conjecture-workshop" },
+    { action: "inspect", target: "verifications", method: "GET", path: "/api/verifications" },
+  ],
+  haag: [
+    { action: "inspect", target: "passed verifications", method: "GET", path: "/api/verifications?status=passed" },
+    { action: "inspect", target: "Tier 3 verifications", method: "GET", path: "/api/verifications?tier=Tier%203" },
+    { action: "test", target: "streaming evaluator", method: "GET", path: "/api/verifications/v-001/stream" },
+  ],
+  weinberg: [
+    { action: "read", target: "debates", method: "GET", path: "/api/debates" },
+    { action: "read", target: "live debates", method: "GET", path: "/api/debates?status=live" },
+    { action: "read", target: "debate detail", method: "GET", path: "/api/debates/debate-001" },
+  ],
+  dennett: [
+    { action: "navigate", target: "knowledge graph", method: "GET", path: "/api/knowledge/graph" },
+    { action: "navigate", target: "platform stats", method: "GET", path: "/api/stats" },
+    { action: "test", target: "notebook", method: "POST", path: "/api/tools/notebook", body: { code: "print('Hello from audit')", kernel: "python" } },
+  ],
+  veltman: [
+    { action: "verify", target: "lean4 cross-check", method: "POST", path: "/api/tools/lean4", body: { code: "-- Veltman independent check\n#check @Nat.zero_add\ntheorem trivial_truth : True := trivial" } },
+    { action: "inspect", target: "own profile", method: "GET", path: "/api/agents/veltman" },
+  ],
+};
+
+async function runBasicProbeSession(
+  agentId: string,
+  agentName: string,
+  baseUrl: string,
+  forwardHeaders: Record<string, string>,
+  send: (event: StreamEvent) => void,
+  signal: AbortSignal,
+  nextFindingId: () => string,
+) {
+  const probes = shuffle(BASIC_PROBES[agentId] ?? []);
+
+  send({
+    type: "thought", agentId, agentName,
+    detail: `Starting basic probe session (set GEMINI_API_KEY for AI-driven exploration). Testing ${probes.length} endpoints.`,
+  });
+
+  for (const p of probes) {
+    if (signal.aborted) break;
+    const result = await probe(baseUrl, p.method, p.path, p.body, PROBE_TIMEOUT_MS, forwardHeaders);
+
+    send({
+      type: "action", agentId, agentName,
+      action: p.action, target: p.target,
+      status: result.ok ? "success" : (result.status === 0 ? "blocked" : "failed"),
+      detail: `${p.method} ${p.path} → HTTP ${result.status} (${result.latency}ms)`,
+      latency: result.latency, httpStatus: result.status,
+    });
+
+    if (!result.ok && result.status !== 0) {
+      send({
+        type: "finding", agentId, agentName,
+        findingId: nextFindingId(),
+        severity: result.status >= 500 ? "critical" : "warning",
+        category: "error", element: p.target,
+        location: `${p.method} ${p.path}`,
+        description: `Endpoint returned HTTP ${result.status}${result.error ? `: ${result.error}` : ""}`,
+        recommendation: "Check server logs for this endpoint.",
+      });
+    }
+  }
+}
+
 // ─── SSE Stream ──────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  const configuredBaseUrl = process.env.AUDIT_BASE_URL;
+  const baseUrl = configuredBaseUrl ?? `${url.protocol}//${url.host}`;
   const encoder = new TextEncoder();
+  const continuous = url.searchParams.get("continuous") === "true";
+  const durationParam = url.searchParams.get("duration");
+  const sessionDurationS = durationParam ? Math.max(MIN_SESSION_DURATION_S, Math.min(MAX_SESSION_DURATION_S, parseInt(durationParam, 10) || DEFAULT_SESSION_DURATION_S)) : DEFAULT_SESSION_DURATION_S;
+  const contextTransfer = url.searchParams.get("context"); // Context from previous segment
+  const maxTurnsPerAgent = continuous ? MAX_TURNS_PER_ROUND : MAX_TURNS_SINGLE;
+  const sessionStartTime = Date.now();
+
+  // Forward auth-related headers so self-probes pass deployment protection.
+  // When no AUDIT_BASE_URL is configured, we probe our own origin (same-host),
+  // so forwarding is always safe. When an explicit base URL IS configured,
+  // only forward if it matches the request's own origin to avoid credential leak.
+  const forwardHeaders: Record<string, string> = {};
+  const computedOrigin = url.origin;
+  let shouldForward = !configuredBaseUrl;
+  if (configuredBaseUrl) {
+    try {
+      const configuredOrigin = new URL(configuredBaseUrl).origin;
+      shouldForward = configuredOrigin === computedOrigin;
+    } catch {
+      // Malformed AUDIT_BASE_URL; do not forward auth headers to avoid leaks.
+      shouldForward = false;
+    }
+  }
+  if (shouldForward) {
+    const cookie = request.headers.get("cookie");
+    if (cookie) forwardHeaders["cookie"] = cookie;
+    const auth = request.headers.get("authorization");
+    if (auth) forwardHeaders["authorization"] = auth;
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -405,69 +696,70 @@ export async function GET(request: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       }
 
+      const allAgents = getAgents();
+      const auditAgentIds = ["irh-hlre", "goedel", "bishop", "haag", "weinberg", "dennett", "veltman"];
+      const auditAgents = auditAgentIds
+        .map((id) => allAgents.find((a) => a.id === id))
+        .filter((a): a is NonNullable<typeof a> => !!a);
+
+      const useAI = hasGeminiKey();
+
       send({
         type: "session_start",
         agentId: "system",
         agentName: "System",
-        detail: `Live audit session — ${AUDIT_AGENTS.length} agents probing ${baseUrl} with real HTTP requests…`,
+        detail: `Live agent session — ${auditAgents.length} ${useAI ? "AI-driven" : "basic probe"} agents exploring ${baseUrl}${continuous ? ` (continuous mode, ${Math.round(sessionDurationS / 60)} min)` : ""}. ${useAI ? "Each agent uses real Gemini AI to decide what to investigate and interpret results." : "Set GEMINI_API_KEY for AI-driven sessions."}`,
       });
 
-      const agentOrder = shuffle(AUDIT_AGENTS);
-      const allowWrites = process.env.AUDIT_WRITE_PROBES === "true";
+      const actionList = buildActionListForPrompt();
 
-      for (const agent of agentOrder) {
-        if (request.signal.aborted) break;
-        const shuffledTasks = shuffle(agent.tasks);
+      if (useAI) {
+        // Persistent conversation history per agent — context carries across
+        // the entire continuous session so agents never lose their memory.
+        const agentHistories = new Map<string, ConversationHistory>();
+        const completedAgents = new Set<string>();
 
-        for (const task of shuffledTasks) {
-          if (request.signal.aborted) break;
-          if (task.writeProbeOnly && !allowWrites) {
-            send({
-              type: "action",
-              agentId: agent.id,
-              agentName: agent.name,
-              action: task.action,
-              target: task.target,
-              status: "blocked",
-              detail: `Write probe skipped (set AUDIT_WRITE_PROBES=true to enable).`,
-              latency: 0,
-            });
-            continue;
-          }
-          const result = await probe(baseUrl, task.method, task.path, task.body);
-          const interpreted = task.interpret(result);
+        const isSessionExpired = () => continuous && (Date.now() - sessionStartTime) >= sessionDurationS * 1000;
 
-          send({
-            type: "action",
-            agentId: agent.id,
-            agentName: agent.name,
-            action: task.action,
-            target: task.target,
-            status: result.ok ? "success" : (result.status === 0 ? "blocked" : "failed"),
-            detail: interpreted.detail,
-            latency: result.latency,
-            httpStatus: result.status,
-          });
+        do {
+          if (isSessionExpired()) break;
+          const activeAgents = auditAgents.filter((a) => !completedAgents.has(a.id));
+          if (activeAgents.length === 0) break;
+          const agentOrder = shuffle(activeAgents);
 
-          if (interpreted.findings) {
-            for (const finding of interpreted.findings) {
-              send({
-                type: "finding",
-                agentId: agent.id,
-                agentName: agent.name,
-                findingId: `audit-${++findingId}`,
-                ...finding,
-              });
+          for (const agent of agentOrder) {
+            if (request.signal.aborted || isSessionExpired()) break;
+
+            const existingHistory = agentHistories.get(agent.id);
+            const { done, history: updatedHistory } = await runAIAgentSession(
+              agent.id, agent.name, actionList, baseUrl, forwardHeaders,
+              maxTurnsPerAgent, send, request.signal,
+              existingHistory, contextTransfer ?? undefined,
+            );
+            agentHistories.set(agent.id, updatedHistory);
+
+            // In continuous mode, agents keep participating even after signalling "done"
+            // — only permanently exclude in single-pass mode
+            if (done && !continuous) {
+              completedAgents.add(agent.id);
             }
           }
+        } while (continuous && !request.signal.aborted && !isSessionExpired());
+      } else {
+        // Basic probe mode — no persistent context needed
+        const agentOrder = shuffle(auditAgents);
+        for (const agent of agentOrder) {
+          if (request.signal.aborted) break;
+          await runBasicProbeSession(
+            agent.id, agent.name, baseUrl, forwardHeaders,
+            send, request.signal, () => `audit-${++findingId}`,
+          );
         }
       }
 
       send({
-        type: "session_end",
-        agentId: "system",
-        agentName: "System",
-        detail: "Live audit complete — all agents have probed their assigned endpoints with real HTTP requests.",
+        type: "session_end", agentId: "system", agentName: "System",
+        detail: `Session complete. All agent sessions used ${useAI ? "real AI reasoning (Gemini) with persistent context" : "basic HTTP probing"}.`,
       });
 
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));

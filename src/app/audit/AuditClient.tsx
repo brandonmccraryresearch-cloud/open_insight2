@@ -1,60 +1,21 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import {
+  type AgentAction,
+  type AgentFinding,
+  type SessionState,
+  getSessionState,
+  subscribe,
+  setSelectedDuration,
+  getTimeRemaining,
+  getElapsedTime,
+  startSession,
+  stopSession,
+  pauseSession,
+  resumeSession,
+} from "@/lib/agentSessionStore";
 
-interface AgentAction {
-  agentId: string;
-  agentName: string;
-  action: string;
-  target: string;
-  status: "success" | "failed" | "blocked";
-  detail: string;
-  latency?: number;
-  httpStatus?: number;
-}
-
-interface AuditFinding {
-  id: string;
-  agentId: string;
-  agentName: string;
-  severity: "critical" | "warning" | "info";
-  category: "mock-data" | "non-functional" | "placeholder" | "inconsistency" | "error" | "emulation" | "incomplete";
-  element: string;
-  location: string;
-  description: string;
-  recommendation: string;
-}
-
-interface AuditReport {
-  timestamp: string;
-  actions: AgentAction[];
-  findings: AuditFinding[];
-  summary: {
-    total: number;
-    critical: number;
-    warnings: number;
-    info: number;
-    actionsAttempted: number;
-    actionsSucceeded: number;
-    actionsFailed: number;
-  };
-  agentParticipants: string[];
-}
-
-const severityStyles: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: "rgba(239,68,68,0.1)", text: "#ef4444", label: "Critical" },
-  warning: { bg: "rgba(245,158,11,0.1)", text: "#f59e0b", label: "Warning" },
-  info: { bg: "rgba(99,102,241,0.1)", text: "#6366f1", label: "Info" },
-};
-
-const categoryLabels: Record<string, string> = {
-  "mock-data": "Mock Data",
-  "non-functional": "Non-Functional",
-  placeholder: "Placeholder",
-  inconsistency: "Inconsistency",
-  error: "Error",
-  emulation: "Emulation",
-  incomplete: "Incomplete",
-};
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const PRESET_DURATIONS = [
   { label: "5 min", seconds: 5 * 60 },
@@ -63,376 +24,544 @@ const PRESET_DURATIONS = [
   { label: "1 hour", seconds: 60 * 60 },
 ];
 
+const severityStyles: Record<string, { bg: string; text: string; label: string }> = {
+  critical: { bg: "rgba(239,68,68,0.1)", text: "#ef4444", label: "Critical" },
+  error: { bg: "rgba(220,38,38,0.1)", text: "#dc2626", label: "Error" },
+  warning: { bg: "rgba(245,158,11,0.1)", text: "#f59e0b", label: "Warning" },
+  info: { bg: "rgba(99,102,241,0.1)", text: "#6366f1", label: "Info" },
+};
+
+const categoryLabels: Record<string, string> = {
+  "mock-data": "Seed-Only Data",
+  "non-functional": "Non-Functional",
+  placeholder: "Placeholder",
+  inconsistency: "Inconsistency",
+  error: "Error",
+  http_error: "HTTP Error",
+  emulation: "Emulation",
+  incomplete: "Incomplete",
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export default function AuditClient() {
-  const [report, setReport] = useState<AuditReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [severityFilter, setSeverityFilter] = useState<string>("all");
+  // Subscribe to global persistent session store (survives navigation)
+  const session: SessionState = useSyncExternalStore(subscribe, getSessionState, getSessionState);
+  const { actions: streamActions, findings: streamFindings, log: sessionLog, streaming, active, error } = session;
+
+  // Local UI state
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>("all");
+  const [expandedActionIdx, setExpandedActionIdx] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Autonomous mode state
-  const [autonomousActive, setAutonomousActive] = useState(false);
-  const [selectedDuration, setSelectedDuration] = useState(PRESET_DURATIONS[0].seconds);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [cycleCount, setCycleCount] = useState(0);
-  const [sessionLog, setSessionLog] = useState<string[]>([]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const auditIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [activeTab, setActiveTab] = useState<"timeline" | "agents" | "findings" | "log">("timeline");
 
-  // Streaming actions state (real-time feed)
-  const [streamActions, setStreamActions] = useState<AgentAction[]>([]);
-  const [streamFindings, setStreamFindings] = useState<AuditFinding[]>([]);
-  const [streaming, setStreaming] = useState(false);
+  const streamScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const addLog = useCallback((msg: string) => {
-    const ts = new Date().toLocaleTimeString();
-    setSessionLog((prev) => [...prev, `[${ts}] ${msg}`]);
-  }, []);
-
-  async function runAudit() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/audit");
-      if (!res.ok) throw new Error("Audit failed");
-      const data = (await res.json()) as AuditReport;
-      setReport(data);
-      return data;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /** Stream audit events via SSE for real-time agent activity display */
-  async function runStreamAudit() {
-    setStreaming(true);
-    setStreamActions([]);
-    setStreamFindings([]);
-    setError(null);
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const res = await fetch("/api/audit/stream", { signal: controller.signal });
-      if (!res.body) throw new Error("No stream body");
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        // Keep the last (potentially incomplete) line in the buffer
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6).trim();
-          if (payload === "[DONE]") break;
-          try {
-            const event = JSON.parse(payload) as {
-              type: string;
-              agentId: string;
-              agentName: string;
-              action?: string;
-              target?: string;
-              status?: string;
-              detail?: string;
-              latency?: number;
-              httpStatus?: number;
-              severity?: string;
-              category?: string;
-              element?: string;
-              location?: string;
-              description?: string;
-              recommendation?: string;
-              findingId?: string;
-            };
-            if (event.type === "action" || event.type === "session_start" || event.type === "session_end") {
-              setStreamActions((prev) => [...prev, {
-                agentId: event.agentId,
-                agentName: event.agentName,
-                action: event.action ?? event.type,
-                target: event.target ?? "",
-                status: (event.status as AgentAction["status"]) ?? "success",
-                detail: event.detail ?? "",
-                latency: event.latency,
-                httpStatus: event.httpStatus,
-              }]);
-              addLog(`${event.agentName} → ${event.action ?? event.type}${event.target ? ` on ${event.target}` : ""}${event.latency ? ` (${event.latency}ms)` : ""}`);
-            } else if (event.type === "finding") {
-              setStreamFindings((prev) => [...prev, {
-                id: event.findingId ?? `f-${prev.length}`,
-                agentId: event.agentId,
-                agentName: event.agentName,
-                severity: (event.severity as AuditFinding["severity"]) ?? "info",
-                category: (event.category as AuditFinding["category"]) ?? "error",
-                element: event.element ?? "",
-                location: event.location ?? "",
-                description: event.description ?? "",
-                recommendation: event.recommendation ?? "",
-              }]);
-            }
-          } catch { /* ignore parse errors */ }
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setError(err instanceof Error ? err.message : "Stream error");
-      }
-    }
-    setStreaming(false);
-  }
-
-  function startAutonomousMode() {
-    setAutonomousActive(true);
-    setTimeRemaining(selectedDuration);
-    setCycleCount(0);
-    setSessionLog([]);
-    addLog(`Autonomous Agent Mode activated — ${PRESET_DURATIONS.find((d) => d.seconds === selectedDuration)?.label} session`);
-    addLog("All agents operating as their PhD-level personas — each starting a characteristic research task…");
-
-    // Run initial streaming audit
-    addLog("Session starting: agents initializing with random opening tasks…");
-    runStreamAudit().then(() => {
-      setCycleCount(1);
-      addLog("Initial session complete — switching to periodic cycle mode.");
-      // Also get the snapshot report for the summary cards
-      runAudit().then((data) => {
-        if (data) {
-          addLog(`Snapshot: ${data.summary.actionsAttempted} actions, ${data.summary.total} findings (${data.summary.critical} critical)`);
-          addLog(`Active agents: ${data.agentParticipants.join(", ")}`);
-        }
-      });
-    });
-  }
-
-  function stopAutonomousMode() {
-    setAutonomousActive(false);
-    setTimeRemaining(0);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (auditIntervalRef.current) clearInterval(auditIntervalRef.current);
-    intervalRef.current = null;
-    auditIntervalRef.current = null;
-    abortRef.current?.abort();
-    abortRef.current = null;
-    addLog("Autonomous Mode ended. Final report ready for export.");
-  }
-
-  // Countdown timer
+  // Countdown timer — polls getTimeRemaining() every second
   useEffect(() => {
-    if (!autonomousActive) return;
-
-    intervalRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          stopAutonomousMode();
-          return 0;
-        }
-        return prev - 1;
-      });
+    if (!active) { setTimeRemaining(0); setElapsed(0); return; }
+    const id = setInterval(() => {
+      const rem = getTimeRemaining();
+      setTimeRemaining(rem);
+      setElapsed(getElapsedTime());
+      if (rem <= 0 && active) {
+        // Let the server-side time enforcement handle ending
+      }
     }, 1000);
+    return () => clearInterval(id);
+  }, [active]);
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autonomousActive]);
-
-  // Periodic re-audit every 60 seconds during autonomous mode
+  // Auto-scroll
   useEffect(() => {
-    if (!autonomousActive) return;
+    if (streamScrollRef.current) {
+      streamScrollRef.current.scrollTop = streamScrollRef.current.scrollHeight;
+    }
+  }, [streamActions]);
 
-    auditIntervalRef.current = setInterval(() => {
-      setCycleCount((prev) => {
-        const next = prev + 1;
-        addLog(`Cycle ${next}: Agents re-engaging platform features...`);
-        runAudit().then((data) => {
-          if (data) {
-            addLog(`Cycle ${next} complete: ${data.summary.actionsAttempted} actions, ${data.summary.total} error reports`);
-          }
-        });
-        return next;
-      });
-    }, 60000);
+  // ─── Derived data ────────────────────────────────────────────────────────
 
-    return () => {
-      if (auditIntervalRef.current) clearInterval(auditIntervalRef.current);
+  const activeAgents = Array.from(
+    new Map(
+      streamActions
+        .filter((a) => a.agentId && a.agentId !== "system")
+        .map((a) => [a.agentId, a.agentName] as const)
+    ).entries()
+  ).map(([id, name]) => ({ id, name }));
+
+  const filteredStreamActions = selectedAgentFilter === "all"
+    ? streamActions
+    : streamActions.filter((a) => a.agentId === selectedAgentFilter || a.type === "session_start" || a.type === "session_end");
+
+  const agentStats = useCallback((agentId: string) => {
+    const aa = streamActions.filter((a) => a.agentId === agentId);
+    return {
+      actions: aa.filter((a) => a.type === "action").length,
+      thoughts: aa.filter((a) => a.type === "thought").length,
+      findings: streamFindings.filter((f) => f.agentId === agentId).length,
+      succeeded: aa.filter((a) => a.type === "action" && a.status === "success").length,
+      failed: aa.filter((a) => a.type === "action" && (a.status === "failed" || a.status === "blocked")).length,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autonomousActive]);
+  }, [streamActions, streamFindings]);
+
+  const totalStats = {
+    actions: streamActions.filter((a) => a.type === "action").length,
+    thoughts: streamActions.filter((a) => a.type === "thought").length,
+    findings: streamFindings.length,
+    succeeded: streamActions.filter((a) => a.type === "action" && a.status === "success").length,
+    failed: streamActions.filter((a) => a.type === "action" && (a.status === "failed" || a.status === "blocked")).length,
+  };
+
+  const actionCount = totalStats.actions;
+  const elapsedMin = elapsed / 60;
+  const actionsPerMin = elapsedMin > 0 ? actionCount / elapsedMin : 0;
+  const successRate = actionCount > 0 ? (totalStats.succeeded / actionCount) * 100 : 0;
+  const actionLatencies = streamActions.filter((a) => a.type === "action" && a.latency != null).map((a) => a.latency!);
+  const avgResponseTime = actionLatencies.length > 0 ? actionLatencies.reduce((s, v) => s + v, 0) / actionLatencies.length : 0;
 
   function formatTime(s: number): string {
     const m = Math.floor(s / 60);
-    const sec = s % 60;
+    const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, "0")}`;
   }
 
-  function generateMarkdownReport(): string {
-    if (!report) return "";
-    const mode = autonomousActive || cycleCount > 0 ? "Autonomous" : "Manual";
+  function copyReport() {
     const lines: string[] = [
-      `## 🔍 Open Insight Platform — Live Audit Report`,
+      `## 🔍 Open Insight Platform — Agent Session Report`,
       ``,
-      `**Generated:** ${new Date(report.timestamp).toLocaleString()}`,
-      `**Mode:** ${mode}${cycleCount > 0 ? ` (${cycleCount} cycle${cycleCount !== 1 ? "s" : ""})` : ""} — **Live HTTP probing**`,
-      `**Participating Agents:** ${report.agentParticipants.join(", ")}`,
+      `**Generated:** ${new Date().toLocaleString()}`,
+      `**Mode:** Autonomous — **Live HTTP probing** (persistent agent context)`,
+      `**Participating Agents:** ${activeAgents.map(a => a.name).join(", ")}`,
       ``,
       `### Agent Activity Summary`,
       `| Metric | Count |`,
       `|--------|-------|`,
-      `| Actions Attempted | ${report.summary.actionsAttempted} |`,
-      `| ✅ Succeeded | ${report.summary.actionsSucceeded} |`,
-      `| ❌ Failed/Blocked | ${report.summary.actionsFailed} |`,
-      ``,
-      `### Error Report Summary`,
-      `| Severity | Count |`,
-      `|----------|-------|`,
-      `| 🔴 Critical | ${report.summary.critical} |`,
-      `| 🟡 Warning | ${report.summary.warnings} |`,
-      `| 🔵 Info | ${report.summary.info} |`,
-      `| **Total** | **${report.summary.total}** |`,
-      ``,
-      `### Agent Actions`,
+      `| Actions Attempted | ${totalStats.actions} |`,
+      `| ✅ Succeeded | ${totalStats.succeeded} |`,
+      `| ❌ Failed/Blocked | ${totalStats.failed} |`,
+      `| 💭 Thoughts | ${totalStats.thoughts} |`,
+      `| 📋 Findings | ${totalStats.findings} |`,
       ``,
     ];
 
-    for (const a of report.actions) {
-      const icon = a.status === "success" ? "✅" : a.status === "blocked" ? "🚫" : "❌";
-      const httpTag = a.httpStatus ? ` \`[HTTP ${a.httpStatus}]\`` : "";
-      const latencyTag = a.latency ? ` ${a.latency}ms` : "";
-      lines.push(`- ${icon} **${a.agentName}** → \`${a.action}\` on \`${a.target}\`: ${a.detail}${httpTag}${latencyTag}`);
+    if (streamActions.length > 0) {
+      lines.push(`### Activity Timeline`, ``);
+      for (const a of streamActions) {
+        if (a.type === "session_start" || a.type === "session_end") {
+          lines.push(`- ⚙ **System**: ${a.detail}`);
+        } else if (a.type === "thought") {
+          lines.push(`- 💭 **${a.agentName}**: ${(a.detail || "").slice(0, 300)}`);
+        } else {
+          const icon = a.status === "success" ? "✅" : a.status === "blocked" ? "🚫" : "❌";
+          const httpTag = a.httpStatus ? ` \`[HTTP ${a.httpStatus}]\`` : "";
+          const latencyTag = a.latency ? ` ${a.latency}ms` : "";
+          lines.push(`- ${icon} **${a.agentName}** → \`${a.action}\` on \`${a.target}\`: ${a.detail}${httpTag}${latencyTag}`);
+        }
+      }
+      lines.push(``);
     }
-    lines.push(``);
 
-    lines.push(`### Error Reports (Findings)`);
-    lines.push(``);
-
-    for (const f of report.findings) {
-      const icon = f.severity === "critical" ? "🔴" : f.severity === "warning" ? "🟡" : "🔵";
-      lines.push(`#### ${icon} ${f.element}`);
-      lines.push(``);
-      lines.push(`- **Severity:** ${f.severity}`);
-      lines.push(`- **Category:** ${categoryLabels[f.category] ?? f.category}`);
-      lines.push(`- **Location:** \`${f.location}\``);
-      lines.push(`- **Reported by:** ${f.agentName}`);
-      lines.push(`- **Description:** ${f.description}`);
-      lines.push(`- **Recommendation:** ${f.recommendation}`);
-      lines.push(``);
+    if (streamFindings.length > 0) {
+      lines.push(`### Error Reports (Findings)`, ``);
+      for (const f of streamFindings) {
+        const icon =
+          f.severity === "critical"
+            ? "🔴"
+            : f.severity === "error"
+              ? "🟠"
+              : f.severity === "warning"
+                ? "🟡"
+                : "🔵";
+        lines.push(`- **Severity:** ${f.severity}`);
+        lines.push(`- **Category:** ${categoryLabels[f.category] ?? f.category}`);
+        lines.push(`- **Location:** \`${f.location}\``);
+        lines.push(`- **Reported by:** ${f.agentName}`);
+        lines.push(`- **Description:** ${f.description}`);
+        lines.push(`- **Recommendation:** ${f.recommendation}`);
+        lines.push(``);
+      }
     }
 
     if (sessionLog.length > 0) {
-      lines.push(`### Session Log`);
-      lines.push(``);
-      lines.push("```");
-      for (const entry of sessionLog) {
-        lines.push(entry);
-      }
-      lines.push("```");
-      lines.push(``);
+      lines.push(`### Session Log`, ``, "```");
+      for (const entry of sessionLog) lines.push(entry);
+      lines.push("```", ``);
     }
 
-    return lines.join("\n");
-  }
-
-  function copyReport() {
-    const md = generateMarkdownReport();
-    navigator.clipboard.writeText(md).then(() => {
+    navigator.clipboard.writeText(lines.join("\n")).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   }
 
-  const filteredFindings = report
-    ? severityFilter === "all"
-      ? report.findings
-      : report.findings.filter((f) => f.severity === severityFilter)
-    : [];
+  // ─── "Take me there" link generator ──────────────────────────────────────
 
-  return (
-    <div className="page-enter p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Platform Audit</h1>
-          <p className="text-sm text-[var(--text-secondary)]">
-            Live API probing by active agents — real HTTP requests, real status codes, real findings
-          </p>
+  function getActionLink(a: AgentAction): string | null {
+    if (a.status !== "success" || a.type !== "action") return null;
+    const target = a.target || "";
+    const action = a.action || "";
+
+    // Forum thread actions — link to the specific thread page when possible
+    if (action === "reply_to_thread") {
+      // Target: /api/forums/{slug}/threads/{threadId}/replies
+      const threadMatch = target.match(/\/api\/forums\/([^/]+)\/threads\/([^/]+)\/replies/);
+      if (threadMatch) return `/forums/${threadMatch[1]}/threads/${threadMatch[2]}`;
+      const forumMatch = target.match(/\/api\/forums\/([^/]+)/);
+      if (forumMatch) return `/forums/${forumMatch[1]}`;
+    }
+    if (action === "create_thread") {
+      const forumMatch = target.match(/\/api\/forums\/([^/]+)/);
+      if (forumMatch) return `/forums/${forumMatch[1]}`;
+    }
+    if (action === "read_forum" || action === "browse_forums") {
+      const forumMatch = target.match(/\/api\/forums\/([^/]+)$/);
+      if (forumMatch) return `/forums/${forumMatch[1]}`;
+      return `/forums`;
+    }
+
+    // Debate actions
+    if (action === "create_debate" || action === "post_debate_message" || action === "view_live_debates" || action === "view_debate") {
+      const debateMatch = target.match(/\/api\/debates\/([^/]+)/);
+      if (debateMatch && debateMatch[1] !== "create") return `/debates/${debateMatch[1]}`;
+      return `/debates`;
+    }
+
+    // Verification actions
+    if (action === "submit_verification" || action === "view_verifications" || action === "view_passed_verifications" || action === "view_tier3_verifications") {
+      return `/verification`;
+    }
+
+    // Agent/reasoning actions
+    if (action === "view_agents" || action === "view_agent" || action === "test_reasoning_engine") {
+      const agentMatch = target.match(/\/api\/agents\/([^/]+)/);
+      if (agentMatch) return `/agents/${agentMatch[1]}`;
+      return `/agents`;
+    }
+
+    // MathMark tools
+    if (action.startsWith("test_mathmark_")) {
+      return `/mathmark`;
+    }
+
+    // Playwright browser interaction tools — link to the browsed URL or agent
+    if (action === "page_navigate" || action === "page_read" || action === "page_find_elements" || action === "page_screenshot") {
+      if (a.agentId) return `/agents/${a.agentId}`;
+      return `/agents`;
+    }
+
+    // Scientific MCP tools → MathMark page
+    if (action === "search_arxiv" || action === "lookup_particle_data" || action === "run_quantum_simulation" || action === "run_symbolic_math" || action === "run_molecular_dynamics" || action === "run_neural_network") {
+      return `/mathmark`;
+    }
+
+    return null;
+  }
+
+  // ─── Action row renderer (shared between autonomous and standalone views)
+
+  function renderActionRow(a: AgentAction) {
+    const isThought = a.type === "thought";
+    const isSystem = a.type === "session_start" || a.type === "session_end";
+    const isExpanded = expandedActionIdx === a.idx;
+
+    if (isSystem) {
+      return (
+        <div key={a.idx} className="flex items-start gap-2 px-3 py-2 rounded-lg text-xs bg-[var(--accent-indigo)]/5 border-l-2 border-[var(--accent-indigo)]">
+          <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp}</span>
+          <span className="text-[var(--accent-indigo)] font-medium">⚙ {a.detail}</span>
         </div>
-        <div className="flex gap-2">
-          {report && (
-            <button
-              onClick={copyReport}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-elevated)] hover:bg-[var(--bg-card-hover)] transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-              </svg>
-              {copied ? "Copied!" : "Copy Report"}
-            </button>
+      );
+    }
+
+    if (isThought) {
+      return (
+        <div
+          key={a.idx}
+          className="px-3 py-2 rounded-lg text-xs bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40 cursor-pointer hover:bg-[var(--accent-gold)]/10 transition-colors"
+          onClick={() => setExpandedActionIdx(isExpanded ? null : a.idx)}
+        >
+          <div className="flex items-start gap-2">
+            <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp}</span>
+            <span className="text-[var(--accent-teal)] font-semibold shrink-0">{a.agentName}</span>
+            <span className="text-[var(--accent-gold)]">💭</span>
+            <span className="text-[var(--text-secondary)] italic flex-1 min-w-0">
+              {isExpanded ? "" : `${(a.detail || "").slice(0, 200)}${(a.detail || "").length > 200 ? "…" : ""}`}
+            </span>
+            <span className="text-[10px] text-[var(--text-muted)] ml-auto shrink-0">{isExpanded ? "▼" : "▶"}</span>
+          </div>
+          {isExpanded && (
+            <div className="mt-2 ml-8 p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--accent-gold)]/20 text-[var(--text-secondary)] italic whitespace-pre-wrap text-[11px] leading-relaxed">
+              {a.detail}
+            </div>
           )}
-          <button
-            onClick={runAudit}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--accent-indigo)] hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                Running Audit…
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </div>
+      );
+    }
+
+    // Action row
+    const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
+    const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
+    return (
+      <div
+        key={a.idx}
+        className="px-3 py-2 rounded-lg text-xs hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer group"
+        onClick={() => setExpandedActionIdx(isExpanded ? null : a.idx)}
+      >
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp}</span>
+          <span className="font-mono font-bold shrink-0 w-4 text-center" style={{ color: statusColor }}>{statusIcon}</span>
+          <span className="text-[var(--accent-teal)] font-semibold shrink-0">{a.agentName}</span>
+          <span className="text-[var(--text-muted)]">→</span>
+          <span className="font-mono text-[var(--text-primary)] font-semibold shrink-0">{a.action}</span>
+          {a.target && <span className="text-[var(--text-secondary)] truncate max-w-[200px]">{a.target}</span>}
+          <div className="flex items-center gap-1.5 ml-auto shrink-0">
+            {a.httpStatus ? (
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-md font-medium" style={{ color: statusColor, backgroundColor: `${statusColor}15` }}>
+                HTTP {a.httpStatus}
+              </span>
+            ) : null}
+            {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)]">{a.latency}ms</span> : null}
+            <span className="text-[10px] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity">{isExpanded ? "▼" : "▶"}</span>
+          </div>
+        </div>
+        {isExpanded && a.detail && (
+          <div className="mt-2 ml-8 p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[11px] font-mono text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto">
+            {a.detail}
+          </div>
+        )}
+        {isExpanded && (() => {
+          const link = getActionLink(a);
+          return link ? (
+            <div className="mt-1 ml-8">
+              <a
+                href={link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[10px] font-medium text-[var(--accent-teal)] hover:text-[var(--accent-gold)] transition-colors bg-[var(--accent-teal)]/10 hover:bg-[var(--accent-gold)]/10 px-2.5 py-1 rounded-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                 </svg>
-                Run Agent Audit
-              </>
-            )}
+                Take me there →
+              </a>
+            </div>
+          ) : null;
+        })()}
+      </div>
+    );
+  }
+
+  // ─── Stats bar component ─────────────────────────────────────────────────
+
+  function StatsBar({ stats }: { stats: typeof totalStats }) {
+    return (
+      <div className="flex items-center gap-4 text-[11px] font-mono flex-wrap" role="status" aria-label="Session statistics">
+        <span className="flex items-center gap-1" aria-label={`${stats.succeeded} succeeded`}>
+          <span className="w-2 h-2 rounded-full bg-[#10b981]" />
+          <span className="text-[var(--text-muted)]">{stats.succeeded}</span>
+          <span className="text-[var(--text-muted)] opacity-60">ok</span>
+        </span>
+        <span className="flex items-center gap-1" aria-label={`${stats.failed} failed`}>
+          <span className="w-2 h-2 rounded-full bg-[#ef4444]" />
+          <span className="text-[var(--text-muted)]">{stats.failed}</span>
+          <span className="text-[var(--text-muted)] opacity-60">fail</span>
+        </span>
+        <span className="flex items-center gap-1" aria-label={`${stats.thoughts} thoughts`}>
+          <span className="text-[var(--accent-gold)]" aria-hidden="true">💭</span>
+          <span className="text-[var(--text-muted)]">{stats.thoughts}</span>
+        </span>
+        <span className="flex items-center gap-1" aria-label={`${stats.findings} findings`}>
+          <span className="text-[var(--accent-rose)]" aria-hidden="true">📋</span>
+          <span className="text-[var(--text-muted)]">{stats.findings}</span>
+        </span>
+        <span className="flex items-center gap-1" title="Actions per minute" aria-label={`${actionsPerMin.toFixed(1)} actions per minute`}>
+          <span className="text-[var(--text-muted)] opacity-60" aria-hidden="true">⚡</span>
+          <span className="text-[var(--text-muted)]">{actionsPerMin.toFixed(1)}/m</span>
+        </span>
+        <span className="flex items-center gap-1" title="Success rate" aria-label={`${successRate.toFixed(0)} percent success rate`}>
+          <span className="text-[var(--text-muted)] opacity-60" aria-hidden="true">📊</span>
+          <span className="text-[var(--text-muted)]">{successRate.toFixed(0)}%</span>
+        </span>
+        <span className="flex items-center gap-1" title="Avg response time" aria-label={`${avgResponseTime.toFixed(0)} milliseconds average response time`}>
+          <span className="text-[var(--text-muted)] opacity-60" aria-hidden="true">⏱</span>
+          <span className="text-[var(--text-muted)]">{avgResponseTime.toFixed(0)}ms</span>
+        </span>
+      </div>
+    );
+  }
+
+  // ─── Agent card in agents tab ────────────────────────────────────────────
+
+  function AgentCard({ agentId, agentName }: { agentId: string; agentName: string }) {
+    const stats = agentStats(agentId);
+    const recentActions = streamActions
+      .filter((a) => a.agentId === agentId && a.type === "action")
+      .slice(-5);
+    const lastThought = streamActions
+      .filter((a) => a.agentId === agentId && a.type === "thought")
+      .slice(-1)[0];
+
+    const agentActions = streamActions.filter((a) => a.agentId === agentId && a.type === "action");
+    const agentSuccessRate = agentActions.length > 0
+      ? (stats.succeeded / agentActions.length) * 100
+      : 0;
+    const agentLatencies = agentActions
+      .filter((a) => a.latency !== null && a.latency !== undefined)
+      .map((a) => a.latency!);
+    const agentAvgLatency = agentLatencies.length > 0
+      ? agentLatencies.reduce((s, v) => s + v, 0) / agentLatencies.length
+      : 0;
+    const shareOfTotal = actionCount > 0 ? (agentActions.length / actionCount) * 100 : 0;
+
+    return (
+      <div className="glass-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-[var(--accent-teal)]/10 flex items-center justify-center text-[var(--accent-teal)] text-sm font-bold">
+              {agentName.charAt(0)}
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">{agentName}</h4>
+              <span className="text-[10px] text-[var(--text-muted)] font-mono">{agentId}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => { setSelectedAgentFilter(agentId); setActiveTab("timeline"); }}
+            className="text-[10px] text-[var(--accent-teal)] hover:underline"
+          >
+            View timeline →
           </button>
         </div>
+        <div className="grid grid-cols-5 gap-2 mb-2">
+          {[
+            { label: "Actions", value: stats.actions, color: "var(--accent-teal)" },
+            { label: "Success", value: stats.succeeded, color: "#10b981" },
+            { label: "Failed", value: stats.failed, color: "#ef4444" },
+            { label: "Thoughts", value: stats.thoughts, color: "var(--accent-gold)" },
+            { label: "Findings", value: stats.findings, color: "var(--accent-rose)" },
+          ].map((s) => (
+            <div key={s.label} className="text-center">
+              <div className="text-base font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-wider">{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 text-[10px] font-mono text-[var(--text-muted)] mb-3 px-1">
+          <span title="Success rate" aria-label={`${agentSuccessRate.toFixed(0)} percent success rate`}><span aria-hidden="true">📊</span> {agentSuccessRate.toFixed(0)}%</span>
+          <span title="Avg latency" aria-label={`${agentAvgLatency.toFixed(0)} milliseconds average latency`}><span aria-hidden="true">⏱</span> {agentAvgLatency.toFixed(0)}ms</span>
+          <span title="Share of total actions" aria-label={`${shareOfTotal.toFixed(0)} percent of total actions`}><span aria-hidden="true">🔀</span> {shareOfTotal.toFixed(0)}% of total</span>
+        </div>
+        {lastThought && (
+          <div className="text-[10px] text-[var(--text-secondary)] italic border-l-2 border-[var(--accent-gold)]/30 pl-2 mb-2 line-clamp-2">
+            💭 {(lastThought.detail || "").slice(0, 200)}
+          </div>
+        )}
+        {recentActions.length > 0 && (
+          <div className="space-y-0.5">
+            <span className="text-[9px] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Recent Actions</span>
+            {recentActions.map((a) => {
+              const sc = a.status === "success" ? "#10b981" : "#ef4444";
+              return (
+                <div key={a.idx} className="flex items-center gap-1.5 text-[10px]">
+                  <span className="font-mono font-bold" style={{ color: sc }}>{a.status === "success" ? "✓" : "✗"}</span>
+                  <span className="font-mono text-[var(--text-primary)]">{a.action}</span>
+                  {a.httpStatus ? <span className="font-mono px-1 rounded" style={{ color: sc, backgroundColor: `${sc}15` }}>HTTP {a.httpStatus}</span> : null}
+                  {a.latency ? <span className="text-[var(--text-muted)]">{a.latency}ms</span> : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────
+
+  const hasSession = active || streamActions.length > 0;
+
+  return (
+    <div className="page-enter p-6 max-w-7xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Autonomous Agents</h1>
+          <p className="text-sm text-[var(--text-secondary)]">
+            AI-driven agents autonomously exploring and interacting with the platform — real actions, real content, real findings
+          </p>
+        </div>
+        {hasSession && (
+          <div className="flex gap-2">
+            <button
+              onClick={copyReport}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-primary)] bg-[var(--bg-elevated)] hover:bg-[var(--bg-card-hover)] transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+              {copied ? "Copied!" : "Export Report"}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Autonomous Agent Mode Panel */}
-      <div className="glass-card p-5">
+      {/* Session Control Panel */}
+      <div className="glass-card p-4">
         <div className="flex items-center gap-3 mb-3">
-          <div className={`w-3 h-3 rounded-full ${autonomousActive ? "bg-[var(--accent-teal)] status-pulse" : "bg-[var(--text-muted)]"}`} />
+          <div className={`w-3 h-3 rounded-full ${active ? "bg-[var(--accent-teal)] status-pulse" : streamActions.length > 0 && !streaming ? "bg-[var(--accent-gold)]" : "bg-[var(--text-muted)]"}`} />
           <h3 className="text-sm font-bold text-[var(--text-primary)]">
-            Full Autonomous AI Agents Mode
+            {active ? "Session Active" : streamActions.length > 0 ? "Session Complete" : "Start New Session"}
           </h3>
-          {autonomousActive && (
+          {active && (
             <span className="badge bg-[var(--accent-teal)]/10 text-[var(--accent-teal)]">
-              Active — {formatTime(timeRemaining)} remaining
+              {formatTime(timeRemaining)} remaining
+            </span>
+          )}
+          {active && (
+            <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">
+              {formatTime(elapsed)} elapsed
+            </span>
+          )}
+          {session.paused && (
+            <span className="badge bg-[var(--accent-gold)]/10 text-[var(--accent-gold)]">
+              Paused
             </span>
           )}
           {streaming && (
-            <span className="badge bg-[var(--accent-gold)]/10 text-[var(--accent-gold)]">
-              Streaming…
+            <span className="badge bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-gold)] status-pulse" />
+              Streaming
+            </span>
+          )}
+          {!active && streamActions.length > 0 && !streaming && (
+            <span className="badge bg-[var(--text-muted)]/10 text-[var(--text-muted)]">
+              Ended
             </span>
           )}
         </div>
-        <p className="text-xs text-[var(--text-muted)] mb-4">
-          Each PhD-level agent operates as its defined persona — attempting reasoning, debates, verification,
-          forum participation, and tool usage across the platform. When they encounter non-functional elements,
-          mock data, emulated tools, or errors, they file reports. Session results are compiled into a
-          Markdown comment for fixing.
-        </p>
-        {!autonomousActive ? (
+
+        {!active && streamActions.length === 0 && (
+          <p className="text-xs text-[var(--text-muted)] mb-4">
+            Each PhD-level agent operates as its defined persona — reasoning, debating, verifying,
+            posting in forums, and using tools across the platform. Agents run for the full selected
+            duration with persistent context memory. Errors are automatically reported. <strong className="text-[var(--text-secondary)]">Sessions persist across page navigation</strong> — you can browse the rest of the platform and return here without losing your session.
+          </p>
+        )}
+
+        {!active ? (
           <div className="flex items-center gap-3 flex-wrap">
-            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-              Session Duration:
+            <label className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+              Duration:
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               {PRESET_DURATIONS.map((d) => (
                 <button
                   key={d.seconds}
                   onClick={() => setSelectedDuration(d.seconds)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    selectedDuration === d.seconds
+                    session.selectedDuration === d.seconds
                       ? "bg-[var(--accent-teal)] text-white"
                       : "bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   }`}
@@ -442,83 +571,48 @@ export default function AuditClient() {
               ))}
             </div>
             <button
-              onClick={startAutonomousMode}
+              onClick={startSession}
               className="px-4 py-1.5 rounded-lg text-xs font-medium text-white bg-[var(--accent-teal)] hover:opacity-90 transition-opacity flex items-center gap-2"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Start Autonomous Mode
+              {streamActions.length > 0 ? "Start New Session" : "Start Autonomous Mode"}
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <div className="progress-bar">
-                  <div
-                    className="progress-fill"
-                    style={{
-                      width: `${((selectedDuration - timeRemaining) / selectedDuration) * 100}%`,
-                      background: "linear-gradient(90deg, var(--accent-teal), var(--accent-gold))",
-                    }}
-                  />
-                </div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{
+                    width: `${((session.selectedDuration - timeRemaining) / session.selectedDuration) * 100}%`,
+                    background: session.paused
+                      ? "linear-gradient(90deg, var(--accent-gold), var(--accent-gold))"
+                      : "linear-gradient(90deg, var(--accent-teal), var(--accent-gold))",
+                  }}
+                />
               </div>
-              <span className="text-xs font-mono text-[var(--text-muted)]">
-                Cycle {cycleCount}
-              </span>
-              <button
-                onClick={stopAutonomousMode}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--accent-rose)] bg-[var(--accent-rose)]/10 hover:bg-[var(--accent-rose)]/20 transition-colors"
-              >
-                Stop
-              </button>
             </div>
-            {/* Session Log */}
-            {sessionLog.length > 0 && (
-              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-40 overflow-y-auto border border-[var(--border-primary)]">
-                {sessionLog.map((entry, i) => (
-                  <div key={i} className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">
-                    {entry}
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* Real-time Agent Stream */}
-            {streamActions.length > 0 && (
-              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-60 overflow-y-auto border border-[var(--border-primary)]">
-                <div className="flex items-center gap-2 mb-2">
-                  {streaming && <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />}
-                  <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                    Live Agent Activity ({streamActions.length} actions, {streamFindings.length} findings)
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  {streamActions.map((a, i) => {
-                    const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
-                    const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
-                    return (
-                      <div key={i} className="flex items-start gap-1.5 text-[11px] animate-[fadeIn_0.3s_ease-in]">
-                        <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
-                        <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                        <span className="text-[var(--text-muted)]">→</span>
-                        <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
-                        {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
-                        {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
-                      </div>
-                    );
-                  })}
-                  {streaming && (
-                    <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
-                      Agents working…
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            <StatsBar stats={totalStats} />
+            <button
+              onClick={session.paused ? resumeSession : pauseSession}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                session.paused
+                  ? "text-[var(--accent-teal)] bg-[var(--accent-teal)]/10 hover:bg-[var(--accent-teal)]/20"
+                  : "text-[var(--accent-gold)] bg-[var(--accent-gold)]/10 hover:bg-[var(--accent-gold)]/20"
+              }`}
+            >
+              {session.paused ? "Resume UI" : "Pause UI"}
+            </button>
+            <button
+              onClick={stopSession}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--accent-rose)] bg-[var(--accent-rose)]/10 hover:bg-[var(--accent-rose)]/20 transition-colors"
+            >
+              Stop
+            </button>
           </div>
         )}
       </div>
@@ -529,240 +623,221 @@ export default function AuditClient() {
         </div>
       )}
 
-      {!report && !loading && !autonomousActive && !streaming && streamActions.length === 0 && (
-        <div className="glass-card p-12 text-center">
-          <svg className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Live Agent Audit</h2>
-          <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto mb-6">
-            Agents make <strong>real HTTP requests</strong> to every API endpoint — testing forums, debates, lean4 prover,
-            verification pipeline, and more. Findings are derived from actual response codes and data.
-          </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={runStreamAudit}
-              className="px-6 py-3 rounded-lg text-sm font-medium text-white bg-[var(--accent-teal)] hover:opacity-90 transition-opacity flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Start Live Audit
-            </button>
-            <button
-              onClick={runAudit}
-              className="px-6 py-3 rounded-lg text-sm font-medium text-[var(--text-secondary)] bg-[var(--bg-elevated)] hover:bg-[var(--bg-card-hover)] transition-colors"
-            >
-              Snapshot Audit
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Standalone streaming display (when not in autonomous mode) */}
-      {!autonomousActive && (streaming || (!report && streamActions.length > 0)) && (
-        <div className="glass-card p-4">
-          <div className="flex items-center gap-2 mb-3">
-            {streaming && <span className="w-2 h-2 rounded-full bg-[var(--accent-teal)] status-pulse" />}
-            <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-              Live Agent Activity Stream ({streamActions.length} actions, {streamFindings.length} findings)
-            </h3>
-          </div>
-          <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-80 overflow-y-auto border border-[var(--border-primary)] space-y-1.5">
-            {streamActions.map((a, i) => {
-              const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
-              const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
-              return (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
-                  <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                  <span className="text-[var(--text-muted)]">→</span>
-                  <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
-                  {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
-                  {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
-                </div>
-              );
-            })}
-            {streaming && (
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
-                Agents working…
-              </div>
-            )}
-          </div>
-          {!streaming && streamFindings.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {streamFindings.map((finding) => {
-                const style = severityStyles[finding.severity];
-                return (
-                  <div key={finding.id} className="flex items-start gap-2 text-xs p-2 rounded-lg" style={{ backgroundColor: style.bg }}>
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: style.text }} />
-                    <div>
-                      <span className="font-medium" style={{ color: style.text }}>{finding.element}</span>
-                      <span className="text-[var(--text-muted)]"> — {finding.description}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {!streaming && (
-            <div className="mt-3">
-              <button
-                onClick={runAudit}
-                disabled={loading}
-                className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-[var(--accent-indigo)] hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {loading ? "Loading full report…" : "Load Full Report"}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {report && (
+      {/* Main session view */}
+      {hasSession && (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
             {[
-              { label: "Actions Taken", value: report.summary.actionsAttempted, color: "var(--accent-teal)" },
-              { label: "Succeeded", value: report.summary.actionsSucceeded, color: "#10b981" },
-              { label: "Failed/Blocked", value: report.summary.actionsFailed, color: "#ef4444" },
-              { label: "Error Reports", value: report.summary.total, color: "#f59e0b" },
-              { label: "Critical", value: report.summary.critical, color: "#ef4444" },
+              { label: "Total Actions", value: String(totalStats.actions), color: "var(--accent-teal)" },
+              { label: "Succeeded", value: String(totalStats.succeeded), color: "#10b981" },
+              { label: "Failed", value: String(totalStats.failed), color: "#ef4444" },
+              { label: "Thoughts", value: String(totalStats.thoughts), color: "var(--accent-gold)" },
+              { label: "Findings", value: String(totalStats.findings), color: "var(--accent-rose)" },
+              { label: "Actions/min", value: actionsPerMin.toFixed(1), color: "var(--accent-indigo)" },
+              { label: "Success Rate", value: `${successRate.toFixed(0)}%`, color: "#10b981" },
+              { label: "Avg Latency", value: `${avgResponseTime.toFixed(0)}ms`, color: "var(--accent-teal)" },
             ].map((s) => (
-              <div key={s.label} className="glass-card p-4 text-center">
-                <div className="text-xl font-bold font-mono" style={{ color: s.color }}>
-                  {s.value}
-                </div>
-                <div className="text-xs text-[var(--text-muted)]">{s.label}</div>
+              <div key={s.label} className="glass-card p-3 text-center">
+                <div className="text-xl font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
+                <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{s.label}</div>
               </div>
             ))}
           </div>
 
-          {/* Active Agents */}
-          <div className="glass-card p-4">
-            <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              Active Agents (PhD-Level Personas)
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {report.agentParticipants.map((name) => (
-                <span key={name} className="badge bg-[var(--accent-teal)]/10 text-[var(--accent-teal)]">
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Agent Activity Log */}
-          <div className="glass-card p-4">
-            <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Agent Activity Log
-            </h3>
-            <div className="space-y-1.5">
-              {report.actions.map((a, i) => {
-                const statusIcon = a.status === "success" ? "✓" : a.status === "blocked" ? "⊘" : "✗";
-                const statusColor = a.status === "success" ? "#10b981" : a.status === "blocked" ? "#f59e0b" : "#ef4444";
-                return (
-                  <div key={i} className="flex items-start gap-2 text-xs">
-                    <span className="font-mono font-bold shrink-0" style={{ color: statusColor }}>{statusIcon}</span>
-                    <span className="text-[var(--accent-teal)] font-medium shrink-0">{a.agentName}</span>
-                    <span className="text-[var(--text-muted)]">→</span>
-                    <span className="text-[var(--text-secondary)]">{a.detail || `${a.action} on ${a.target}`}</span>
-                    {a.httpStatus ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">[HTTP {a.httpStatus}]</span> : null}
-                    {a.latency ? <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.latency}ms</span> : null}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Filter tabs */}
-          <div className="flex gap-2 border-b border-[var(--border-primary)] pb-1">
+          {/* Tab Navigation */}
+          <div className="flex items-center gap-1 border-b border-[var(--border-primary)]">
             {[
-              { key: "all", label: `All (${report.summary.total})` },
-              { key: "critical", label: `Critical (${report.summary.critical})` },
-              { key: "warning", label: `Warnings (${report.summary.warnings})` },
-              { key: "info", label: `Info (${report.summary.info})` },
+              { key: "timeline" as const, label: "Timeline", icon: "📋" },
+              { key: "agents" as const, label: `Agents (${activeAgents.length})`, icon: "👥" },
+              { key: "findings" as const, label: `Findings (${streamFindings.length})`, icon: "🔍" },
+              { key: "log" as const, label: "Session Log", icon: "📝" },
             ].map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setSeverityFilter(tab.key)}
-                className={`px-4 py-2 text-sm transition-colors ${
-                  severityFilter === tab.key
-                    ? "text-[var(--accent-indigo)] tab-active font-medium"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2.5 text-xs font-medium transition-colors flex items-center gap-1.5 border-b-2 -mb-px ${
+                  activeTab === tab.key
+                    ? "text-[var(--accent-teal)] border-[var(--accent-teal)]"
+                    : "text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)] hover:border-[var(--border-primary)]"
                 }`}
               >
+                <span>{tab.icon}</span>
                 {tab.label}
               </button>
             ))}
           </div>
 
-          {/* Findings List */}
-          <div className="space-y-3">
-            {filteredFindings.map((finding) => {
-              const style = severityStyles[finding.severity];
-              return (
-                <div key={finding.id} className="glass-card p-4">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="w-2 h-2 rounded-full shrink-0 mt-2"
-                      style={{ backgroundColor: style.text }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span
-                          className="badge uppercase tracking-wider"
-                          style={{ backgroundColor: style.bg, color: style.text, fontSize: 10 }}
-                        >
-                          {style.label}
-                        </span>
-                        <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>
-                          {categoryLabels[finding.category] ?? finding.category}
-                        </span>
-                        <span className="text-xs text-[var(--text-muted)]">
-                          reported by {finding.agentName}
-                        </span>
+          {/* Timeline Tab */}
+          {activeTab === "timeline" && (
+            <div className="glass-card overflow-hidden">
+              {/* Agent filter bar */}
+              <div className="flex items-center gap-1 px-3 py-2 bg-[var(--bg-elevated)] border-b border-[var(--border-primary)] flex-wrap">
+                <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mr-1">Filter:</span>
+                <button
+                  onClick={() => { setSelectedAgentFilter("all"); setExpandedActionIdx(null); }}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                    selectedAgentFilter === "all"
+                      ? "bg-[var(--accent-teal)] text-white"
+                      : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
+                  }`}
+                >
+                  All ({streamActions.filter(a => a.agentId !== "system").length})
+                </button>
+                {activeAgents.map((agent) => {
+                  const stats = agentStats(agent.id);
+                  return (
+                    <button
+                      key={agent.id}
+                      onClick={() => { setSelectedAgentFilter(agent.id); setExpandedActionIdx(null); }}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors flex items-center gap-1 ${
+                        selectedAgentFilter === agent.id
+                          ? "bg-[var(--accent-teal)] text-white"
+                          : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-[var(--accent-teal)]/20 flex items-center justify-center text-[8px] font-bold text-[var(--accent-teal)]">{agent.name.charAt(0)}</span>
+                      {agent.name}
+                      <span className="opacity-60 font-mono">
+                        {stats.actions}⚡ {stats.thoughts}💭
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Per-agent summary card when filtering */}
+              {selectedAgentFilter !== "all" && (() => {
+                const stats = agentStats(selectedAgentFilter);
+                const agent = activeAgents.find(a => a.id === selectedAgentFilter);
+                return (
+                  <div className="px-3 py-2 bg-[var(--accent-teal)]/5 border-b border-[var(--border-primary)] flex items-center gap-4 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-[var(--accent-teal)]/10 flex items-center justify-center text-[var(--accent-teal)] text-[10px] font-bold">
+                        {agent?.name.charAt(0)}
                       </div>
-                      <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
-                        {finding.element}
-                      </h4>
-                      <p className="text-xs text-[var(--text-secondary)] mb-2">{finding.description}</p>
-                      <div className="flex items-start gap-2">
-                        <span className="text-xs text-[var(--accent-teal)] font-medium shrink-0">Fix:</span>
-                        <span className="text-xs text-[var(--text-secondary)]">{finding.recommendation}</span>
-                      </div>
-                      <div className="mt-2">
-                        <code className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-elevated)] px-2 py-0.5 rounded">
-                          {finding.location}
-                        </code>
+                      <span className="text-[11px] font-semibold text-[var(--accent-teal)]">{agent?.name}</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                      ✓ {stats.succeeded} succeeded · ✗ {stats.failed} failed · 💭 {stats.thoughts} thoughts · 📋 {stats.findings} findings
+                    </span>
+                    <button
+                      onClick={() => setSelectedAgentFilter("all")}
+                      className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] ml-auto"
+                    >
+                      Clear filter ×
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Stream rows */}
+              <div ref={streamScrollRef} className="p-2 max-h-[700px] overflow-y-auto space-y-0.5">
+                {filteredStreamActions.map(renderActionRow)}
+                {streaming && (
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] px-3 py-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-teal)] status-pulse" />
+                    Agents working…
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Agents Tab */}
+          {activeTab === "agents" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {activeAgents.map((agent) => (
+                <AgentCard key={agent.id} agentId={agent.id} agentName={agent.name} />
+              ))}
+              {activeAgents.length === 0 && (
+                <div className="col-span-2 text-center py-12 text-sm text-[var(--text-muted)]">
+                  No agents have started yet…
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Findings Tab */}
+          {activeTab === "findings" && (
+            <div className="space-y-3">
+              {streamFindings.length === 0 ? (
+                <div className="glass-card p-8 text-center text-sm text-[var(--text-muted)]">
+                  No findings reported yet. Errors and failures are automatically captured.
+                </div>
+              ) : (
+                streamFindings.map((finding) => {
+                  const style = severityStyles[finding.severity] ?? severityStyles.info;
+                  return (
+                    <div key={finding.id} className="glass-card p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-2 h-2 rounded-full shrink-0 mt-2" style={{ backgroundColor: style.text }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="badge uppercase tracking-wider" style={{ backgroundColor: style.bg, color: style.text, fontSize: 10 }}>
+                              {style.label}
+                            </span>
+                            <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>
+                              {categoryLabels[finding.category] ?? finding.category}
+                            </span>
+                            <span className="text-[10px] text-[var(--text-muted)]">
+                              reported by {finding.agentName}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-1">{finding.element}</h4>
+                          <p className="text-xs text-[var(--text-secondary)] mb-2">{finding.description}</p>
+                          {finding.recommendation && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-xs text-[var(--accent-teal)] font-medium shrink-0">Fix:</span>
+                              <span className="text-xs text-[var(--text-secondary)]">{finding.recommendation}</span>
+                            </div>
+                          )}
+                          <div className="mt-2">
+                            <code className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-elevated)] px-2 py-0.5 rounded">{finding.location}</code>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* Session Log Tab */}
+          {activeTab === "log" && (
+            <div className="glass-card p-4">
+              <div className="bg-[var(--bg-primary)] rounded-lg p-3 max-h-[600px] overflow-y-auto border border-[var(--border-primary)]">
+                {sessionLog.length === 0 ? (
+                  <div className="text-xs text-[var(--text-muted)] text-center py-8">No log entries yet.</div>
+                ) : (
+                  sessionLog.map((entry, i) => (
+                    <div key={i} className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] px-1 rounded transition-colors">
+                      {entry}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Export section */}
-          <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Export Report</h3>
-            <p className="text-xs text-[var(--text-muted)] mb-4">
-              Copy the full audit report as Markdown. Paste it as a GitHub issue comment or pull request review to track fixes.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={copyReport}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--accent-indigo)] hover:opacity-90 transition-opacity flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                </svg>
-                {copied ? "Copied to Clipboard!" : "Copy as Markdown Comment"}
-              </button>
+          <div className="glass-card p-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Export Session Report</h3>
+              <p className="text-[10px] text-[var(--text-muted)]">
+                Copy the full session report as Markdown for GitHub issues or pull request reviews.
+              </p>
             </div>
+            <button
+              onClick={copyReport}
+              className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-[var(--accent-indigo)] hover:opacity-90 transition-opacity flex items-center gap-1.5 shrink-0"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+              {copied ? "Copied!" : "Copy as Markdown"}
+            </button>
           </div>
         </>
       )}

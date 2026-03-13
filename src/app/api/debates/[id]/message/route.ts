@@ -5,6 +5,9 @@ import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { eq, max } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { getDebateMessagesNeon, persistDebateMessageNeon } from "@/lib/neonPersistence";
+
+export const maxDuration = 120;
 
 export async function POST(
   request: NextRequest,
@@ -33,45 +36,69 @@ export async function POST(
     return NextResponse.json({ error: "Agent is not a participant in this debate" }, { status: 403 });
   }
 
-  const previousMessages = debate.messages.map((m) => ({
+  const neonHistory = await getDebateMessagesNeon(id);
+  const combinedHistory = [
+    ...debate.messages.map((m) => ({ agentName: m.agentName, content: m.content })),
+    ...neonHistory.map((m) => ({ agentName: m.agent_name, content: m.content })),
+  ];
+  const previousMessages = Array.from(
+    new Map(
+      combinedHistory.map((m) => [`${m.agentName}:${m.content}`, m]),
+    ).values(),
+  ).map((m) => ({
     agentName: m.agentName,
     content: m.content,
   }));
 
+  const orderRow = db
+    .select({ maxOrder: max(schema.debateMessages.sortOrder) })
+    .from(schema.debateMessages)
+    .where(eq(schema.debateMessages.debateId, id))
+    .get();
+  const nextOrder = (orderRow?.maxOrder ?? 0) + 1;
+  const msgId = `msg-${randomUUID()}`;
+  const timestamp = new Date().toISOString();
+
   if (!hasGeminiKey()) {
-    return NextResponse.json({
-      content: `[${agent.name}] This debate position requires further elaboration. I maintain my epistemic stance and challenge the preceding argument on formal grounds.`,
-      verificationDetails: undefined,
-      agentName: agent.name,
-      agentId,
-      executionMode: "simulated",
-    });
+    return NextResponse.json(
+      {
+        error: "AI backend unavailable",
+        details: "GEMINI_API_KEY is not configured; cannot generate debate message.",
+      },
+      { status: 503 },
+    );
   }
 
   try {
     const result = await generateDebateMessage(agentId, debate.title, previousMessages);
 
     // Persist the new message
-    const orderRow = db
-      .select({ maxOrder: max(schema.debateMessages.sortOrder) })
-      .from(schema.debateMessages)
-      .where(eq(schema.debateMessages.debateId, id))
-      .get();
-    const nextOrder = (orderRow?.maxOrder ?? 0) + 1;
-
-    const msgId = `msg-${randomUUID()}`;
     db.insert(schema.debateMessages).values({
       id: msgId,
       debateId: id,
       agentId,
       agentName: agent.name,
       content: result.content,
-      timestamp: "just now",
+      timestamp,
       verificationStatus: "unchecked",
       verificationDetails: result.verificationDetails ?? null,
       upvotes: 0,
       sortOrder: nextOrder,
     }).run();
+    void persistDebateMessageNeon({
+      id: msgId,
+      debateId: id,
+      agentId,
+      agentName: agent.name,
+      content: result.content,
+      timestamp,
+      verificationStatus: "unchecked",
+      verificationDetails: result.verificationDetails ?? null,
+      upvotes: 0,
+      sortOrder: nextOrder,
+    }).catch(() => {
+      // Best-effort mirror to Neon; local DB write already succeeded.
+    });
 
     return NextResponse.json({
       ...result,

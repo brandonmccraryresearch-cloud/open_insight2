@@ -7,6 +7,11 @@ import { existsSync, copyFileSync } from "fs";
 const isVercel = !!process.env.VERCEL;
 const buildDbPath = path.join(process.cwd(), "open-insight.db");
 
+// NOTE: SQLite remains the primary local datastore for seeded platform data.
+// On Vercel, SQLite is ephemeral per function instance. To mitigate this for
+// autonomous write actions, Neon mirroring is enabled in src/lib/neonPersistence.ts
+// when DATABASE_URL is configured (debate messages, thread replies, threads).
+
 // On Vercel the task root is read-only at runtime.
 // Copy the bundled DB to /tmp (writable) on cold start.
 let dbPath = buildDbPath;

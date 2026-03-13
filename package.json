@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.42.0",
+    "@neondatabase/serverless": "^1.0.0",
     "better-sqlite3": "^12.6.2",
     "d3": "^7.9.0",
     "drizzle-orm": "^0.45.1",

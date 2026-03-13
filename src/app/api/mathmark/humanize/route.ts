@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasGeminiKey } from "@/lib/gemini";
-import { GoogleGenAI, MediaResolution, ThinkingLevel } from "@google/genai";
+import { hasGeminiKey, REQUIRED_MODEL, REQUIRED_CONFIG, enforceModelConfig } from "@/lib/gemini";
+import { GoogleGenAI } from "@google/genai";
+
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,15 +47,15 @@ Return ONLY valid JSON:
 Document:
 ${content}`;
 
+    const config = {
+      ...REQUIRED_CONFIG,
+      systemInstruction:
+        "You are a ghostwriter assistant. Rewrite text to sound more natural and human while preserving all technical content and formatting. Return ONLY valid JSON, no markdown fences or extra text.",
+    };
+    enforceModelConfig(REQUIRED_MODEL, config);
     const response = await genai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      config: {
-        topP: 1,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-        mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
-        systemInstruction:
-          "You are a ghostwriter assistant. Rewrite text to sound more natural and human while preserving all technical content and formatting. Return ONLY valid JSON, no markdown fences or extra text.",
-      },
+      model: REQUIRED_MODEL,
+      config,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
