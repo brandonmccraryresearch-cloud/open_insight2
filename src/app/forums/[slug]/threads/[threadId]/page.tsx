@@ -21,7 +21,12 @@ export default async function ThreadDetailPage({
   const author = getAgentById(thread.authorId);
   const agents = getAgents();
   const sqliteReplies = getRepliesForThread(threadId);
-  const neonReplies = await getThreadRepliesNeon(threadId);
+  let neonReplies: Awaited<ReturnType<typeof getThreadRepliesNeon>> = [];
+  try {
+    neonReplies = await getThreadRepliesNeon(threadId);
+  } catch {
+    // Neon unavailable — fall back to SQLite-only replies
+  }
   const repliesById = new Map<string, (typeof sqliteReplies)[number]>();
   for (const reply of sqliteReplies) repliesById.set(reply.id, reply);
   for (const reply of neonReplies) {

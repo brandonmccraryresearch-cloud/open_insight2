@@ -52,7 +52,6 @@ Output both the Python code used and the numerical results.`;
 
     const config = {
       ...REQUIRED_CONFIG,
-      tools: [{ codeExecution: {} }],
       systemInstruction: "You are a quantum physics simulator. Execute Python code for quantum mechanics computations. Always show the code and results.",
     };
     enforceModelConfig(REQUIRED_MODEL, config);

@@ -62,53 +62,60 @@ async function ensureNeonTables() {
   if (!sql || initDone) return;
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    await sql`
-      CREATE TABLE IF NOT EXISTS debate_messages_neon (
-        id text PRIMARY KEY,
-        debate_id text NOT NULL,
-        agent_id text NOT NULL,
-        agent_name text NOT NULL,
-        content text NOT NULL,
-        timestamp text NOT NULL,
-        verification_status text NOT NULL DEFAULT 'unchecked',
-        verification_details text,
-        upvotes integer NOT NULL DEFAULT 0,
-        sort_order integer NOT NULL DEFAULT 0
-      )
-    `;
-    await sql`
-      CREATE TABLE IF NOT EXISTS forum_thread_replies_neon (
-        id text PRIMARY KEY,
-        thread_id text NOT NULL,
-        forum_slug text NOT NULL,
-        agent_id text NOT NULL,
-        agent_name text NOT NULL,
-        content text NOT NULL,
-        timestamp text NOT NULL,
-        upvotes integer NOT NULL DEFAULT 0,
-        verification_status text NOT NULL DEFAULT 'unchecked',
-        verification_note text
-      )
-    `;
-    await sql`
-      CREATE TABLE IF NOT EXISTS forum_threads_neon (
-        id text PRIMARY KEY,
-        forum_slug text NOT NULL,
-        title text NOT NULL,
-        author text NOT NULL,
-        author_id text NOT NULL,
-        timestamp text NOT NULL,
-        reply_count integer NOT NULL DEFAULT 0,
-        verification_status text NOT NULL DEFAULT 'unverified',
-        tags text NOT NULL,
-        excerpt text NOT NULL,
-        upvotes integer NOT NULL DEFAULT 0,
-        views integer NOT NULL DEFAULT 0
-      )
-    `;
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS debate_messages_neon (
+          id text PRIMARY KEY,
+          debate_id text NOT NULL,
+          agent_id text NOT NULL,
+          agent_name text NOT NULL,
+          content text NOT NULL,
+          timestamp text NOT NULL,
+          verification_status text NOT NULL DEFAULT 'unchecked',
+          verification_details text,
+          upvotes integer NOT NULL DEFAULT 0,
+          sort_order integer NOT NULL DEFAULT 0
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS forum_thread_replies_neon (
+          id text PRIMARY KEY,
+          thread_id text NOT NULL,
+          forum_slug text NOT NULL,
+          agent_id text NOT NULL,
+          agent_name text NOT NULL,
+          content text NOT NULL,
+          timestamp text NOT NULL,
+          upvotes integer NOT NULL DEFAULT 0,
+          verification_status text NOT NULL DEFAULT 'unchecked',
+          verification_note text
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS forum_threads_neon (
+          id text PRIMARY KEY,
+          forum_slug text NOT NULL,
+          title text NOT NULL,
+          author text NOT NULL,
+          author_id text NOT NULL,
+          timestamp text NOT NULL,
+          reply_count integer NOT NULL DEFAULT 0,
+          verification_status text NOT NULL DEFAULT 'unverified',
+          tags text NOT NULL,
+          excerpt text NOT NULL,
+          upvotes integer NOT NULL DEFAULT 0,
+          views integer NOT NULL DEFAULT 0
+        )
+      `;
+      initDone = true;
+    } catch (err) {
+      // Reset so future calls can retry instead of permanently failing
+      initPromise = null;
+      console.error("[NeonPersistence] ensureNeonTables failed, disabling for this attempt:", err);
+      throw err;
+    }
   })();
   await initPromise;
-  initDone = true;
   return;
 }
 

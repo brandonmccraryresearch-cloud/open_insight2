@@ -30,7 +30,12 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
     );
   }
 
-  const neonMessages = await getDebateMessagesNeon(id);
+  let neonMessages: Awaited<ReturnType<typeof getDebateMessagesNeon>> = [];
+  try {
+    neonMessages = await getDebateMessagesNeon(id);
+  } catch {
+    // Neon unavailable — fall back to SQLite-only messages
+  }
   const mergedMessages = [
     ...debate.messages,
     ...neonMessages.map((m) => ({
