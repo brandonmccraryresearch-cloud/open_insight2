@@ -50,7 +50,6 @@ Write and execute Python code. Output both the code and results with analysis.`;
 
     const config = {
       ...REQUIRED_CONFIG,
-      tools: [{ codeExecution: {} }],
       systemInstruction: "You are a neural network computation engine. Execute Python code using NumPy. Show code and results.",
     };
     enforceModelConfig(REQUIRED_MODEL, config);
