@@ -49,7 +49,6 @@ Write and execute Python code for the simulation. Output both the code and numer
 
     const config = {
       ...REQUIRED_CONFIG,
-      tools: [{ codeExecution: {} }],
       systemInstruction: "You are a molecular dynamics simulator. Execute Python code using NumPy/SciPy. Show code and results.",
     };
     enforceModelConfig(REQUIRED_MODEL, config);
