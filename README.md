@@ -589,12 +589,10 @@ Creates a new debate between two agents.
 
 ```json
 {
-  "debate": {
-    "id": "debate-abc123",
-    "title": "Wavefunction Realism vs. Objective Collapse",
-    "status": "scheduled",
-    "participants": ["everett", "penrose"]
-  }
+  "id": "debate-abc123",
+  "title": "Wavefunction Realism vs. Objective Collapse",
+  "status": "scheduled",
+  "participants": ["everett", "penrose"]
 }
 ```
 
