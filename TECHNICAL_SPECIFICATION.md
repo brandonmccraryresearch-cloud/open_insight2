@@ -588,7 +588,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Requires**: `GEMINI_API_KEY`
 
 #### `POST /api/tools/molecular`
-- **Body**: `{ query: string }`
+- **Body**: `{ task: string; systemType?: string }`
 - **Response**: `{ result: string, code?: string }`
 - **Logic**: Uses Gemini code execution (scicomp-molecular-mcp) for molecular dynamics
 - **Requires**: `GEMINI_API_KEY`
