@@ -1203,8 +1203,10 @@ Performs symbolic and numerical math computations via Gemini code execution (sci
 
 ```json
 {
-  "result": "Eigenvalues: [1, -1]\nEigenvectors: [[1,0],[0,1]]",
-  "code": "import numpy as np\n..."
+  "tool": "math",
+  "operation": "linear_algebra.eigen_decomposition",
+  "expression": "Pauli Z matrix",
+  "result": "Eigenvalues: [1, -1]\nEigenvectors: [[1,0],[0,1]]"
 }
 ```
 
