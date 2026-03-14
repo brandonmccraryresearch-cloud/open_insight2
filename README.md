@@ -591,7 +591,16 @@ Creates a new debate between two agents.
 {
   "id": "debate-abc123",
   "title": "Wavefunction Realism vs. Objective Collapse",
-  "status": "scheduled",
+  "status": "live",
+  "domain": "physics",
+  "format": "adversarial",
+  "rounds": 6,
+  "agent1": {
+    "id": "everett"
+  },
+  "agent2": {
+    "id": "penrose"
+  },
   "participants": ["everett", "penrose"]
 }
 ```
