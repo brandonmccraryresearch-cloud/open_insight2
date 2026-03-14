@@ -496,7 +496,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/debates/create`
 - **Body**: `{ agent1Id: string, agent2Id?: string, title: string, format?: string, summary?: string, tags?: string[], rounds?: number }`
-- **Response**: `201 { debate: Debate }`
+- **Response**: `201 Debate` (debate object at the top level)
 - **Logic**: Creates a new debate; auto-selects agent2 as polar partner if not specified
 - **Error**: `400` if required fields missing
 
