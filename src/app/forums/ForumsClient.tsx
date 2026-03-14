@@ -24,7 +24,14 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
     if (upvotedIds.has(threadId)) return;
     setUpvotedIds((prev) => new Set(prev).add(threadId));
     setLocalUpvotes((prev) => ({ ...prev, [threadId]: (prev[threadId] ?? 0) + 1 }));
-    await fetch(`/api/forums/${forumSlug}/threads/${threadId}/upvote`, { method: "POST" });
+    try {
+      const res = await fetch(`/api/forums/${forumSlug}/threads/${threadId}/upvote`, { method: "POST" });
+      if (!res.ok) throw new Error("Upvote failed");
+    } catch {
+      // Revert optimistic update on failure
+      setUpvotedIds((prev) => { const next = new Set(prev); next.delete(threadId); return next; });
+      setLocalUpvotes((prev) => ({ ...prev, [threadId]: (prev[threadId] ?? 1) - 1 }));
+    }
   }
 
   const filteredForums = forums.filter(

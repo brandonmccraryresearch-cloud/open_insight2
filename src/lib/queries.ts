@@ -360,18 +360,18 @@ export function getComputedAgentStats(): Record<string, {
     ensure(m.agentId).postCount++;
   }
 
-  // Count debate wins: agent with most messages + upvotes in completed debates
+  // Count debate wins: agent with most upvotes on their messages in completed debates.
+  // Ties are broken alphabetically by agent ID for deterministic results.
   for (const d of debates) {
     if (d.status === "completed" && d.verdict) {
       const msgs = debateMessages.filter((m) => m.debateId === d.id);
       const participants = new Set(msgs.map((m) => m.agentId));
       if (participants.size >= 2) {
-        // Determine winner by most upvotes on their messages
         let maxScore = -1;
         let winnerId = "";
         for (const pid of participants) {
           const score = msgs.filter((m) => m.agentId === pid).reduce((s, m) => s + m.upvotes, 0);
-          if (score > maxScore) {
+          if (score > maxScore || (score === maxScore && pid < winnerId)) {
             maxScore = score;
             winnerId = pid;
           }
@@ -389,13 +389,23 @@ export function getComputedAgentStats(): Record<string, {
     }
   }
 
-  // Compute reputation: weighted score from contributions
+  // Reputation score formula:
+  //   Base score of 50 (minimum for any agent with activity), plus:
+  //   - Posts: 0.5 points each (forum threads, replies, debate messages), capped at 20
+  //   - Verified claims: 2 points each (passed verifications), capped at 20
+  //   - Debate wins: 3 points each, capped at 10
+  //   Maximum possible: 50 + 20 + 20 + 10 = 100, clamped to 99
+  const REPUTATION_BASE = 50;
+  const POST_WEIGHT = 0.5, POST_CAP = 20;
+  const VERIFIED_WEIGHT = 2, VERIFIED_CAP = 20;
+  const DEBATE_WEIGHT = 3, DEBATE_CAP = 10;
+  const REPUTATION_MAX = 99;
+
   for (const [, s] of Object.entries(stats)) {
-    // Reputation = base 50 + posts (0.5 each, max 20) + verified claims (2 each, max 20) + debate wins (3 each, max 10)
-    const postBonus = Math.min(s.postCount * 0.5, 20);
-    const verifiedBonus = Math.min(s.verifiedClaims * 2, 20);
-    const debateBonus = Math.min(s.debateWins * 3, 10);
-    s.reputationScore = Math.min(99, Math.round(50 + postBonus + verifiedBonus + debateBonus));
+    const postBonus = Math.min(s.postCount * POST_WEIGHT, POST_CAP);
+    const verifiedBonus = Math.min(s.verifiedClaims * VERIFIED_WEIGHT, VERIFIED_CAP);
+    const debateBonus = Math.min(s.debateWins * DEBATE_WEIGHT, DEBATE_CAP);
+    s.reputationScore = Math.min(REPUTATION_MAX, Math.round(REPUTATION_BASE + postBonus + verifiedBonus + debateBonus));
   }
 
   return stats;

@@ -102,6 +102,12 @@ const mcpToolDefs = [
   },
 ];
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function formatDuration(ms: number): string {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function McpDashboardPage() {
@@ -315,7 +321,7 @@ export default function McpDashboardPage() {
                   </div>
                   {callResult.responseTimeMs != null && (
                     <span className="font-mono text-[var(--text-muted)]" title="Round-trip response time including network latency">
-                      ⏱ {callResult.responseTimeMs < 1000 ? `${callResult.responseTimeMs}ms` : `${(callResult.responseTimeMs / 1000).toFixed(1)}s`}
+                      ⏱ {formatDuration(callResult.responseTimeMs)}
                     </span>
                   )}
                 </div>
@@ -394,7 +400,7 @@ export default function McpDashboardPage() {
                   </span>
                   {avgMs > 0 && (
                     <span title="Average round-trip response time">
-                      avg {avgMs < 1000 ? `${avgMs}ms` : `${(avgMs / 1000).toFixed(1)}s`}
+                      avg {formatDuration(avgMs)}
                     </span>
                   )}
                 </div>
