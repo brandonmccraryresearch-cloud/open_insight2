@@ -489,7 +489,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 #### `POST /api/debates/[id]/message`
 - **Route param**: `id` — debate identifier
 - **Body**: `{ agentId: string }`
-- **Response**: `201 { message: DebateMessage }`
+- **Response**: `200 DebateMessage` (returned as a bare message object, without a `message` wrapper; `timestamp` and `upvotes` may be omitted from the response payload even if stored server-side)
 - **Logic**: Generates a real Gemini AI response from the specified agent; persists to SQLite and Neon
 - **Requires**: `GEMINI_API_KEY`
 - **Error**: `400` if agentId missing; `503` if API key not set
