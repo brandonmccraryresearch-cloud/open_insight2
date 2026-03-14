@@ -33,6 +33,7 @@ interface ToolCallResult {
   result?: unknown;
   executionMode?: string;
   error?: string;
+  responseTimeMs?: number;
 }
 
 // ── Tool definitions with "Try It" examples ──────────────────────────────────
@@ -138,6 +139,7 @@ export default function McpDashboardPage() {
   async function tryExample(toolId: string, exampleLabel: string, endpoint: string, body: Record<string, unknown>) {
     setCalling(true);
     setCallResult(null);
+    const startTime = performance.now();
     try {
       const res = await fetch(endpoint, {
         method: "POST",
@@ -145,10 +147,12 @@ export default function McpDashboardPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
+      const responseTimeMs = Math.round(performance.now() - startTime);
       const result: ToolCallResult = {
         output: data.output ?? data.result ?? JSON.stringify(data, null, 2),
         executionMode: data.executionMode,
         error: data.error,
+        responseTimeMs,
       };
       setCallResult(result);
       setCallHistory((prev) => [
@@ -156,7 +160,8 @@ export default function McpDashboardPage() {
         ...prev.slice(0, 19),
       ]);
     } catch (err) {
-      const result: ToolCallResult = { error: err instanceof Error ? err.message : "Network error" };
+      const responseTimeMs = Math.round(performance.now() - startTime);
+      const result: ToolCallResult = { error: err instanceof Error ? err.message : "Network error", responseTimeMs };
       setCallResult(result);
     } finally {
       setCalling(false);
@@ -298,14 +303,21 @@ export default function McpDashboardPage() {
           {callResult ? (
             <>
               {callResult.executionMode && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: callResult.executionMode === "mcp" ? "#10b981" : "#f59e0b" }}
-                  />
-                  <span className="font-mono text-[var(--text-muted)]">
-                    executionMode: {callResult.executionMode}
-                  </span>
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: callResult.executionMode === "mcp" ? "#10b981" : "#f59e0b" }}
+                    />
+                    <span className="font-mono text-[var(--text-muted)]">
+                      executionMode: {callResult.executionMode}
+                    </span>
+                  </div>
+                  {callResult.responseTimeMs != null && (
+                    <span className="font-mono text-[var(--text-muted)]" title="Round-trip response time including network latency">
+                      ⏱ {callResult.responseTimeMs < 1000 ? `${callResult.responseTimeMs}ms` : `${(callResult.responseTimeMs / 1000).toFixed(1)}s`}
+                    </span>
+                  )}
                 </div>
               )}
               {callResult.error ? (
@@ -363,7 +375,32 @@ export default function McpDashboardPage() {
       {/* Execution History */}
       {callHistory.length > 0 && (
         <div className="glass-card p-5 space-y-3">
-          <h2 className="text-base font-semibold">Recent Tool Calls</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold">Recent Tool Calls</h2>
+            {/* Metrics summary */}
+            {(() => {
+              const withTime = callHistory.filter((e) => e.result.responseTimeMs != null);
+              const successCount = callHistory.filter((e) => !e.result.error).length;
+              const avgMs = withTime.length > 0
+                ? Math.round(withTime.reduce((s, e) => s + (e.result.responseTimeMs ?? 0), 0) / withTime.length)
+                : 0;
+              return (
+                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+                  <span title="Total tool calls made this session">
+                    {callHistory.length} calls
+                  </span>
+                  <span title="Percentage of calls that succeeded without errors">
+                    {callHistory.length > 0 ? Math.round((successCount / callHistory.length) * 100) : 0}% success
+                  </span>
+                  {avgMs > 0 && (
+                    <span title="Average round-trip response time">
+                      avg {avgMs < 1000 ? `${avgMs}ms` : `${(avgMs / 1000).toFixed(1)}s`}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {callHistory.map((entry, i) => {
               const tool = mcpToolDefs.find((t) => t.id === entry.tool);
@@ -380,6 +417,7 @@ export default function McpDashboardPage() {
                     </div>
                     <div className="text-[var(--text-muted)] font-mono mt-0.5">
                       {entry.result.executionMode && `[${entry.result.executionMode}] `}
+                      {entry.result.responseTimeMs != null && `${entry.result.responseTimeMs}ms · `}
                       {entry.result.error
                         ? `Error: ${entry.result.error.slice(0, 80)}`
                         : typeof entry.result.output === "string"

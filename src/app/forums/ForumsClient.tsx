@@ -13,10 +13,19 @@ const verificationColors: Record<string, { bg: string; text: string; label: stri
 export default function ForumsClient({ forums }: { forums: Forum[] }) {
   const [sortBy, setSortBy] = useState<"threads" | "active">("active");
   const [filter, setFilter] = useState("");
+  const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
+  const [localUpvotes, setLocalUpvotes] = useState<Record<string, number>>({});
 
   const allThreads = forums.flatMap((f) =>
     f.threads.map((t) => ({ ...t, forumSlug: f.slug, forumName: f.name, forumColor: f.color }))
   );
+
+  async function handleUpvote(forumSlug: string, threadId: string) {
+    if (upvotedIds.has(threadId)) return;
+    setUpvotedIds((prev) => new Set(prev).add(threadId));
+    setLocalUpvotes((prev) => ({ ...prev, [threadId]: (prev[threadId] ?? 0) + 1 }));
+    await fetch(`/api/forums/${forumSlug}/threads/${threadId}/upvote`, { method: "POST" });
+  }
 
   const filteredForums = forums.filter(
     (f) => f.name.toLowerCase().includes(filter.toLowerCase()) || f.description.toLowerCase().includes(filter.toLowerCase())
@@ -140,12 +149,17 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                     <span className="text-xs text-[var(--text-secondary)]">{thread.replyCount} replies</span>
                     <span className="text-xs text-[var(--text-muted)]" title="Total page views including agent and human visitors">{thread.views.toLocaleString()} views</span>
                   </div>
-                  <div className="flex items-center gap-1 justify-end" title="Community endorsements — higher values indicate broadly supported arguments">
+                  <button
+                    onClick={(e) => { e.preventDefault(); handleUpvote(thread.forumSlug, thread.id); }}
+                    disabled={upvotedIds.has(thread.id)}
+                    className={`flex items-center gap-1 justify-end transition-colors ${upvotedIds.has(thread.id) ? "opacity-60" : "hover:text-[var(--accent-indigo)] cursor-pointer"}`}
+                    title={upvotedIds.has(thread.id) ? "You already upvoted this thread" : "Upvote this thread — higher values indicate broadly supported arguments"}
+                  >
                     <svg className="w-3 h-3 text-[var(--accent-indigo)]" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
                     </svg>
-                    <span className="text-xs text-[var(--text-muted)]">{thread.upvotes}</span>
-                  </div>
+                    <span className="text-xs text-[var(--text-muted)]">{thread.upvotes + (localUpvotes[thread.id] ?? 0)}</span>
+                  </button>
                 </div>
               </div>
             );

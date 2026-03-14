@@ -313,18 +313,125 @@ export function getVerifications(tier?: string, status?: string): VerificationEn
 
 // --- Stats ---
 
+/**
+ * Compute real agent statistics from actual DB activity (threads, replies,
+ * debate messages, verifications) rather than seeded values.
+ */
+export function getComputedAgentStats(): Record<string, {
+  postCount: number;
+  debateWins: number;
+  verificationsSubmitted: number;
+  verifiedClaims: number;
+  reputationScore: number;
+}> {
+  const threads = db.select().from(schema.forumThreads).all();
+  const replies = db.select().from(schema.forumThreadReplies).all();
+  const debateMessages = db.select().from(schema.debateMessages).all();
+  const debates = db.select().from(schema.debates).all();
+  const verifications = db.select().from(schema.verifications).all();
+
+  const stats: Record<string, {
+    postCount: number;
+    debateWins: number;
+    verificationsSubmitted: number;
+    verifiedClaims: number;
+    reputationScore: number;
+  }> = {};
+
+  function ensure(agentId: string) {
+    if (!stats[agentId]) {
+      stats[agentId] = { postCount: 0, debateWins: 0, verificationsSubmitted: 0, verifiedClaims: 0, reputationScore: 0 };
+    }
+    return stats[agentId];
+  }
+
+  // Count forum threads authored
+  for (const t of threads) {
+    ensure(t.authorId).postCount++;
+  }
+
+  // Count forum replies
+  for (const r of replies) {
+    ensure(r.agentId).postCount++;
+  }
+
+  // Count debate messages
+  for (const m of debateMessages) {
+    ensure(m.agentId).postCount++;
+  }
+
+  // Count debate wins: agent with most messages + upvotes in completed debates
+  for (const d of debates) {
+    if (d.status === "completed" && d.verdict) {
+      const msgs = debateMessages.filter((m) => m.debateId === d.id);
+      const participants = new Set(msgs.map((m) => m.agentId));
+      if (participants.size >= 2) {
+        // Determine winner by most upvotes on their messages
+        let maxScore = -1;
+        let winnerId = "";
+        for (const pid of participants) {
+          const score = msgs.filter((m) => m.agentId === pid).reduce((s, m) => s + m.upvotes, 0);
+          if (score > maxScore) {
+            maxScore = score;
+            winnerId = pid;
+          }
+        }
+        if (winnerId) ensure(winnerId).debateWins++;
+      }
+    }
+  }
+
+  // Count verifications
+  for (const v of verifications) {
+    ensure(v.agentId).verificationsSubmitted++;
+    if (v.status === "passed") {
+      ensure(v.agentId).verifiedClaims++;
+    }
+  }
+
+  // Compute reputation: weighted score from contributions
+  for (const [, s] of Object.entries(stats)) {
+    // Reputation = base 50 + posts (0.5 each, max 20) + verified claims (2 each, max 20) + debate wins (3 each, max 10)
+    const postBonus = Math.min(s.postCount * 0.5, 20);
+    const verifiedBonus = Math.min(s.verifiedClaims * 2, 20);
+    const debateBonus = Math.min(s.debateWins * 3, 10);
+    s.reputationScore = Math.min(99, Math.round(50 + postBonus + verifiedBonus + debateBonus));
+  }
+
+  return stats;
+}
+
 export function getStats() {
   const debateRows = db.select().from(schema.debates).all();
   const verifications = db.select().from(schema.verifications).all();
   const agentRows = db.select().from(schema.agents).all();
   const threadRows = db.select().from(schema.forumThreads).all();
+  const replyRows = db.select().from(schema.forumThreadReplies).all();
+  const debateMessageRows = db.select().from(schema.debateMessages).all();
 
   const totalDebates = debateRows.length;
   const liveDebates = debateRows.filter((d) => d.status === "live").length;
   const totalRounds = debateRows.reduce((sum, d) => sum + d.rounds, 0);
   const totalSpectators = debateRows.reduce((sum, d) => sum + d.spectators, 0);
   const averageSpectators = totalDebates > 0 ? Math.round(totalSpectators / totalDebates) : 0;
-  const activeAgents = agentRows.filter((a) => a.status !== "idle").length;
+
+  // Compute "active agents" from real recent activity:
+  // An agent is active if they have any thread, reply, or debate message
+  const agentIdsWithActivity = new Set<string>();
+  for (const t of threadRows) agentIdsWithActivity.add(t.authorId);
+  for (const r of replyRows) agentIdsWithActivity.add(r.agentId);
+  for (const m of debateMessageRows) agentIdsWithActivity.add(m.agentId);
+  // Also count agents in live debates as active
+  for (const d of debateRows) {
+    if (d.status === "live") {
+      try {
+        const participants: string[] = JSON.parse(d.participants);
+        for (const pid of participants) agentIdsWithActivity.add(pid);
+      } catch { /* ignore parse errors */ }
+    }
+  }
+  const activeAgents = Math.max(agentIdsWithActivity.size, agentRows.filter((a) => a.status !== "idle").length);
+
   const totalThreads = threadRows.length;
   const verifiedClaims = verifications.filter((v) => v.status === "passed").length;
   const lean4Proofs = verifications.filter((v) => v.tier === "Tier 3" && v.status === "passed").length;

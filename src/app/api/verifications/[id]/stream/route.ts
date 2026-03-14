@@ -43,6 +43,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const body = new ReadableStream({
       async start(controller) {
+        const startTime = Date.now();
         let finalStatus = "passed";
         let finalDetails = "";
         let finalConfidence: number | null = null;
@@ -62,7 +63,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
                   finalStatus = payload.status;
                   finalDetails = payload.details ?? "";
                   finalConfidence = payload.confidence ?? null;
-                  finalDuration = payload.duration ?? "—";
+                  // Use actual measured duration if Gemini didn't provide one
+                  const elapsedMs = Date.now() - startTime;
+                  finalDuration = payload.duration ?? (elapsedMs < 1000 ? `${elapsedMs}ms` : `${(elapsedMs / 1000).toFixed(1)}s`);
                 }
               } catch { /* ignore parse errors */ }
             }
@@ -73,6 +76,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           finalStatus = "failed";
           finalDetails = msg;
+          const elapsedMs = Date.now() - startTime;
+          finalDuration = elapsedMs < 1000 ? `${elapsedMs}ms` : `${(elapsedMs / 1000).toFixed(1)}s`;
         }
 
         db.update(schema.verifications)
@@ -93,6 +98,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const tier = verification.tier;
   const body = new ReadableStream({
     async start(controller) {
+      const startTime = Date.now();
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "running", details: `Starting ${tier} verification...` })}\n\n`));
       db.update(schema.verifications).set({ status: "running", details: `Running ${tier} verification...`, timestamp: "running..." }).where(eq(schema.verifications.id, id)).run();
 
@@ -112,7 +118,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       const passed = Math.random() > 0.2;
       const confidence = passed ? (tier === "Tier 3" ? 100 : tier === "Tier 2" ? 90 + Math.floor(Math.random() * 8) : 99) : 30 + Math.floor(Math.random() * 20);
       const finalStatus = passed ? "passed" : "failed";
-      const duration = tier === "Tier 1" ? "<10ms" : tier === "Tier 2" ? `${500 + Math.floor(Math.random() * 500)}ms` : `${3 + Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}s`;
+      // Measure actual elapsed time instead of hardcoded strings
+      const elapsedMs = Date.now() - startTime;
+      const duration = elapsedMs < 1000 ? `${elapsedMs}ms` : `${(elapsedMs / 1000).toFixed(1)}s`;
       const details = passed ? `${tier} verification completed successfully.` : `${tier} verification failed.`;
 
       db.update(schema.verifications).set({ status: finalStatus, details, confidence, duration, timestamp: "just now" }).where(eq(schema.verifications.id, id)).run();
