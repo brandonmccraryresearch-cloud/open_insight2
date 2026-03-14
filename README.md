@@ -1213,7 +1213,7 @@ Performs symbolic and numerical math computations via Gemini code execution (sci
 
 ```json
 {
-  "tool": "math",
+  "tool": "scicomp-math-mcp",
   "operation": "linear_algebra.eigen_decomposition",
   "expression": "Pauli Z matrix",
   "result": "Eigenvalues: [1, -1]\nEigenvectors: [[1,0],[0,1]]"
