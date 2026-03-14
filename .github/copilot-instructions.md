@@ -193,13 +193,22 @@ This is a massive overhaul broken into sub-phases. Each session should complete 
 - [ ] Add "Quick Actions" floating panel for agents to invoke tools — deferred to Phase 6e
 - [x] Ensure mobile responsiveness for new menu items
 
-#### Phase 6e — Real Metrics + Seed Data Replacement (Session 5) ✅ COMPLETE
+#### Phase 6e — Real Metrics + Seed Data Replacement (Session 5+6) ✅ COMPLETE
 - [x] Replace hardcoded agent statistics with real computed values from activity
 - [x] Make forum upvotes functional (add vote endpoint + UI click handler)
 - [x] Add real verification duration tracking (measure actual Lean 4/Gemini execution time)
 - [x] Compute "Active Agents" from recent autonomous activity timestamps
 - [x] Show real MCP execution metrics (avg response time, success rate) on status page
 - [x] Fix home page "Formal Proofs" stat to use correct data
+- [x] Comprehensive UX audit: added tooltips to all remaining unlabeled metrics
+- [x] Standardized "watching"→"spectators" terminology across entire app
+- [x] Made debate tags clickable with tag filter dropdown
+- [x] Made verification tier/status badges clickable to filter
+- [x] Made agent status text clickable + added status filter dropdown
+- [x] Made reply counts clickable (link to thread)
+- [x] Added tooltips to formalism page parameter audit (Inputs/Outputs/Free Params)
+- [x] Added tooltips to all tag badges, upvote displays, verdict explanations
+- [x] Added debate message upvote tooltips and reply upvote tooltips
 - [ ] Add real-time spectator tracking for debates (WebSocket or polling) — deferred to Phase 6g
 - [ ] Replace hardcoded paper database with real OpenAlex/Semantic Scholar API — deferred to Phase 6g
 
@@ -491,3 +500,15 @@ Update `TECHNICAL_SPECIFICATION.md`:
 - **Tooltips on agent detail stats**: Each stat on agent profile has tooltip explaining computation method
 - **Build verified**: all 34 routes compile, 0 TypeScript errors
 - **Files changed**: `queries.ts`, `page.tsx` (home), `agents/page.tsx`, `agents/[id]/page.tsx`, `ForumsClient.tsx`, `tools/mcp/page.tsx`, `verifications/[id]/stream/route.ts`, `copilot-instructions.md`
+
+### Session 6e continuation summary (2026-03-14)
+- **Comprehensive UX audit**: Found and fixed 32+ remaining issues across all pages
+- **Missing tooltips fixed**: Round tooltips (home + debate detail), views tooltips (thread detail + ForumThreadsClient), spectators tooltips (home + debate detail), reply count tooltips (all 3 locations), upvote tooltips (thread detail + ForumThreadsClient + reply upvotes + debate message upvotes), formalism parameter audit tooltips (Inputs/Outputs/Free Params), verdict determination tooltip, format/domain badge tooltips on debate detail, all tag badges across app
+- **Terminology standardized**: "watching" → "spectators" on home page (matches debates page)
+- **Debate tags clickable**: Added `tagFilter` state + dropdown filter + clickable tag buttons in DebatesClient (consistent with format/domain badge pattern)
+- **Verification badges clickable**: Tier and status badges in VerificationClient now click to set the corresponding filter
+- **Agent status filter**: Added `statusFilter` state + dropdown + clickable status text in AgentsClient (extends existing domain filter pattern)
+- **Reply counts clickable**: ForumsClient + ForumThreadsClient reply counts are now Link elements to thread detail
+- **Debate detail tags**: Have tooltips explaining topic tags
+- **Build verified**: all 34 routes compile, 0 TypeScript errors
+- **Files changed**: `page.tsx` (home), `DebatesClient.tsx`, `debates/[id]/page.tsx`, `ForumsClient.tsx`, `ForumThreadsClient.tsx`, `threads/[threadId]/page.tsx`, `VerificationClient.tsx`, `AgentsClient.tsx`, `formalism/page.tsx`, `copilot-instructions.md`

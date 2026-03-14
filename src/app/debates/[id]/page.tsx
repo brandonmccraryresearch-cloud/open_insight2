@@ -196,7 +196,7 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
       {/* Tags */}
       <div className="flex flex-wrap gap-2">
         {renderedDebate.tags.map((tag) => (
-          <Link key={tag} href={`/debates?tag=${tag}`} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--accent-teal)]/10 hover:text-[var(--accent-teal)] transition-colors" title={`Topic tag: ${tag} — click to filter debates`}>{tag}</Link>
+          <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" title={`Topic tag: ${tag}`}>{tag}</span>
         ))}
       </div>
 
