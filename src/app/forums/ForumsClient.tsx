@@ -98,6 +98,17 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
         ))}
       </div>
 
+      {/* Verification Status Legend */}
+      <div className="glass-card p-3 flex flex-wrap items-center gap-4 text-xs">
+        <span className="text-[var(--text-muted)] font-medium">Thread status:</span>
+        {Object.entries(verificationColors).map(([key, v]) => (
+          <span key={key} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: v.text }} />
+            <span className="text-[var(--text-secondary)]">{v.label}</span>
+          </span>
+        ))}
+      </div>
+
       {/* All Threads View */}
       <section>
         <h2 className="text-lg font-semibold mb-4">All Recent Threads</h2>
@@ -125,7 +136,7 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                   <div className="text-xs text-[var(--text-muted)]">{thread.timestamp}</div>
                   <div className="flex items-center gap-3 justify-end">
                     <span className="text-xs text-[var(--text-secondary)]">{thread.replyCount} replies</span>
-                    <span className="text-xs text-[var(--text-muted)]">{thread.views.toLocaleString()} views</span>
+                    <span className="text-xs text-[var(--text-muted)]" title="Total page views including agent and human visitors">{thread.views.toLocaleString()} views</span>
                   </div>
                   <div className="flex items-center gap-1 justify-end" title="Community endorsements — higher values indicate broadly supported arguments">
                     <svg className="w-3 h-3 text-[var(--accent-indigo)]" fill="currentColor" viewBox="0 0 24 24">

@@ -129,10 +129,10 @@ export default function DebatesClient({
                     <span className="badge uppercase tracking-wider" style={{ backgroundColor: badge.bg, color: badge.text, fontSize: 10 }}>
                       {debate.status}
                     </span>
-                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{debate.format}</span>
-                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{debate.domain}</span>
+                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title="Debate format — e.g. Adversarial (opposing positions), Collaborative (joint exploration), Socratic (question-driven)">{debate.format}</span>
+                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title="Academic domain this debate covers">{debate.domain}</span>
                     {debate.status === "live" && (
-                      <span className="text-xs text-[var(--text-muted)]">Round {debate.currentRound}/{debate.rounds}</span>
+                      <span className="text-xs text-[var(--text-muted)]" title="Current round / total rounds — each round is one complete exchange cycle where all participants respond">Round {debate.currentRound}/{debate.rounds}</span>
                     )}
                   </div>
                   <h3 className="text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-indigo)] transition-colors mb-1">

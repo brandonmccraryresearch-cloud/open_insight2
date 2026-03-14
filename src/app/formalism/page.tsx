@@ -183,7 +183,7 @@ export default function FormalismPage() {
                 }}>
                   <span className="text-sm font-medium" style={{
                     color: paramAudit.status === "balanced" ? "#10b981" : paramAudit.status === "underconstrained" ? "#ef4444" : "#f59e0b",
-                  }}>
+                  }} title="Ratio of constraint outputs to inputs. < 1 = underconstrained (too few inputs), 1–3 = balanced, > 3 = overconstrained (too many constraints)">
                     Efficiency Ratio: {paramAudit.efficiencyRatio}
                   </span>
                   <span className="badge" style={{
@@ -223,7 +223,7 @@ export default function FormalismPage() {
           {activeTab === "classify" && classification && (
             <div className="space-y-4">
               <div className="glass-card p-6 text-center">
-                <div className="text-4xl font-bold font-mono mb-2" style={{ color: classification.color }}>
+                <div className="text-4xl font-bold font-mono mb-2" style={{ color: classification.color }} title="Discovery Classes: Class 1 = Novel theoretical prediction. Class 2 = Extension of known framework. Class 3 = Replication/confirmation of existing result.">
                   Class {classification.discoveryClass}
                 </div>
                 <h3 className="text-lg font-semibold" style={{ color: classification.color }}>
@@ -231,7 +231,7 @@ export default function FormalismPage() {
                 </h3>
                 <p className="text-sm text-[var(--text-secondary)] mt-1">{classification.description}</p>
                 <div className="mt-4">
-                  <div className="text-sm text-[var(--text-muted)]">Confidence</div>
+                  <div className="text-sm text-[var(--text-muted)]" title="Probability that the classification is correct, based on criteria match assessment">Confidence</div>
                   <div className="text-2xl font-bold font-mono" style={{ color: classification.color }}>
                     {classification.confidence}%
                   </div>

@@ -345,7 +345,7 @@ print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-sm">{tool.name}</h3>
                   {tool.status === "beta" && (
-                    <span className="badge bg-[var(--accent-violet)]/10 text-[var(--accent-violet)]" style={{ fontSize: 9 }}>BETA</span>
+                    <span className="badge bg-[var(--accent-violet)]/10 text-[var(--accent-violet)]" style={{ fontSize: 9 }} title="This tool is in beta — features may be incomplete and the API may change">BETA</span>
                   )}
                 </div>
               </div>
@@ -669,10 +669,10 @@ print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
                     )}
                   </div>
                   <div className="text-right shrink-0 ml-4 space-y-1">
-                    <div className="text-xs font-mono" style={{ color: paper.relevance > 0.9 ? "#10b981" : "#f59e0b" }}>
+                    <div className="text-xs font-mono" style={{ color: paper.relevance > 0.9 ? "#10b981" : "#f59e0b" }} title="Semantic similarity score computed via SPECTER2 embeddings — measures how closely the paper matches your query">
                       {(paper.relevance * 100).toFixed(0)}% match
                     </div>
-                    <div className="text-[10px] text-[var(--text-muted)]">{paper.source}</div>
+                    <div className="text-[10px] text-[var(--text-muted)]" title={paper.source === "OpenAlex" ? "OpenAlex: Open-access scholarly metadata covering 250M+ works" : "Semantic Scholar: AI-powered academic search by Allen AI"}>{paper.source}</div>
                     <a
                       href={`https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title)}`}
                       target="_blank"
