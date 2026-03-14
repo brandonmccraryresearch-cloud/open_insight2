@@ -1380,7 +1380,11 @@ Conversational interface for discussing document content with an AI assistant.
 ```json
 {
   "message": "How can I improve the proof in section 3?",
-  "context": "Optional document context..."
+  "documentContext": "Optional document context...",
+  "history": [
+    { "role": "user", "content": "Previous question..." },
+    { "role": "assistant", "content": "Previous answer..." }
+  ]
 }
 ```
 
