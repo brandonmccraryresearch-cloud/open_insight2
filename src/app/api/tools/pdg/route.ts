@@ -28,15 +28,33 @@ export async function POST(request: NextRequest) {
     const property = typeof body.property === "string" ? body.property.slice(0, 200) : "";
     const query = typeof body.query === "string" ? body.query.slice(0, 500) : "";
 
-    const searchQuery = query || `${particle} ${property}`.trim();
-    if (!searchQuery.trim()) {
-      return NextResponse.json({ error: "particle, property, or query is required" }, { status: 400 });
+    const hasParticle = particle.trim().length > 0;
+    const hasQuery = query.trim().length > 0;
+    const hasProperty = property.trim().length > 0;
+
+    if (!hasParticle && !hasQuery) {
+      if (hasProperty) {
+        return NextResponse.json(
+          { error: "particle or query is required; property is only valid when a particle is specified" },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json(
+        { error: "particle or query is required" },
+        { status: 400 },
+      );
     }
+
+    const searchQuery = hasQuery
+      ? query
+      : hasProperty
+        ? `${particle} ${property}`.trim()
+        : particle;
 
     const { result, executionMode } = await callMcpTool(
       PDG_MCP_SERVER,
       "get_particle",
-      { name: particle || searchQuery },
+      { name: hasParticle ? particle.trim() : searchQuery },
       hasGeminiKey() ? () => runGeminiFallback(searchQuery) : undefined,
     );
 
