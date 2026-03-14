@@ -1195,7 +1195,8 @@ Performs symbolic and numerical math computations via Gemini code execution (sci
 
 ```json
 {
-  "expression": "Compute the eigenvalues of the Pauli Z matrix"
+  "operation": "linear_algebra.eigen_decomposition",
+  "expression": "Pauli Z matrix"
 }
 ```
 
