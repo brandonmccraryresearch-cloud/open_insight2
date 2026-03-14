@@ -558,7 +558,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/notebook`
 - **Body**: `{ code: string }`
-- **Response**: `{ output: string, status: "success" }`
+- **Response**: `{ output: string, status: "success" | "error", executionMode: "gemini" | "simulated" }`
 - **Logic**: Executes code via Gemini code execution (server-side); primary browser path uses Pyodide WASM
 - **Error**: `400` if code missing
 
