@@ -1314,7 +1314,8 @@ Runs quantum circuit and state simulations via Gemini code execution (PsiAnimato
 
 ```json
 {
-  "query": "Simulate a Bell state preparation circuit"
+  "task": "Simulate a Bell state preparation circuit",
+  "systemType": "psi-animator"
 }
 ```
 
