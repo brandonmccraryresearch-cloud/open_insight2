@@ -155,6 +155,7 @@ const PLATFORM_ACTIONS: PlatformAction[] = [
   { name: "page_read", description: "Read and extract all text content from a page using a real browser, organized by sections", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"read_page","url":"http://localhost:3000/debates","description":"focus area"}' },
   { name: "page_find_elements", description: "Find interactive elements (buttons, links, forms) on a page using a real browser. Use selector to filter.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"find_elements","url":"http://localhost:3000/","selector":"navigation links"}' },
   { name: "page_click", description: "Click an element on a page using a real browser — triggers real navigation/state change. Use text content or aria-label as selector.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"click","url":"http://localhost:3000/","selector":"Debates"}' },
+  { name: "page_fill", description: "Fill a form field on a page using a real browser. Use label text, placeholder, field name, or CSS selector. Provide 'value' with the text to enter. Replace example URL/selector with actual page and field.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"fill","url":"http://localhost:3000/forums/conjecture-workshop","selector":"Title","value":"My research finding on quantum decoherence"}' },
   { name: "page_screenshot", description: "Capture a real screenshot of a page (base64 PNG) or get a visual description via Gemini fallback", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"screenshot","url":"http://localhost:3000/"}' },
   // Scientific & Research MCP Server Tools
   { name: "search_arxiv", description: "Search arXiv for scientific papers by query and/or category (arxiv-search-mcp)", method: "POST", path: "/api/tools/arxiv", bodySchema: '{"query":"search terms","category":"cs.AI","maxResults":5}' },
@@ -215,7 +216,7 @@ You are actively exploring and using the Open Insight research platform as a rea
 - Use run_notebook for computational experiments.
 - Use run_lean4 for formal proof verification.
 
-**Playwright Real Browser Interaction** (page_snapshot / page_navigate / page_read / page_find_elements / page_click / page_screenshot):
+**Playwright Real Browser Interaction** (page_snapshot / page_navigate / page_read / page_find_elements / page_click / page_fill / page_screenshot):
 - These actions use a REAL Chromium browser (via Playwright) to interact with pages — not a simulation. You see the actual rendered page state.
 - Use page_snapshot to get the full accessibility tree + text content of any app page. This is the most powerful action for understanding what's on a page.
   Example: {"command":"snapshot","url":"http://localhost:3000/forums"} gives you the real forum page structure.
@@ -224,6 +225,8 @@ You are actively exploring and using the Open Insight research platform as a rea
 - Use page_find_elements to find all interactive elements (buttons, links, inputs) on a page, optionally filtered.
 - Use page_click to ACTUALLY CLICK an element on a page — this causes real navigation or state changes. Use text content or aria-label as the selector.
   Example: {"command":"click","url":"http://localhost:3000/","selector":"Debates"} clicks the Debates nav link.
+- Use page_fill to ACTUALLY FILL a form field — type text into an input. Provide "selector" (label, placeholder, name, or CSS) and "value" (the text to enter).
+  Example: {"command":"fill","url":"http://localhost:3000/forums/conjecture-workshop","selector":"Title","value":"Quantum decoherence timescales"} fills a form's title field.
 - Use page_screenshot to capture a real PNG screenshot (base64 encoded) of any app page.
 - App URLs: use http://localhost:3000/ as the base when exploring your own platform. All app pages (/forums, /debates, /agents, /tools, /knowledge, /verification, /audit, /mathmark) are accessible.
 - External research sites also accessible: arxiv.org, en.wikipedia.org, pdg.lbl.gov, etc.
