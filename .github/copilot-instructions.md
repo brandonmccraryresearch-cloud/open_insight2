@@ -153,17 +153,20 @@ This is a massive overhaul broken into sub-phases. Each session should complete 
 - [x] Forums page: tooltips on thread counts, active agents count, upvotes
 - [x] Build verified: all routes compile
 
-#### Phase 6b — Ambiguity Resolution + Info Icons (Session 2)
-- [ ] Add info (ⓘ) tooltips for all unexplained metrics across the app
-- [ ] Add forum color legend explaining what category colors represent
-- [ ] Make forum thread counts clickable (link to forum thread list)
-- [ ] Add tooltip to "Active Agents" count explaining what "active" means
-- [ ] Add tooltip to forum upvotes explaining what they represent
-- [ ] Clarify "Efficiency Ratio" on formalism page with inline definition
-- [ ] Add Discovery Class explanation (Class 1/2/3) with inline help
-- [ ] Add "beta" badge tooltip on tools page explaining beta status
-- [ ] Add search source labels on tools page ("Searching: OpenAlex + Semantic Scholar")
-- [ ] Make debate format/domain badges filterable (not just status)
+#### Phase 6b — Ambiguity Resolution + Info Icons (Session 2) ✅ COMPLETE
+- [x] Add info (ⓘ) tooltips for all unexplained metrics across the app
+- [x] Add forum verification status color legend explaining what status colors represent
+- [x] Add tooltip to forum upvotes explaining what they represent (done in 6a)
+- [x] Clarify "Efficiency Ratio" on formalism page with inline tooltip definition
+- [x] Add Discovery Class explanation (Class 1/2/3) with tooltip help
+- [x] Add "beta" badge tooltip on tools page explaining beta status
+- [x] Add search source labels on tools page (OpenAlex vs Semantic Scholar tooltips)
+- [x] Add debate format/domain badge tooltips (Adversarial/Collaborative/Socratic + domain)
+- [x] Add debate round counter tooltip explaining what a "round" means
+- [x] Add thread views count tooltip
+- [x] Add confidence % tooltip on formalism page
+- [ ] Make forum thread counts clickable (link to forum thread list) — deferred to Phase 6d
+- [ ] Make debate format/domain badges filterable (not just status) — deferred to Phase 6d
 
 #### Phase 6c — MCP Tool Integration Surfaces (Session 3)
 - [ ] Add "MCP Tools" sub-menu under Tools in sidebar showing available tool routes
@@ -426,3 +429,14 @@ Update `TECHNICAL_SPECIFICATION.md`:
 - MCP binary not found → fall back to Gemini immediately (no retry)
 - Always log `executionMode` so operators can see which path was taken
 
+
+### Session 6b summary (2026-03-14)
+- Fixed Vercel build: Next.js 16 required custom `global-error.tsx` for prerendering; also added `not-found.tsx` and made `getHeaderData()` resilient to missing DB tables during build (try/catch with safe defaults)
+- Added tooltips to formalism page: Efficiency Ratio (definition + threshold explanation), Discovery Class (Class 1/2/3 meanings), Confidence % (what it measures)
+- Added tooltips to tools page: BETA badge (feature incomplete/API may change), relevance score (SPECTER2 embeddings), source labels (OpenAlex vs Semantic Scholar descriptions)
+- Added verification status color legend to forums page (Verified/Disputed/Pending/Unverified with colored dots)
+- Added tooltips to forums: thread views count
+- Added tooltips to debates page: format badge (Adversarial/Collaborative/Socratic), domain badge, round counter (what constitutes a round)
+- **Build verified**: all 33 routes compile, 0 TypeScript errors, 0 CodeQL alerts
+- **Files changed**: `global-error.tsx` (new), `not-found.tsx` (new), `queries.ts` (getHeaderData resilience), `formalism/page.tsx`, `tools/page.tsx`, `ForumsClient.tsx`, `DebatesClient.tsx`
+- **Deferred to Phase 6d**: Make forum thread counts clickable, make debate format/domain badges filterable
