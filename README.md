@@ -1230,9 +1230,12 @@ Runs molecular dynamics and computational chemistry calculations via Gemini code
 
 ```json
 {
-  "query": "Simulate the bond vibration frequency of H2O"
+  "task": "Simulate the bond vibration frequency of H2O"
 }
 ```
+
+- `task` (string, required): Description of the molecular computation to perform.
+- `systemType` (string, optional): Additional system type or preset configuration for the molecular tools.
 
 ---
 
