@@ -1295,7 +1295,7 @@ Performs safe browser actions (navigate, read, find elements, screenshot) using 
 }
 ```
 
-Supported commands: `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`
+Supported commands (interpreted descriptively via Gemini urlContext, not as real Playwright/browser automation): `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`. Every request must include a `url`.
 
 **Response:**
 
@@ -1305,10 +1305,7 @@ Supported commands: `navigate`, `read_page`, `find_elements`, `click`, `fill`, `
   "url": "https://arxiv.org/abs/2401.00001",
   "selector": null,
   "value": null,
-  "result": {
-    "status": "ok",
-    "data": { /* command-specific result payload */ }
-  }
+  "result": "Navigated to https://arxiv.org/abs/2401.00001 and read the page via Gemini urlContext, returning a natural-language summary of the main content."
 }
 ```
 
