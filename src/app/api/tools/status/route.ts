@@ -101,12 +101,12 @@ export async function GET() {
       playwright: {
         available: playwrightAvailable || gemini,
         executionMode: playwrightAvailable ? "playwright" : gemini ? "gemini-urlcontext" : "unavailable",
-        requires: [],
+        requires: playwrightAvailable ? [] : gemini ? ["GEMINI_API_KEY"] : [],
       },
       notebook: {
         available: true,
-        executionMode: gemini ? "gemini" : "simulated",
-        requires: [],
+        executionMode: gemini ? "gemini" : "subprocess",
+        requires: gemini ? ["GEMINI_API_KEY"] : [],
       },
       math: {
         available: (mcp["scicomp-math-mcp"]?.available) || gemini,
