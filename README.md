@@ -1109,15 +1109,17 @@ Searches the arXiv preprint server via the public arXiv API.
 
 ```json
 {
-  "papers": [
+  "tool": "arxiv",
+  "resultCount": 1,
+  "results": [
     {
-      "id": "arXiv:2401.00001",
       "title": "...",
       "authors": ["Author Name"],
-      "abstract": "...",
+      "summary": "...",
       "published": "2024-01-01",
       "categories": ["quant-ph"],
-      "url": "https://arxiv.org/abs/2401.00001"
+      "absLink": "https://arxiv.org/abs/2401.00001",
+      "pdfLink": "https://arxiv.org/pdf/2401.00001.pdf"
     }
   ]
 }
