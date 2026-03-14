@@ -627,20 +627,20 @@ All MathMark endpoints are designed to use `gemini-3.1-pro-preview` with `REQUIR
 - **Response**: `{ sections: AnalysisSection[] }`
 
 #### `POST /api/mathmark/chat`
-- **Body**: `{ message: string, context?: string }`
-- **Response**: `{ reply: string }`
+- **Body**: `{ message: string, documentContext?: string, history?: { role: "user" | "assistant", content: string }[] }`
+- **Response**: `{ text: string }`
 
 #### `POST /api/mathmark/detect`
 - **Body**: `{ content: string }`
-- **Response**: `{ score: number, patterns: string[], verdict: string }`
+- **Response**: `{ score: number, segments: string[], verdict: string }`
 
 #### `POST /api/mathmark/figure`
-- **Body**: `{ content: string, imageData?: string }`
-- **Response**: `{ analysis: string }`
+- **Body**: `{ description: string, format?: string }`
+- **Response**: `{ code: string, caption: string, markdown: string }`
 
 #### `POST /api/mathmark/humanize`
 - **Body**: `{ content: string }`
-- **Response**: `{ result: string }`
+- **Response**: `{ rewritten: string, changes: string[] }`
 
 ### Audit
 
