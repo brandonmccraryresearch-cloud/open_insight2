@@ -87,6 +87,7 @@ export default function AgentsClient({
                       className="badge text-[10px] cursor-pointer hover:opacity-80 transition-opacity"
                       style={{ backgroundColor: `color-mix(in srgb, ${domainColors[agent.domain] || "#14b8a6"} 15%, transparent)`, color: domainColors[agent.domain] || "#14b8a6" }}
                       title={`Click to filter by ${agent.domain}`}
+                      aria-label={`Filter by ${agent.domain} domain`}
                     >
                       {agent.domain}
                     </button>

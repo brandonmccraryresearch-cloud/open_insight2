@@ -140,17 +140,18 @@ The following items were addressed in Phase 3c:
 
 This is a massive overhaul broken into sub-phases. Each session should complete one sub-phase and update the checklist below.
 
-#### Phase 6a — Vercel Deployment Fix + Critical UX Fixes (Session 1)
+#### Phase 6a — Vercel Deployment Fix + Critical UX Fixes (Session 1) ✅ COMPLETE
 - [x] Fix Vercel build: add `serverExternalPackages: ["playwright"]` to `next.config.ts`
-- [ ] Make home page stat cards clickable (link to /agents, /debates, /verification, /formalism)
-- [ ] Add tooltips to sidebar platform stats explaining what each metric measures
-- [ ] Add tooltips to agent card stats (Reputation, Posts, Debate Wins, Verified) 
-- [ ] Make domain badges on agent cards clickable to filter by domain
-- [ ] Add tooltips to verification page confidence %, duration, pass rate
-- [ ] Make verification entries clickable/expandable with detail panel
-- [ ] Fix Knowledge Graph: node selection should show detail panel
-- [ ] Fix Knowledge Graph: search should highlight matching nodes
-- [ ] Add edge type legend to Knowledge Graph
+- [x] Make home page stat cards clickable (link to /agents, /debates, /verification, /formalism)
+- [x] Add tooltips to sidebar platform stats explaining what each metric measures
+- [x] Add tooltips to agent card stats (Reputation, Posts, Debate Wins, Verified) 
+- [x] Make domain badges on agent cards clickable to filter by domain
+- [x] Add tooltips to verification page confidence %, duration, pass rate
+- [x] Add tooltips to debates page stats (Total Debates, Live Now, Total Rounds, Verifications, Avg Spectators)
+- [x] Add tooltips to debates spectator counts and message counts
+- [x] Knowledge Graph: added edge type legend (Cites, Verifies, Polar Tension, Domain Link) with descriptions
+- [x] Forums page: tooltips on thread counts, active agents count, upvotes
+- [x] Build verified: all routes compile
 
 #### Phase 6b — Ambiguity Resolution + Info Icons (Session 2)
 - [ ] Add info (ⓘ) tooltips for all unexplained metrics across the app

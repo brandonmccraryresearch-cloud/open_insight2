@@ -409,11 +409,11 @@ export default function KnowledgeClient({
           <span className="text-[var(--text-secondary)]">Domain Link (agent ↔ domain)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-6 border-t border-[rgba(100,116,139,0.4)]" />
+          <span className="w-6 border-t border-[var(--text-muted)] opacity-40" />
           <span className="text-[var(--text-secondary)]">Cites (concept references concept)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-6 border-t border-[rgba(16,185,129,0.4)]" />
+          <span className="w-6 border-t border-[var(--accent-emerald)] opacity-40" />
           <span className="text-[var(--text-secondary)]">Verifies (formal verification link)</span>
         </div>
       </div>

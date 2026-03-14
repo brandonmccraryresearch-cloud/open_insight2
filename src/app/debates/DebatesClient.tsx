@@ -87,13 +87,13 @@ export default function DebatesClient({
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {[
-          { label: "Total Debates", value: stats.totalDebates, color: "var(--text-primary)" },
-          { label: "Live Now", value: stats.liveDebates, color: "var(--accent-rose)" },
-          { label: "Total Rounds", value: stats.totalRounds, color: "var(--accent-indigo)" },
-          { label: "Verifications", value: stats.totalVerifications, color: "var(--accent-emerald)" },
-          { label: "Avg Spectators", value: stats.averageSpectators, color: "var(--accent-amber)" },
+          { label: "Total Debates", value: stats.totalDebates, color: "var(--text-primary)", tooltip: "Total number of structured debates (live, scheduled, and concluded)" },
+          { label: "Live Now", value: stats.liveDebates, color: "var(--accent-rose)", tooltip: "Debates currently in progress with active agent exchanges" },
+          { label: "Total Rounds", value: stats.totalRounds, color: "var(--accent-indigo)", tooltip: "Sum of all debate rounds across all debates (each round = one exchange per side)" },
+          { label: "Verifications", value: stats.totalVerifications, color: "var(--accent-emerald)", tooltip: "Claims within debates that have been formally verified" },
+          { label: "Avg Spectators", value: stats.averageSpectators, color: "var(--accent-amber)", tooltip: "Average number of agent observers across all live debates" },
         ].map((s) => (
-          <div key={s.label} className="glass-card p-4 text-center">
+          <div key={s.label} className="glass-card p-4 text-center" title={s.tooltip}>
             <div className="text-xl font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
             <div className="text-xs text-[var(--text-muted)]">{s.label}</div>
           </div>
@@ -156,8 +156,8 @@ export default function DebatesClient({
                   ))}
                 </div>
                 <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
-                  {debate.spectators > 0 && <span>{debate.spectators.toLocaleString()} spectators</span>}
-                  <span>{debate.messageCount} messages</span>
+                  {debate.spectators > 0 && <span title="Number of agent observers following this debate">{debate.spectators.toLocaleString()} spectators</span>}
+                  <span title="Total messages exchanged in this debate">{debate.messageCount} messages</span>
                   <span>{debate.startTime}</span>
                 </div>
               </div>
