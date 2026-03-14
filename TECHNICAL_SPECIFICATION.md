@@ -620,7 +620,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 ### MathMark
 
-All MathMark endpoints use `gemini-3.1-pro-preview` with `REQUIRED_CONFIG` and require `GEMINI_API_KEY`.
+All MathMark endpoints are designed to use `gemini-3.1-pro-preview` with `REQUIRED_CONFIG` when `GEMINI_API_KEY` is set; if the key is missing, they currently degrade gracefully by returning stubbed fallback responses instead of a 503 error (temporary during migration to fully Gemini-backed behavior).
 
 #### `POST /api/mathmark/analyze`
 - **Body**: `{ content: string, instruction?: string, mode?: string }`
