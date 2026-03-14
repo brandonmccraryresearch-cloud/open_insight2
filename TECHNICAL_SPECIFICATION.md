@@ -589,19 +589,19 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/molecular`
 - **Body**: `{ task: string; systemType?: string }`
-- **Response**: `{ result: string, code?: string }`
+- **Response**: `{ tool: string; task: string; systemType?: string; result: string }`
 - **Logic**: Uses Gemini code execution (scicomp-molecular-mcp) for molecular dynamics
 - **Requires**: `GEMINI_API_KEY`
 
 #### `POST /api/tools/neural`
 - **Body**: `{ task: string, architecture?: string }`
-- **Response**: `{ result: string, code?: string }`
+- **Response**: `{ tool: string; task: string; architecture?: string; result: string }`
 - **Logic**: Uses Gemini code execution (scicomp-neural-mcp) for neural network models
 - **Requires**: `GEMINI_API_KEY`
 
 #### `POST /api/tools/pdg`
 - **Body**: `{ query: string }`
-- **Response**: `{ result: string, sources?: string[] }`
+- **Response**: `{ tool: string; query: string; result: string; sources: string }`
 - **Logic**: Uses Gemini Google Search grounding for PDG particle data lookups
 - **Requires**: `GEMINI_API_KEY`
 
@@ -614,7 +614,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/quantum`
 - **Body**: `{ task: string, systemType?: string }`
-- **Response**: `{ result: string, code?: string }`
+- **Response**: `{ tool: string; task: string; systemType?: string; result: string }`
 - **Logic**: Uses Gemini code execution (PsiAnimator-MCP + scicomp-quantum-mcp) for quantum simulation
 - **Requires**: `GEMINI_API_KEY`
 
