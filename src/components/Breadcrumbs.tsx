@@ -15,6 +15,8 @@ const routeLabels: Record<string, string> = {
   mcp: "MCP Dashboard",
   mathmark: "MathMark2PDF",
   audit: "Autonomous Agents",
+  pdg: "PDG",
+  qft: "QFT",
 };
 
 export default function Breadcrumbs() {
