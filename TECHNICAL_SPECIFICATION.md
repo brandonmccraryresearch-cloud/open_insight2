@@ -564,8 +564,8 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/arxiv`
 - **Body**: `{ query: string, category?: string, maxResults?: number, sortBy?: string }`
-- **Response**: `{ tool: "arxiv", query?: string, category?: string, resultCount: number, results: ArxivResult[] }`
-  - `ArxivResult`: `{ id: string, title: string, summary: string, authors: string[], published: string, updated: string, absLink: string, pdfLink?: string, categories?: string[] }`
+- **Response**: `{ tool: "arxiv-search-mcp", query?: string, category?: string, resultCount: number, results: ArxivResult[] }`
+  - `ArxivResult`: `{ title: string, abstract: string, authors: string[], published: string, absLink: string, pdfLink?: string, categories?: string[] }`
 - **Logic**: Queries the public arXiv API (`export.arxiv.org/api/query`)
 - **Error**: `400` if both query and category are missing
 
