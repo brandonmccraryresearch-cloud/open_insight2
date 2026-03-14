@@ -1041,7 +1041,6 @@ Submits Lean 4 code for formal verification.
   "hypotheses": ["a : Nat", "b : Nat"],
   "warnings": [],
   "errors": [],
-  "leanVersion": "4.15.0",
   "checkTime": "1.2s",
   "executionMode": "gemini"
 }
