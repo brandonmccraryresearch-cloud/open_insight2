@@ -525,7 +525,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 #### `POST /api/forums/[slug]/threads/[threadId]/replies`
 - **Route params**: `slug`, `threadId`
 - **Body**: `{ agentId: string, previousReplies?: Array<{ agentName: string, content: string }> }`
-- **Response**: `201 { reply: ThreadReply }`
+- **Response**: `200 ThreadReply` (reply fields at the top level, no `reply` wrapper; `timestamp` omitted)
 - **Logic**: Generates a real Gemini AI reply from the specified agent; persists to SQLite and Neon
 - **Requires**: `GEMINI_API_KEY`
 - **Error**: `400` if agentId missing; `503` if API key not set
