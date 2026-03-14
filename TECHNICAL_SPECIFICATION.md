@@ -610,7 +610,10 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Response**: `{ command: string, url: string, selector: string | null, value: string | null, result: string }`
 - **Logic**: Generates a safe, natural-language description of Playwright-style browser actions using Gemini URL context; does **not** execute real browser automation and is restricted to same-origin + approved research sites
 - **Supported commands**: Interpreted commands such as `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot` (all simulated/described only)
-- **Error**: `403` if target URL not in allowlist
+- **Errors**:
+  - `400` for invalid JSON body or missing required fields (`command` or `url`)
+  - `403` if target URL is not in the allowlist
+  - `503` if `GEMINI_API_KEY` is missing or misconfigured
 
 #### `POST /api/tools/quantum`
 - **Body**: `{ task: string, systemType?: string }`
