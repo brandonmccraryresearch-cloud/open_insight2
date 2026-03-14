@@ -136,13 +136,82 @@ The following items were addressed in Phase 3c:
   - All component states (hover, active, skeleton, search-input, etc.) updated for dark theme
 - **Build verified**: 33 routes compile, all pages render correctly with new dark theme
 
-### Next session priorities (Phase 6)
+### Phase 6 — Comprehensive UX Overhaul + Real Metrics + MCP Tool Integration (MULTI-SESSION)
 
-1. **Phase 2 remaining items**: "take me there" routing for every write action type + conflict/idempotency handling for concurrent autonomous writes
-2. **Persistent browser sessions**: Consider keeping a browser context alive per agent for multi-step Playwright workflows
-3. **particlephysics-mcp install**: Binary not on PyPI — needs `uvx` from git; add Docker/VPS install instructions
-4. **MCP server health monitoring**: Add background keepalive pings so `isMcpServerAvailable()` stays warm between requests
-5. **Agent workflow tests**: Run agents in a live audit session and observe them using real MCP tools via `check_tool_status`
+This is a massive overhaul broken into sub-phases. Each session should complete one sub-phase and update the checklist below.
+
+#### Phase 6a — Vercel Deployment Fix + Critical UX Fixes (Session 1)
+- [x] Fix Vercel build: add `serverExternalPackages: ["playwright"]` to `next.config.ts`
+- [ ] Make home page stat cards clickable (link to /agents, /debates, /verification, /formalism)
+- [ ] Add tooltips to sidebar platform stats explaining what each metric measures
+- [ ] Add tooltips to agent card stats (Reputation, Posts, Debate Wins, Verified) 
+- [ ] Make domain badges on agent cards clickable to filter by domain
+- [ ] Add tooltips to verification page confidence %, duration, pass rate
+- [ ] Make verification entries clickable/expandable with detail panel
+- [ ] Fix Knowledge Graph: node selection should show detail panel
+- [ ] Fix Knowledge Graph: search should highlight matching nodes
+- [ ] Add edge type legend to Knowledge Graph
+
+#### Phase 6b — Ambiguity Resolution + Info Icons (Session 2)
+- [ ] Add info (ⓘ) tooltips for all unexplained metrics across the app
+- [ ] Add forum color legend explaining what category colors represent
+- [ ] Make forum thread counts clickable (link to forum thread list)
+- [ ] Add tooltip to "Active Agents" count explaining what "active" means
+- [ ] Add tooltip to forum upvotes explaining what they represent
+- [ ] Clarify "Efficiency Ratio" on formalism page with inline definition
+- [ ] Add Discovery Class explanation (Class 1/2/3) with inline help
+- [ ] Add "beta" badge tooltip on tools page explaining beta status
+- [ ] Add search source labels on tools page ("Searching: OpenAlex + Semantic Scholar")
+- [ ] Make debate format/domain badges filterable (not just status)
+
+#### Phase 6c — MCP Tool Integration Surfaces (Session 3)
+- [ ] Add "MCP Tools" sub-menu under Tools in sidebar showing available tool routes
+- [ ] Add tool status indicators in sidebar (green dot = MCP active, yellow = Gemini fallback)
+- [ ] Create `/tools/mcp` dashboard page showing all MCP server statuses in real-time
+- [ ] Add MCP tool invocation UI for each tool type (math, quantum, molecular, neural, PDG)
+- [ ] Add "Try It" interactive panels on tools page connected to real MCP endpoints
+- [ ] Expose tool execution history in audit page so operators can see what agents computed
+- [ ] Add tool result rendering (LaTeX for math, plots for quantum/molecular, tables for PDG)
+
+#### Phase 6d — Navigation + Menu Overhaul (Session 4)
+- [ ] Add collapsible sub-menus to sidebar for tool categories
+- [ ] Add "Scientific Computing" section with sub-items: Math, Quantum, Molecular, Neural, PDG
+- [ ] Add "Browser Tools" section: Playwright, Browse, Docs
+- [ ] Add "Verification" section: Lean 4, Formalism Engine, Verification
+- [ ] Update header features dropdown to include MCP tools
+- [ ] Add breadcrumb navigation to all pages
+- [ ] Add "Quick Actions" floating panel for agents to invoke tools
+- [ ] Ensure mobile responsiveness for new menu items
+
+#### Phase 6e — Real Metrics + Seed Data Replacement (Session 5)
+- [ ] Replace hardcoded agent statistics with real computed values from activity
+- [ ] Add real-time spectator tracking for debates (WebSocket or polling)
+- [ ] Make forum upvotes functional (add vote endpoint + UI click handler)
+- [ ] Add real verification duration tracking (measure actual Lean 4/Gemini execution time)
+- [ ] Replace hardcoded paper database with real OpenAlex/Semantic Scholar API
+- [ ] Add real-time agent activity tracking (compute Reputation from actual contributions)
+- [ ] Compute "Active Agents" from recent autonomous session timestamps, not status field
+- [ ] Show real MCP execution metrics (avg response time, success rate) on status page
+
+#### Phase 6f — Logo Redesign + Branding (Session 6)
+- [ ] Replace globe icon with atom/neural-network motif SVG logo
+- [ ] Logo should represent "Open Insight" as scientific + AI research platform
+- [ ] Update favicon, apple-touch-icon, og:image with new logo
+- [ ] Update README header with new logo
+- [ ] Ensure logo works in dark teal theme and on light backgrounds
+
+#### Phase 6g — Integration Testing + Polish (Session 7)
+- [ ] End-to-end test: agent invokes MCP tool → result displays in UI → notification appears
+- [ ] Audit all pages for remaining non-functional elements
+- [ ] Performance audit: ensure tooltips/modals don't cause layout shifts
+- [ ] Accessibility audit: all tooltips have aria labels, keyboard navigable
+- [ ] Final Vercel deployment verification
+
+### Session 6a summary (2026-03-14)
+- Fixed Vercel build: added `serverExternalPackages: ["playwright"]` to `next.config.ts` to prevent bundling native Playwright binaries
+- Wrote comprehensive Phase 6 multi-session plan in copilot-instructions.md
+- Audited ALL UI elements for non-functional, ambiguous, or unexplained items (see audit findings above)
+- Started Phase 6a critical UX fixes
 
 ---
 

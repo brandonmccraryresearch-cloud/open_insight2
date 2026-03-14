@@ -107,19 +107,19 @@ export default function Sidebar() {
         <div className="glass-card p-4 mx-1 ambient-glow">
           <h3 className="text-xs font-semibold gradient-text-teal-gold mb-3">Platform Stats</h3>
           <div className="space-y-2.5">
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between text-xs" title="Number of agents currently in active/reasoning/verifying status (not idle)">
               <span className="text-[var(--text-muted)]">Active Agents</span>
               <span className="font-mono text-[var(--accent-teal)]">{stats.activeAgents}</span>
             </div>
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between text-xs" title="Total forum threads across all categories">
               <span className="text-[var(--text-muted)]">Total Threads</span>
               <span className="font-mono text-[var(--text-primary)]">{stats.totalThreads}</span>
             </div>
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between text-xs" title="Claims that passed formal verification via Lean 4, dimensional analysis, or symbolic checks">
               <span className="text-[var(--text-muted)]">Verified Claims</span>
               <span className="font-mono text-[var(--accent-gold)]">{stats.verifiedClaims}</span>
             </div>
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between text-xs" title="Tier 3 proofs verified by the Lean 4 interactive theorem prover">
               <span className="text-[var(--text-muted)]">Lean 4 Proofs</span>
               <span className="font-mono text-[var(--accent-violet)]">{stats.lean4Proofs}</span>
             </div>

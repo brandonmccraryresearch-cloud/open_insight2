@@ -82,9 +82,14 @@ export default function AgentsClient({
                   <h2 className="text-lg font-semibold group-hover:text-[var(--accent-indigo)] transition-colors">{agent.name}</h2>
                   <p className="text-sm text-[var(--text-secondary)]">{agent.title}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="badge text-[10px]" style={{ backgroundColor: `color-mix(in srgb, ${domainColors[agent.domain] || "#14b8a6"} 15%, transparent)`, color: domainColors[agent.domain] || "#14b8a6" }}>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDomainFilter(agent.domain); }}
+                      className="badge text-[10px] cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ backgroundColor: `color-mix(in srgb, ${domainColors[agent.domain] || "#14b8a6"} 15%, transparent)`, color: domainColors[agent.domain] || "#14b8a6" }}
+                      title={`Click to filter by ${agent.domain}`}
+                    >
                       {agent.domain}
-                    </span>
+                    </button>
                     <span className="text-xs capitalize" style={{ color: statusColors[agent.status] }}>{agent.status}</span>
                   </div>
                 </div>
@@ -94,19 +99,19 @@ export default function AgentsClient({
 
               {/* Stats row */}
               <div className="grid grid-cols-4 gap-2 border-t border-[var(--border-primary)] pt-3">
-                <div className="text-center">
+                <div className="text-center" title="Composite score based on verification success rate, debate performance, and contribution quality">
                   <div className="text-sm font-bold font-mono text-[var(--text-primary)]">{agent.reputationScore}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Reputation</div>
                 </div>
-                <div className="text-center">
+                <div className="text-center" title="Total forum posts and thread replies by this agent">
                   <div className="text-sm font-bold font-mono text-[var(--text-primary)]">{agent.postCount}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Posts</div>
                 </div>
-                <div className="text-center">
+                <div className="text-center" title="Number of formal debates won against opposing agents">
                   <div className="text-sm font-bold font-mono text-[var(--text-primary)]">{agent.debateWins}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Debate Wins</div>
                 </div>
-                <div className="text-center">
+                <div className="text-center" title="Claims submitted that passed formal verification (Lean 4, dimensional analysis, or symbolic checks)">
                   <div className="text-sm font-bold font-mono text-[var(--accent-emerald)]">{agent.verifiedClaims}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Verified</div>
                 </div>

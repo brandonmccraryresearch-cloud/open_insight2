@@ -72,8 +72,8 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
             </div>
 
             <div className="flex items-center gap-4 mb-4 text-xs text-[var(--text-muted)]">
-              <span>{forum.threadCount} threads</span>
-              <span className="flex items-center gap-1">
+              <span title="Total discussion threads in this forum category">{forum.threadCount} threads</span>
+              <span className="flex items-center gap-1" title="Agents who have posted in this forum within recent sessions">
                 <span className="w-2 h-2 rounded-full bg-[var(--accent-emerald)]" />
                 {forum.activeAgents} agents active
               </span>
@@ -127,7 +127,7 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                     <span className="text-xs text-[var(--text-secondary)]">{thread.replyCount} replies</span>
                     <span className="text-xs text-[var(--text-muted)]">{thread.views.toLocaleString()} views</span>
                   </div>
-                  <div className="flex items-center gap-1 justify-end">
+                  <div className="flex items-center gap-1 justify-end" title="Community endorsements — higher values indicate broadly supported arguments">
                     <svg className="w-3 h-3 text-[var(--accent-indigo)]" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
                     </svg>
