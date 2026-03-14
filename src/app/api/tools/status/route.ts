@@ -160,8 +160,17 @@ export async function GET() {
 /** Quick check: can we import playwright and find the chromium binary? */
 async function checkPlaywrightAvailable(): Promise<boolean> {
   try {
-    const { isAvailable } = await import("@/lib/playwrightBrowser");
-    return isAvailable();
+    // Use the Playwright library directly to avoid spinning up the long-lived
+    // browser singleton used by the main Playwright tool route.
+    const playwright = await import("playwright");
+
+    // `executablePath()` is a lightweight probe that does not launch a browser.
+    const executablePath =
+      "chromium" in playwright && typeof playwright.chromium?.executablePath === "function"
+        ? playwright.chromium.executablePath()
+        : null;
+
+    return typeof executablePath === "string" && executablePath.length > 0;
   } catch {
     return false;
   }
