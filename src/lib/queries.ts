@@ -347,13 +347,15 @@ export function getStats() {
  * Replaces hardcoded notifications and live debate counts.
  */
 export function getHeaderData() {
-  const debateRows = db.select().from(schema.debates).all();
-  const threadRows = db.select().from(schema.forumThreads).all();
-  const forumRows = db.select().from(schema.forums).all();
-  const verifications = db.select().from(schema.verifications).all();
+  // Guard against missing tables during build / first deploy before seed runs
+  try {
+    const debateRows = db.select().from(schema.debates).all();
+    const threadRows = db.select().from(schema.forumThreads).all();
+    const forumRows = db.select().from(schema.forums).all();
+    const verifications = db.select().from(schema.verifications).all();
 
-  const liveDebateRows = debateRows.filter((d) => d.status === "live");
-  const liveDebates = liveDebateRows.length;
+    const liveDebateRows = debateRows.filter((d) => d.status === "live");
+    const liveDebates = liveDebateRows.length;
 
   // Build notifications from real platform data (most recent threads, debates, verifications)
   const notifications: { id: number; title: string; forum: string; time: string; href: string }[] = [];
@@ -397,5 +399,9 @@ export function getHeaderData() {
     });
   }
 
-  return { liveDebates, notifications };
+    return { liveDebates, notifications };
+  } catch {
+    // Tables may not exist yet (e.g. fresh build before seed). Return safe defaults.
+    return { liveDebates: 0, notifications: [] };
+  }
 }
