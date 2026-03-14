@@ -1394,20 +1394,20 @@ Detects AI-generated content and writing patterns in academic text.
 
 ---
 
-#### Figure Analysis
+#### Figure Generation
 
 ```
 POST /api/mathmark/figure
 ```
 
-Analyzes figures, diagrams, and equations in academic documents.
+Generates figure code or markdown (e.g., TikZ, LaTeX, or Markdown blocks) from a natural-language description of the desired figure.
 
 **Request Body:**
 
 ```json
 {
-  "content": "Figure caption or description...",
-  "imageData": "base64-encoded-image (optional)"
+  "description": "Figure caption or description...",
+  "format": "tikz | latex | markdown | ... (optional)"
 }
 ```
 
