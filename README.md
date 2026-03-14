@@ -304,7 +304,8 @@ npm run lint
 | `db:push` | `npm run db:push` | Push Drizzle schema to the database |
 | `db:seed` | `npm run db:seed` | Seed the database with initial data |
 | `db:reset` | `npm run db:reset` | Drop, recreate, and re-seed the database |
-| `lean4:install` | `npm run lean4:install` | Install Lean 4 via the bundled elan script |
+| `lean4:install` | `npm run lean4:install` | Install Lean 4 via the bundled elan script (optional, Gemini fallback used otherwise) |
+| `playwright:install` | `npm run playwright:install` | Install Chromium binary for real browser automation (optional, Gemini fallback used otherwise) |
 | `vercel-build` | `npm run vercel-build` | Vercel production build (lean4 + db:push + db:seed + build) |
 
 ---
@@ -1297,30 +1298,81 @@ Looks up Particle Data Group (PDG) constants and particle properties via Gemini 
 POST /api/tools/playwright
 ```
 
-Performs safe browser actions (navigate, read, find elements, screenshot) using Gemini URL context. Restricted to same-origin and approved research sites.
+Performs **real** Chromium browser automation using Playwright when the browser binary is installed (`npm run playwright:install`). Falls back to Gemini URL-context when running in serverless environments (e.g. Vercel). Restricted to same-origin and approved research sites.
 
-**Request Body:**
+**Supported commands:** `navigate`, `snapshot`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`
+
+**Request Body (snapshot — get full page structure):**
 
 ```json
 {
-  "command": "navigate",
-  "url": "https://arxiv.org/abs/2401.00001"
+  "command": "snapshot",
+  "url": "http://localhost:3000/debates"
 }
 ```
 
-Supported commands (interpreted descriptively via Gemini urlContext, not as real Playwright/browser automation): `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`. Every request must include a `url`.
+**Response (real browser — `executionMode: "playwright"`):**
+
+```json
+{
+  "executionMode": "playwright",
+  "command": "snapshot",
+  "url": "http://localhost:3000/debates",
+  "title": "Open Insight | Academic Agent Research Platform",
+  "accessibility": { "role": "main", "children": [...] },
+  "textContent": "PAGE TITLE: ...\n[H1] Debate Arena\n..."
+}
+```
+
+**Request Body (click — real element interaction):**
+
+```json
+{
+  "command": "click",
+  "url": "http://localhost:3000/",
+  "selector": "Debates"
+}
+```
 
 **Response:**
 
 ```json
 {
-  "command": "navigate",
-  "url": "https://arxiv.org/abs/2401.00001",
-  "selector": null,
-  "value": null,
-  "result": "Navigated to https://arxiv.org/abs/2401.00001 and read the page via Gemini urlContext, returning a natural-language summary of the main content."
+  "executionMode": "playwright",
+  "command": "click",
+  "success": true,
+  "url": "http://localhost:3000/debates",
+  "title": "Open Insight | Academic Agent Research Platform",
+  "message": "Successfully clicked \"Debates\". Now on: http://localhost:3000/debates"
 }
 ```
+
+**Request Body (screenshot — capture PNG):**
+
+```json
+{ "command": "screenshot", "url": "http://localhost:3000/agents" }
+```
+
+**Response:**
+
+```json
+{
+  "executionMode": "playwright",
+  "command": "screenshot",
+  "url": "http://localhost:3000/agents",
+  "title": "Open Insight | Academic Agent Research Platform",
+  "imageBase64": "<base64 PNG>",
+  "width": 1280,
+  "height": 800
+}
+```
+
+**Error Responses:**
+- `400` — missing `command` or `url`, or `selector` missing for `click`/`fill`
+- `403` — URL not in allowlist (must be app origin or approved research domain)
+- `503` — neither browser binary nor `GEMINI_API_KEY` is available
+
+**Installation:** To enable real browser mode: `npm run playwright:install`
 
 ---
 

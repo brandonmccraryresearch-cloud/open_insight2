@@ -607,14 +607,27 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Requires**: `GEMINI_API_KEY`
 
 #### `POST /api/tools/playwright`
-- **Body**: `{ command: string, url: string, selector?: string | null, value?: string | null }`
-- **Response**: `{ command: string, url: string, selector: string | null, value: string | null, result: string }`
-- **Logic**: Generates a safe, natural-language description of Playwright-style browser actions using Gemini URL context; does **not** execute real browser automation and is restricted to same-origin + approved research sites
-- **Supported commands**: Interpreted commands such as `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot` (all simulated/described only)
+- **Body**: `{ command: string, url: string, selector?: string, value?: string, description?: string }`
+- **Supported commands**: `navigate`, `snapshot`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`
+- **Response** (real browser — `executionMode: "playwright"`):
+  - `navigate` / `snapshot` / `read_page`: `{ executionMode, command, url, title, accessibility: AccessibilityNode | null, textContent: string }`
+  - `find_elements`: `{ executionMode, command, url, elements: ElementInfo[], count: number }`
+  - `click` / `fill`: `{ executionMode, command, success: boolean, url, title, message }`
+  - `screenshot`: `{ executionMode, command, url, title, imageBase64: string, width: number, height: number }`
+- **Response** (Gemini fallback — `executionMode: "gemini-urlcontext"`): `{ executionMode, command, url, selector, value, result: string }`
+- **Logic**: Uses a real Chromium browser (via `playwright@1.58.2`) when the binary is available (`src/lib/playwrightBrowser.ts`); falls back to Gemini URL-context when no browser is installed (e.g. Vercel serverless). Same-origin + approved research site allowlist enforced server-side.
+- **Playwright commands**:
+  - `snapshot`/`navigate` — navigate to URL, return real accessibility tree + section-organized text content
+  - `find_elements` — return all interactive elements (buttons, links, inputs) with role/name/type
+  - `click` — actually click an element by text content, aria-label, or CSS selector; returns new URL/title after navigation
+  - `fill` — fill a form field by label, placeholder, name, or CSS selector
+  - `screenshot` — capture base64 PNG screenshot (1280×800 viewport)
 - **Errors**:
-  - `400` for invalid JSON body or missing required fields (`command` or `url`)
-  - `403` if target URL is not in the allowlist
-  - `503` if `GEMINI_API_KEY` is missing or misconfigured
+  - `400` for invalid JSON body, missing `command`, or missing `url`
+  - `400` for `click`/`fill` without required `selector`
+  - `403` if target URL is not in the allowlist (same-origin or approved research domains)
+  - `503` if neither browser binary nor `GEMINI_API_KEY` is available
+- **Installation**: Run `npm run playwright:install` to install the Chromium binary on a dedicated server
 
 #### `POST /api/tools/quantum`
 - **Body**: `{ task: string, systemType?: string }`
@@ -1468,6 +1481,7 @@ return NextResponse.json({ error: "Field required" }, { status: 400 });
   "drizzle-orm": "^0.45.1",
   "katex": "^0.16.28",
   "next": "16.1.6",
+  "playwright": "^1.58.2",
   "react": "19.2.3",
   "react-dom": "19.2.3",
   "react-markdown": "^10.1.0",
@@ -1478,7 +1492,7 @@ return NextResponse.json({ error: "Field required" }, { status: 400 });
 }
 ```
 
-> **Note**: `@anthropic-ai/sdk` is **not installed**. `src/lib/claude.ts` is retained as a stub but its `streamAgentReasoning` throws at runtime. Pyodide is not an npm dependency — the runtime is loaded entirely from CDN (`v0.27.5` via jsdelivr) in `src/lib/pyodide.ts`.
+> **Note**: `@anthropic-ai/sdk` is **not installed**. `src/lib/claude.ts` is retained as a stub but its `streamAgentReasoning` throws at runtime. Pyodide is not an npm dependency — the runtime is loaded entirely from CDN (`v0.27.5` via jsdelivr) in `src/lib/pyodide.ts`. The `playwright` package is installed but the Chromium binary must be installed separately via `npm run playwright:install` (not bundled with the package).
 
 ### Dev Dependencies
 
