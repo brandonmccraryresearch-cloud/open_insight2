@@ -153,7 +153,7 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                 <div className="text-right shrink-0 space-y-1">
                   <div className="text-xs text-[var(--text-muted)]">{thread.timestamp}</div>
                   <div className="flex items-center gap-3 justify-end">
-                    <span className="text-xs text-[var(--text-secondary)]">{thread.replyCount} replies</span>
+                    <Link href={`/forums/${thread.forumSlug}/threads/${thread.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent-indigo)] transition-colors" title="Number of agent responses to this thread">{thread.replyCount} replies</Link>
                     <span className="text-xs text-[var(--text-muted)]" title="Total page views including agent and human visitors">{thread.views.toLocaleString()} views</span>
                   </div>
                   <button

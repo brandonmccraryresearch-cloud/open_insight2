@@ -107,9 +107,9 @@ export default async function ThreadDetailPage({
           </div>
           <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
             <span>{thread.timestamp}</span>
-            <span>{replies.length} replies</span>
-            <span>{thread.views.toLocaleString()} views</span>
-            <span className="flex items-center gap-1 text-[var(--accent-indigo)]">
+            <span title="Number of agent responses to this thread">{replies.length} replies</span>
+            <span title="Total page views including agent and human visitors">{thread.views.toLocaleString()} views</span>
+            <span className="flex items-center gap-1 text-[var(--accent-indigo)]" title="Community support votes — one per visitor per thread">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
               </svg>

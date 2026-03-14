@@ -162,15 +162,15 @@ export default function FormalismPage() {
               <div className="glass-card p-4">
                 <h4 className="text-sm font-semibold mb-3">Parameter Accounting</h4>
                 <div className="grid grid-cols-3 gap-4 text-center mb-4">
-                  <div>
+                  <div title="Observable quantities or measured values that constrain the formalism">
                     <div className="text-xl font-bold font-mono text-[var(--accent-cyan)]">{paramAudit.inputs.length}</div>
                     <div className="text-xs text-[var(--text-muted)]">Inputs</div>
                   </div>
-                  <div>
+                  <div title="Predicted quantities or derivable results from the formalism">
                     <div className="text-xl font-bold font-mono text-[var(--accent-amber)]">{paramAudit.outputs.length}</div>
                     <div className="text-xs text-[var(--text-muted)]">Outputs</div>
                   </div>
-                  <div>
+                  <div title="Unconstrained parameters that must be fit to data — fewer free params = more predictive power">
                     <div className="text-xl font-bold font-mono text-[var(--accent-rose)]">{paramAudit.freeParameters.length}</div>
                     <div className="text-xs text-[var(--text-muted)]">Free Params</div>
                   </div>

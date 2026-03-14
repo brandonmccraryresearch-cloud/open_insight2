@@ -50,6 +50,7 @@ export default function DebatesClient({
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [formatFilter, setFormatFilter] = useState<string>("all");
   const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [localDebates, setLocalDebates] = useState<DebateListItem[]>([]);
   const router = useRouter();
@@ -58,14 +59,16 @@ export default function DebatesClient({
   const debates = [...localDebates.filter((ld) => !initialDebateIds.has(ld.id)), ...initialDebates];
   const agentMap = new Map(agents.map((a) => [a.id, a]));
 
-  // Collect unique formats and domains for filter options
+  // Collect unique formats, domains, and tags for filter options
   const allFormats = Array.from(new Set(debates.map((d) => d.format)));
   const allDomains = Array.from(new Set(debates.map((d) => d.domain)));
+  const allTags = Array.from(new Set(debates.flatMap((d) => d.tags))).sort();
 
   const filtered = debates.filter((d) => {
     if (statusFilter !== "all" && d.status !== statusFilter) return false;
     if (formatFilter !== "all" && d.format !== formatFilter) return false;
     if (domainFilter !== "all" && d.domain !== domainFilter) return false;
+    if (tagFilter !== "all" && !d.tags.includes(tagFilter)) return false;
     return true;
   });
 
@@ -147,9 +150,20 @@ export default function DebatesClient({
           <option value="all">All Domains</option>
           {allDomains.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
-        {(formatFilter !== "all" || domainFilter !== "all") && (
+        {allTags.length > 0 && (
+          <select
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
+            className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-md px-2 py-1 text-xs text-[var(--text-primary)] outline-none"
+            title="Filter by topic tag"
+          >
+            <option value="all">All Tags</option>
+            {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
+        {(formatFilter !== "all" || domainFilter !== "all" || tagFilter !== "all") && (
           <button
-            onClick={() => { setFormatFilter("all"); setDomainFilter("all"); }}
+            onClick={() => { setFormatFilter("all"); setDomainFilter("all"); setTagFilter("all"); }}
             className="text-[10px] text-[var(--accent-rose)] hover:underline"
           >
             Clear filters
@@ -181,7 +195,7 @@ export default function DebatesClient({
                   </h3>
                   <p className="text-sm text-[var(--text-secondary)]">{debate.summary}</p>
                   {debate.verdict && (
-                    <p className="text-xs text-[var(--accent-amber)] mt-2 italic">{debate.verdict}</p>
+                    <p className="text-xs text-[var(--accent-amber)] mt-2 italic" title="Verdict determined by AI analysis of argument quality, evidence strength, and logical consistency">{debate.verdict}</p>
                   )}
                 </div>
               </div>
@@ -212,7 +226,7 @@ export default function DebatesClient({
               {/* Tags */}
               <div className="flex flex-wrap gap-1 mt-3">
                 {debate.tags.map((tag) => (
-                  <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
+                  <button key={tag} onClick={(e) => { e.preventDefault(); setTagFilter(tag); }} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-pointer hover:bg-[var(--accent-teal)]/10 hover:text-[var(--accent-teal)] transition-colors" style={{ fontSize: 10 }} title={`Topic tag: ${tag} — click to filter`} aria-label={`Filter debates by tag: ${tag}`}>{tag}</button>
                 ))}
               </div>
             </Link>

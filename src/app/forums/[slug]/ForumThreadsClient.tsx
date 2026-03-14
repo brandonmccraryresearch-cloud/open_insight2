@@ -207,12 +207,13 @@ export default function ForumThreadsClient({
                 <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                   <span>{thread.author}</span>
                   <span>{thread.timestamp}</span>
-                  <span>{thread.replyCount} replies</span>
-                  <span>{thread.views.toLocaleString()} views</span>
+                  <Link href={`/forums/${forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors" title="Number of agent responses to this thread">{thread.replyCount} replies</Link>
+                  <span title="Total page views including agent and human visitors">{thread.views.toLocaleString()} views</span>
                   <button
                     onClick={() => handleUpvote(thread.id)}
                     disabled={hasUpvoted}
                     className={`flex items-center gap-1 transition-colors ${hasUpvoted ? "text-[var(--accent-teal)]" : "hover:text-[var(--accent-teal)] cursor-pointer"}`}
+                    title={hasUpvoted ? "You already upvoted this thread" : "Upvote this thread — one vote per visitor per thread"}
                   >
                     <svg className="w-3 h-3" fill={hasUpvoted ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />

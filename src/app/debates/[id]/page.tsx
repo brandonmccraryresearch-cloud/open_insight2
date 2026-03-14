@@ -79,15 +79,15 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
           {renderedDebate.status === "concluded" && (
             <span className="badge uppercase tracking-wider" style={{ backgroundColor: "rgba(100,116,139,0.1)", color: "#64748b", fontSize: 10 }}>Concluded</span>
           )}
-          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{renderedDebate.format}</span>
-          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{renderedDebate.domain}</span>
+          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" title={`Debate format: ${renderedDebate.format}`}>{renderedDebate.format}</span>
+          <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" title={`Academic domain: ${renderedDebate.domain}`}>{renderedDebate.domain}</span>
         </div>
 
         <h1 className="text-2xl font-bold mb-2">{renderedDebate.title}</h1>
         <p className="text-[var(--text-secondary)] mb-4">{renderedDebate.summary}</p>
 
         {renderedDebate.verdict && (
-          <div className="p-3 rounded-lg border border-[var(--accent-amber)]/20 bg-[var(--accent-amber)]/5 mb-4">
+          <div className="p-3 rounded-lg border border-[var(--accent-amber)]/20 bg-[var(--accent-amber)]/5 mb-4" title="Verdict is determined by AI analysis of argument quality, evidence strength, and logical consistency across all rounds">
             <p className="text-sm text-[var(--accent-amber)]"><strong>Verdict:</strong> {renderedDebate.verdict}</p>
           </div>
         )}
@@ -112,9 +112,9 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
           </div>
           <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
             {renderedDebate.status === "live" && (
-              <span>Round {renderedDebate.currentRound}/{renderedDebate.rounds}</span>
+              <span title="Current round / total rounds — each round is one complete exchange cycle where all participants respond">Round {renderedDebate.currentRound}/{renderedDebate.rounds}</span>
             )}
-            <span>{renderedDebate.spectators.toLocaleString()} spectators</span>
+            <span title="Number of agent observers following this debate">{renderedDebate.spectators.toLocaleString()} spectators</span>
             <span>{renderedDebate.startTime}</span>
           </div>
         </div>

@@ -108,7 +108,7 @@ export default function Home() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="badge" style={{ backgroundColor: "rgba(244,63,94,0.1)", color: "#f43f5e", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Live</span>
                       <span className="badge" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-muted)" }}>{debate.format}</span>
-                      <span className="text-xs text-[var(--text-muted)]">Round {debate.currentRound}/{debate.rounds}</span>
+                      <span className="text-xs text-[var(--text-muted)]" title="Current round / total rounds — each round is one complete exchange cycle where all participants respond">Round {debate.currentRound}/{debate.rounds}</span>
                     </div>
                     <h3 className="font-semibold text-[var(--text-primary)] mb-1">{debate.title}</h3>
                     <p className="text-sm text-[var(--text-secondary)] line-clamp-2">{debate.summary}</p>
@@ -128,7 +128,7 @@ export default function Home() {
                     ))}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                    <span>{debate.spectators.toLocaleString()} watching</span>
+                    <span title="Number of agent observers following this debate">{debate.spectators.toLocaleString()} spectators</span>
                     <span>{debate.startTime}</span>
                   </div>
                 </div>
