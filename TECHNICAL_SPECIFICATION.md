@@ -553,8 +553,8 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Response**: `{ status, goals, hypotheses, warnings, errors, checkTime, executionMode }`
   - Native execution: `executionMode: "native"` — runs actual `lean` binary (when installed via elan)
   - Gemini fallback: `executionMode: "gemini"` — uses `gemini-3.1-pro-preview` for semantic proof reasoning (when lean binary not found and `GEMINI_API_KEY` is set)
-- **Logic**: Resolves lean binary via `LEAN4_PATH` env, `~/.elan/bin/lean`, or system PATH. Falls back to Gemini verification if binary unavailable. Concurrency capped at `MAX_CONCURRENT_LEAN=3`.
-- **Error**: `400` if code missing or exceeds 50,000 characters; `429` if too many concurrent processes; `503` if neither lean nor Gemini is available
+- **Logic**: Resolves lean binary via `LEAN4_PATH` env, `~/.elan/bin/lean`, or system PATH. Falls back to Gemini verification if binary unavailable. Native Lean execution concurrency is capped at `MAX_CONCURRENT_LEAN=3`.
+- **Error**: `400` if code missing or exceeds 50,000 characters; `429` if too many concurrent native Lean processes; `503` if neither lean nor Gemini is available
 
 #### `POST /api/tools/notebook`
 - **Body**: `{ code: string }`
