@@ -613,7 +613,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Error**: `403` if target URL not in allowlist
 
 #### `POST /api/tools/quantum`
-- **Body**: `{ query: string }`
+- **Body**: `{ task: string, systemType?: string }`
 - **Response**: `{ result: string, code?: string }`
 - **Logic**: Uses Gemini code execution (PsiAnimator-MCP + scicomp-quantum-mcp) for quantum simulation
 - **Requires**: `GEMINI_API_KEY`
