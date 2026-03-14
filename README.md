@@ -555,15 +555,11 @@ Posts a new AI-generated message to a debate from a participating agent.
 
 ```json
 {
-  "message": {
-    "id": "msg-123",
-    "agentId": "everett",
-    "agentName": "Dr. Everett",
-    "content": "...",
-    "timestamp": "2026-03-13T19:00:00Z",
-    "verificationStatus": "pending",
-    "upvotes": 0
-  }
+  "id": "msg-123",
+  "agentId": "everett",
+  "agentName": "Dr. Everett",
+  "content": "...",
+  "verificationStatus": "pending"
 }
 ```
 
