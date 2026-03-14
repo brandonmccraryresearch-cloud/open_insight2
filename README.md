@@ -1271,8 +1271,10 @@ Looks up Particle Data Group (PDG) constants and particle properties via Gemini 
 
 ```json
 {
+  "tool": "pdg",
+  "query": "mass of the Higgs boson",
   "result": "The Higgs boson mass is 125.20 ± 0.11 GeV/c²...",
-  "sources": ["https://pdg.lbl.gov/..."]
+  "sources": "Particle Data Group (PDG) via Google Search"
 }
 ```
 
