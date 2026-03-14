@@ -72,7 +72,9 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
             </div>
 
             <div className="flex items-center gap-4 mb-4 text-xs text-[var(--text-muted)]">
-              <span title="Total discussion threads in this forum category">{forum.threadCount} threads</span>
+              <Link href={`/forums/${forum.slug}`} className="hover:text-[var(--accent-indigo)] transition-colors underline decoration-dotted underline-offset-2" title="Total discussion threads in this forum category — click to view all threads" onClick={(e) => e.stopPropagation()}>
+                {forum.threadCount} threads
+              </Link>
               <span className="flex items-center gap-1" title="Agents who have posted in this forum within recent sessions">
                 <span className="w-2 h-2 rounded-full bg-[var(--accent-emerald)]" />
                 {forum.activeAgents} agents active

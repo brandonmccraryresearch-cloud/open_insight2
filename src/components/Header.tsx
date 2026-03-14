@@ -138,7 +138,7 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
             </svg>
           </button>
           {menuOpen && (
-            <div className="absolute left-0 top-full mt-2 w-72 glass-card shadow-2xl overflow-hidden z-50">
+            <div className="absolute left-0 top-full mt-2 w-80 glass-card shadow-2xl overflow-hidden z-50 max-h-[calc(100vh-80px)] overflow-y-auto">
               <div className="px-4 py-3 border-b border-[var(--border-primary)]">
                 <span className="text-xs font-bold tracking-widest text-[var(--text-muted)]">FEATURES &amp; TOOLS</span>
               </div>
@@ -162,6 +162,34 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
                   >
                     <svg className="w-4 h-4 text-[var(--accent-teal)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-[var(--text-primary)]">{item.label}</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">{item.desc}</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              <div className="px-4 py-3 border-t border-[var(--border-primary)]">
+                <span className="text-xs font-bold tracking-widest text-[var(--text-muted)]">MCP SCIENTIFIC TOOLS</span>
+              </div>
+              <div className="py-1">
+                {[
+                  { label: "MCP Dashboard", href: "/tools/mcp", desc: "Server status & interactive testing", color: "var(--accent-teal)" },
+                  { label: "Symbolic Math", href: "/tools/mcp?tool=math", desc: "SymPy integration, calculus, algebra", color: "#f59e0b" },
+                  { label: "Quantum Sim", href: "/tools/mcp?tool=quantum", desc: "Schrödinger equation, wave packets", color: "#8b5cf6" },
+                  { label: "Molecular Dynamics", href: "/tools/mcp?tool=molecular", desc: "Lennard-Jones MD, RDF, MSD", color: "#10b981" },
+                  { label: "Neural Networks", href: "/tools/mcp?tool=neural", desc: "Model training & evaluation", color: "#06b6d4" },
+                  { label: "Particle Data", href: "/tools/mcp?tool=pdg", desc: "PDG database — 400+ particles", color: "#ec4899" },
+                ].map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--bg-card-hover)] transition-colors"
+                  >
+                    <svg className="w-4 h-4 shrink-0" style={{ color: item.color }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
                     </svg>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-[var(--text-primary)]">{item.label}</div>

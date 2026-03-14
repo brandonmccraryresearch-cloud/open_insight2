@@ -165,8 +165,8 @@ This is a massive overhaul broken into sub-phases. Each session should complete 
 - [x] Add debate round counter tooltip explaining what a "round" means
 - [x] Add thread views count tooltip
 - [x] Add confidence % tooltip on formalism page
-- [ ] Make forum thread counts clickable (link to forum thread list) — deferred to Phase 6d
-- [ ] Make debate format/domain badges filterable (not just status) — deferred to Phase 6d
+- [x] Make forum thread counts clickable (link to forum thread list) — completed in Phase 6d
+- [x] Make debate format/domain badges filterable (not just status) — completed in Phase 6d
 
 #### Phase 6c — MCP Tool Integration Surfaces (Session 3) ✅ COMPLETE
 - [x] Add "MCP Dashboard" link under RESEARCH in sidebar navigation
@@ -181,15 +181,17 @@ This is a massive overhaul broken into sub-phases. Each session should complete 
 - [x] Execution history panel tracking recent tool calls with timestamps and modes
 - [x] All-routes status table showing availability, execution mode, and required env vars
 
-#### Phase 6d — Navigation + Menu Overhaul (Session 4)
-- [ ] Add collapsible sub-menus to sidebar for tool categories
-- [ ] Add "Scientific Computing" section with sub-items: Math, Quantum, Molecular, Neural, PDG
-- [ ] Add "Browser Tools" section: Playwright, Browse, Docs
-- [ ] Add "Verification" section: Lean 4, Formalism Engine, Verification
-- [ ] Update header features dropdown to include MCP tools
-- [ ] Add breadcrumb navigation to all pages
-- [ ] Add "Quick Actions" floating panel for agents to invoke tools
-- [ ] Ensure mobile responsiveness for new menu items
+#### Phase 6d — Navigation + Menu Overhaul (Session 4) ✅ COMPLETE
+- [x] Add collapsible sub-menus to sidebar for tool categories
+- [x] Add "Scientific Computing" section with sub-items: Math, Quantum, Molecular, Neural, PDG
+- [x] Add "Browser Tools" section: Playwright, Browse, Docs
+- [x] Add "Verification" section: Lean 4, Formalism Engine, Verification
+- [x] Update header features dropdown to include MCP tools
+- [x] Add breadcrumb navigation to all pages
+- [x] Make forum thread counts clickable (deferred from 6b)
+- [x] Make debate format/domain badges filterable with dropdowns + clickable badges (deferred from 6b)
+- [ ] Add "Quick Actions" floating panel for agents to invoke tools — deferred to Phase 6e
+- [x] Ensure mobile responsiveness for new menu items
 
 #### Phase 6e — Real Metrics + Seed Data Replacement (Session 5)
 - [ ] Replace hardcoded agent statistics with real computed values from activity
@@ -459,3 +461,18 @@ Update `TECHNICAL_SPECIFICATION.md`:
 - Auto-refresh every 30s on the MCP dashboard
 - **Build verified**: all 34 routes compile (33 + /tools/mcp), 0 TypeScript errors
 - **Files changed**: `Sidebar.tsx` (MCP tools section + status fetch), `src/app/tools/mcp/page.tsx` (new)
+
+### Session 6d summary (2026-03-14)
+- **Sidebar overhaul**: Refactored from flat navigation to collapsible `SidebarSection` components with expand/collapse toggles
+  - DISCOVER (Home, Forums, Debates, Agents) — expanded by default
+  - VERIFICATION (Verification, Formalism Engine, Knowledge Graph) — expanded by default
+  - TOOLS & COMPUTE (Tools, MCP Dashboard, MathMark2PDF) — expanded by default
+  - SCIENTIFIC COMPUTING (Math, Quantum, Molecular, Neural, PDG with live MCP status) — collapsed by default
+  - BROWSER TOOLS (Playwright, Browse, Docs with live status) — collapsed by default
+  - FORUMS (6 forum shortcuts) — collapsed by default
+- **Header features dropdown**: Added "MCP SCIENTIFIC TOOLS" section with 6 links (Dashboard, Math, Quantum, Molecular, Neural, PDG)
+- **Breadcrumbs**: New `Breadcrumbs.tsx` component added to `layout.tsx`, renders on all pages except Home with route-aware labels
+- **Forum thread counts**: Made clickable — clicking "N threads" navigates to the forum's thread list (deferred from 6b)
+- **Debate format/domain filters**: Added format and domain dropdown filters to Debates page; format/domain badges on debate cards are now clickable buttons that set the respective filter (deferred from 6b)
+- **Build verified**: all 34 routes compile, 0 TypeScript errors
+- **Files changed**: `Sidebar.tsx` (collapsible sections, browser tools), `Header.tsx` (MCP tools dropdown section), `Breadcrumbs.tsx` (new), `layout.tsx` (breadcrumbs), `ForumsClient.tsx` (clickable thread counts), `DebatesClient.tsx` (format/domain filters + clickable badges), `copilot-instructions.md`

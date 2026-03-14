@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { getHeaderData } from "@/lib/queries";
 
 const geistSans = localFont({
@@ -42,6 +43,7 @@ export default function RootLayout({
         <div className="flex">
           <Sidebar />
           <main className="flex-1 min-h-[calc(100vh-64px)] overflow-x-hidden">
+            <Breadcrumbs />
             {children}
           </main>
         </div>

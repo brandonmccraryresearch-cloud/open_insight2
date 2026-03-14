@@ -3,36 +3,57 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 
-const navigation = [
-  {
-    label: "DISCOVER",
-    items: [
-      { name: "Home", href: "/", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
-      { name: "Forums", href: "/forums", icon: "M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" },
-      { name: "Debates", href: "/debates", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" },
-      { name: "Agents", href: "/agents", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
-    ]
-  },
-  {
-    label: "RESEARCH",
-    items: [
-      { name: "Verification", href: "/verification", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
-      { name: "Knowledge Graph", href: "/knowledge", icon: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" },
-      { name: "Formalism Engine", href: "/formalism", icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" },
-      { name: "Tools", href: "/tools", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
-      { name: "MCP Dashboard", href: "/tools/mcp", icon: "M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" },
-      { name: "MathMark2PDF", href: "/mathmark", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
-    ]
-  }
+/** Collapsible sidebar section */
+function SidebarSection({ label, defaultOpen = true, children }: { label: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-between w-full text-[10px] font-bold tracking-widest text-[var(--text-muted)] mb-2 px-3 hover:text-[var(--text-secondary)] transition-colors"
+      >
+        {label}
+        <svg className={`w-3 h-3 transition-transform ${open ? "rotate-0" : "-rotate-90"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+const discoverItems = [
+  { name: "Home", href: "/", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
+  { name: "Forums", href: "/forums", icon: "M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" },
+  { name: "Debates", href: "/debates", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" },
+  { name: "Agents", href: "/agents", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
+];
+
+const verificationItems = [
+  { name: "Verification", href: "/verification", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
+  { name: "Formalism Engine", href: "/formalism", icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" },
+  { name: "Knowledge Graph", href: "/knowledge", icon: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" },
+];
+
+const toolItems = [
+  { name: "Tools", href: "/tools", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
+  { name: "MCP Dashboard", href: "/tools/mcp", icon: "M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" },
+  { name: "MathMark2PDF", href: "/mathmark", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
 ];
 
 /** MCP tool routes shown in the sidebar with live status indicators */
-const mcpTools = [
+const sciCompTools = [
   { name: "Math", route: "math", color: "#f59e0b" },
   { name: "Quantum", route: "quantum", color: "#8b5cf6" },
   { name: "Molecular", route: "molecular", color: "#10b981" },
   { name: "Neural", route: "neural", color: "#06b6d4" },
   { name: "PDG", route: "pdg", color: "#ec4899" },
+];
+
+const browserTools = [
+  { name: "Playwright", route: "playwright", color: "#22d3ee" },
+  { name: "Browse", route: "browse", color: "#a78bfa" },
+  { name: "Docs", route: "docs", color: "#34d399" },
 ];
 
 const forumShortcuts = [
@@ -45,6 +66,46 @@ const forumShortcuts = [
 ];
 
 interface ToolRouteStatus { available: boolean; executionMode: string }
+
+function NavItem({ href, icon, name, active }: { href: string; icon: string; name: string; active: boolean }) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className={`nav-item flex items-center gap-3 text-sm ${active ? "active" : ""}`}
+      >
+        <svg className="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
+        </svg>
+        {name}
+      </Link>
+    </li>
+  );
+}
+
+function ToolStatusItem({ name, route, color, status }: { name: string; route: string; color: string; status?: ToolRouteStatus }) {
+  const mode = status?.executionMode ?? "unknown";
+  const isMcp = mode === "mcp";
+  const isAvailable = status?.available ?? false;
+  return (
+    <li>
+      <Link
+        href={`/tools/mcp?tool=${route}`}
+        className="nav-item flex items-center gap-3 text-sm"
+        title={`${name}: ${isMcp ? "Real MCP server" : isAvailable ? "Gemini fallback" : "Unavailable"}`}
+      >
+        <span
+          className="w-2 h-2 rounded-full shrink-0"
+          style={{ backgroundColor: isMcp ? "#10b981" : isAvailable ? "#f59e0b" : "#64748b" }}
+        />
+        <span className="truncate" style={{ color }}>{name}</span>
+        <span className="ml-auto text-[9px] font-mono text-[var(--text-muted)]">
+          {isMcp ? "MCP" : isAvailable ? "AI" : "—"}
+        </span>
+      </Link>
+    </li>
+  );
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -73,73 +134,54 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 border-r border-[rgba(139,92,246,0.06)] h-[calc(100vh-64px)] sticky top-16 overflow-y-auto hidden lg:block bg-[var(--bg-primary)]/80 backdrop-blur-xl">
-      <nav className="p-4 space-y-6">
-        {navigation.map((section) => (
-          <div key={section.label}>
-            <h3 className="text-[10px] font-bold tracking-widest text-[var(--text-muted)] mb-2 px-3">
-              {section.label}
-            </h3>
-            <ul className="space-y-0.5">
-              {section.items.map((item) => (
-                <li key={item.name}>
-                  <Link
-                    href={item.href}
-                    className={`nav-item flex items-center gap-3 text-sm ${
-                      pathname === item.href ? "active" : ""
-                    }`}
-                  >
-                    <svg className="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                    </svg>
-                    {item.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-
-        {/* MCP Tools */}
-        <div>
-          <h3 className="text-[10px] font-bold tracking-widest text-[var(--text-muted)] mb-2 px-3">
-            MCP TOOLS
-          </h3>
+      <nav className="p-4 space-y-5">
+        {/* DISCOVER */}
+        <SidebarSection label="DISCOVER">
           <ul className="space-y-0.5">
-            {mcpTools.map((tool) => {
-              const status = toolStatus[tool.route];
-              const mode = status?.executionMode ?? "unknown";
-              const isMcp = mode === "mcp";
-              const isAvailable = status?.available ?? false;
-              return (
-                <li key={tool.route}>
-                  <Link
-                    href={`/tools/mcp?tool=${tool.route}`}
-                    className={`nav-item flex items-center gap-3 text-sm ${
-                      pathname === `/tools/mcp` ? "" : ""
-                    }`}
-                    title={`${tool.name}: ${isMcp ? "Real MCP server" : isAvailable ? "Gemini fallback" : "Unavailable"}`}
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: isMcp ? "#10b981" : isAvailable ? "#f59e0b" : "#64748b" }}
-                      title={isMcp ? "MCP active" : isAvailable ? "Gemini fallback" : "Unavailable"}
-                    />
-                    <span className="truncate" style={{ color: tool.color }}>{tool.name}</span>
-                    <span className="ml-auto text-[9px] font-mono text-[var(--text-muted)]">
-                      {isMcp ? "MCP" : isAvailable ? "AI" : "—"}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
+            {discoverItems.map((item) => (
+              <NavItem key={item.name} href={item.href} icon={item.icon} name={item.name} active={pathname === item.href} />
+            ))}
           </ul>
-        </div>
+        </SidebarSection>
+
+        {/* VERIFICATION */}
+        <SidebarSection label="VERIFICATION">
+          <ul className="space-y-0.5">
+            {verificationItems.map((item) => (
+              <NavItem key={item.name} href={item.href} icon={item.icon} name={item.name} active={pathname === item.href} />
+            ))}
+          </ul>
+        </SidebarSection>
+
+        {/* TOOLS */}
+        <SidebarSection label="TOOLS & COMPUTE">
+          <ul className="space-y-0.5">
+            {toolItems.map((item) => (
+              <NavItem key={item.name} href={item.href} icon={item.icon} name={item.name} active={pathname === item.href || (item.href === "/tools/mcp" && pathname.startsWith("/tools/mcp"))} />
+            ))}
+          </ul>
+        </SidebarSection>
+
+        {/* SCIENTIFIC COMPUTING — MCP tools */}
+        <SidebarSection label="SCIENTIFIC COMPUTING" defaultOpen={false}>
+          <ul className="space-y-0.5">
+            {sciCompTools.map((tool) => (
+              <ToolStatusItem key={tool.route} name={tool.name} route={tool.route} color={tool.color} status={toolStatus[tool.route]} />
+            ))}
+          </ul>
+        </SidebarSection>
+
+        {/* BROWSER TOOLS */}
+        <SidebarSection label="BROWSER TOOLS" defaultOpen={false}>
+          <ul className="space-y-0.5">
+            {browserTools.map((tool) => (
+              <ToolStatusItem key={tool.route} name={tool.name} route={tool.route} color={tool.color} status={toolStatus[tool.route]} />
+            ))}
+          </ul>
+        </SidebarSection>
 
         {/* Forum shortcuts */}
-        <div>
-          <h3 className="text-[10px] font-bold tracking-widest text-[var(--text-muted)] mb-2 px-3">
-            FORUMS
-          </h3>
+        <SidebarSection label="FORUMS" defaultOpen={false}>
           <ul className="space-y-0.5">
             {forumShortcuts.map((forum) => (
               <li key={forum.slug}>
@@ -158,7 +200,7 @@ export default function Sidebar() {
               </li>
             ))}
           </ul>
-        </div>
+        </SidebarSection>
 
         {/* Platform stats */}
         <div className="glass-card p-4 mx-1 ambient-glow">

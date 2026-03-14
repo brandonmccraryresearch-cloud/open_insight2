@@ -48,6 +48,8 @@ export default function DebatesClient({
   stats: Stats;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [formatFilter, setFormatFilter] = useState<string>("all");
+  const [domainFilter, setDomainFilter] = useState<string>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [localDebates, setLocalDebates] = useState<DebateListItem[]>([]);
   const router = useRouter();
@@ -55,7 +57,17 @@ export default function DebatesClient({
   const initialDebateIds = new Set(initialDebates.map((d) => d.id));
   const debates = [...localDebates.filter((ld) => !initialDebateIds.has(ld.id)), ...initialDebates];
   const agentMap = new Map(agents.map((a) => [a.id, a]));
-  const filtered = statusFilter === "all" ? debates : debates.filter((d) => d.status === statusFilter);
+
+  // Collect unique formats and domains for filter options
+  const allFormats = Array.from(new Set(debates.map((d) => d.format)));
+  const allDomains = Array.from(new Set(debates.map((d) => d.domain)));
+
+  const filtered = debates.filter((d) => {
+    if (statusFilter !== "all" && d.status !== statusFilter) return false;
+    if (formatFilter !== "all" && d.format !== formatFilter) return false;
+    if (domainFilter !== "all" && d.domain !== domainFilter) return false;
+    return true;
+  });
 
   const statusBadge = (status: string) => {
     const map: Record<string, { bg: string; text: string }> = {
@@ -101,19 +113,48 @@ export default function DebatesClient({
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2 border-b border-[var(--border-primary)] pb-1">
-        {["all", "live", "scheduled", "concluded"].map((s) => (
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-primary)] pb-2">
+        <div className="flex gap-1">
+          {["all", "live", "scheduled", "concluded"].map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1.5 text-sm capitalize transition-colors rounded-md ${
+                statusFilter === s ? "text-[var(--accent-indigo)] bg-[var(--accent-indigo)]/10 font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              }`}
+            >
+              {s === "all" ? "All" : s}
+              {s === "live" && <span className="ml-1.5 w-2 h-2 rounded-full bg-[var(--accent-rose)] inline-block status-pulse" />}
+            </button>
+          ))}
+        </div>
+        <span className="hidden sm:inline text-[var(--border-primary)]">│</span>
+        <select
+          value={formatFilter}
+          onChange={(e) => setFormatFilter(e.target.value)}
+          className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-md px-2 py-1 text-xs text-[var(--text-primary)] outline-none"
+          title="Filter by debate format"
+        >
+          <option value="all">All Formats</option>
+          {allFormats.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select
+          value={domainFilter}
+          onChange={(e) => setDomainFilter(e.target.value)}
+          className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-md px-2 py-1 text-xs text-[var(--text-primary)] outline-none"
+          title="Filter by academic domain"
+        >
+          <option value="all">All Domains</option>
+          {allDomains.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        {(formatFilter !== "all" || domainFilter !== "all") && (
           <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`px-4 py-2 text-sm capitalize transition-colors ${
-              statusFilter === s ? "text-[var(--accent-indigo)] tab-active font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            }`}
+            onClick={() => { setFormatFilter("all"); setDomainFilter("all"); }}
+            className="text-[10px] text-[var(--accent-rose)] hover:underline"
           >
-            {s === "all" ? "All Debates" : s}
-            {s === "live" && <span className="ml-1.5 w-2 h-2 rounded-full bg-[var(--accent-rose)] inline-block status-pulse" />}
+            Clear filters
           </button>
-        ))}
+        )}
       </div>
 
       {/* Debate list */}
@@ -129,8 +170,8 @@ export default function DebatesClient({
                     <span className="badge uppercase tracking-wider" style={{ backgroundColor: badge.bg, color: badge.text, fontSize: 10 }}>
                       {debate.status}
                     </span>
-                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title="Debate format — e.g. Adversarial (opposing positions), Collaborative (joint exploration), Socratic (question-driven)">{debate.format}</span>
-                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title="Academic domain this debate covers">{debate.domain}</span>
+                    <button onClick={(e) => { e.preventDefault(); setFormatFilter(debate.format); }} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-pointer hover:bg-[var(--accent-indigo)]/10 hover:text-[var(--accent-indigo)] transition-colors" style={{ fontSize: 10 }} title={`Debate format: ${debate.format} — click to filter`}>{debate.format}</button>
+                    <button onClick={(e) => { e.preventDefault(); setDomainFilter(debate.domain); }} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-pointer hover:bg-[var(--accent-teal)]/10 hover:text-[var(--accent-teal)] transition-colors" style={{ fontSize: 10 }} title={`Domain: ${debate.domain} — click to filter`}>{debate.domain}</button>
                     {debate.status === "live" && (
                       <span className="text-xs text-[var(--text-muted)]" title="Current round / total rounds — each round is one complete exchange cycle where all participants respond">Round {debate.currentRound}/{debate.rounds}</span>
                     )}
