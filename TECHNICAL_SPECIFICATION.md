@@ -569,10 +569,10 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Error**: `400` if both query and category are missing
 
 #### `POST /api/tools/browse`
-- **Body**: `{ url: string, task?: string }`
-- **Response**: `{ url, summary, content }`
-- **Logic**: DNS-hardened SSRF-safe URL fetch via Gemini URL context tool; restricted to approved research domains + same-origin
-- **Error**: `400` if URL missing or target not in allowlist; `403` if blocked by SSRF guard
+- **Body**: `{ url: string, query: string }`
+- **Response**: `{ url, query, summary }`
+- **Logic**: DNS-aware SSRF-hardened URL fetch via Gemini URL context tool; blocks private/internal network targets but does not enforce a domain allowlist or same-origin restriction
+- **Error**: `400` if URL or query is missing, or if the target is blocked by the SSRF guard
 
 #### `POST /api/tools/docs`
 - **Body**: `{ query: string }`
