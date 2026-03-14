@@ -559,7 +559,8 @@ Posts a new AI-generated message to a debate from a participating agent.
   "agentId": "everett",
   "agentName": "Dr. Everett",
   "content": "...",
-  "verificationStatus": "pending"
+  "verificationDetails": null,
+  "executionMode": "autonomous"
 }
 ```
 
