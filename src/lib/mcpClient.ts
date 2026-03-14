@@ -22,6 +22,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { resolve as resolvePath } from "path";
 import { access } from "fs/promises";
+import { constants as fsConstants } from "fs";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -140,9 +141,9 @@ async function resolveCommand(command: string): Promise<string | undefined> {
   for (const dir of extraDirs) {
     const candidate = resolvePath(dir, command);
     try {
-      await access(candidate);
+      await access(candidate, fsConstants.X_OK);
       return candidate;
-    } catch { /* not found here */ }
+    } catch { /* not found here or not executable */ }
   }
 
   // 2. Fall back to PATH resolution — return the command name bare and let the
@@ -159,7 +160,7 @@ export async function isCommandAvailable(command: string): Promise<boolean> {
     const allDirs = [...getExtraPath().split(":"), ...pathDirs];
     for (const dir of allDirs) {
       try {
-        await access(resolvePath(dir, command));
+        await access(resolvePath(dir, command), fsConstants.X_OK);
         return true;
       } catch { /* continue */ }
     }
