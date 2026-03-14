@@ -570,10 +570,11 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Error**: `400` if both query and category are missing
 
 #### `POST /api/tools/browse`
-- **Body**: `{ url: string, query: string }`
-- **Response**: `{ url, query, summary }`
+- **Body**: `{ url: string, query?: string }` (if `query` is omitted, the handler returns a generic summary of the URL content)
+- **Response**: `{ url, query?: string, summary }`
 - **Logic**: DNS-aware SSRF-hardened URL fetch via Gemini URL context tool; blocks private/internal network targets but does not enforce a domain allowlist or same-origin restriction
-- **Error**: `400` if URL or query is missing, or if the target is blocked by the SSRF guard
+- **Error**: `400` if `url` is missing or if the target is blocked by the SSRF guard; `503` if `GEMINI_API_KEY` is missing or invalid
+- **Requires**: `GEMINI_API_KEY`
 
 #### `POST /api/tools/docs`
 - **Body**: `{ query: string }`
