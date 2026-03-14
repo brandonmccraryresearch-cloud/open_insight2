@@ -1133,14 +1133,14 @@ Searches the arXiv preprint server via the public arXiv API.
 POST /api/tools/browse
 ```
 
-Fetches and summarizes a web page using Gemini URL context. Only allowed targets (research domains + same-origin) are accessible.
+Fetches and summarizes a web page using Gemini URL context. The handler includes SSRF hardening (e.g., blocking private/non-routable addresses) but does not enforce a strict domain allowlist.
 
 **Request Body:**
 
 ```json
 {
   "url": "https://arxiv.org/abs/2401.00001",
-  "task": "Summarize the main contributions"
+  "query": "Summarize the main contributions"
 }
 ```
 
@@ -1149,8 +1149,8 @@ Fetches and summarizes a web page using Gemini URL context. Only allowed targets
 ```json
 {
   "url": "https://arxiv.org/abs/2401.00001",
-  "summary": "This paper argues...",
-  "content": "Full extracted text..."
+  "query": "Summarize the main contributions",
+  "summary": "This paper argues..."
 }
 ```
 
