@@ -1176,8 +1176,7 @@ Searches academic and technical documentation using Gemini Google Search groundi
 
 ```json
 {
-  "result": "The induction tactic in Lean 4...",
-  "sources": ["https://leanprover.github.io/..."]
+  "result": "The induction tactic in Lean 4..."
 }
 ```
 
