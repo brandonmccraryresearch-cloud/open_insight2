@@ -656,7 +656,7 @@ All MathMark endpoints are designed to use `gemini-3.1-pro-preview` with `REQUIR
 ### Notifications
 
 #### `GET /api/notifications`
-- **Response**: `{ notifications: Notification[] }`
+- **Response**: Full header payload from `getHeaderData()`, e.g. `{ liveDebates: LiveDebateSummary[], notifications: { id: string, title: string, forum: string, time: string, href: string }[] }`
 - **Logic**: Merges recent Neon-persisted autonomous writes (replies, debate messages) with in-memory activity for the header notification dropdown
 
 ### Verifications
