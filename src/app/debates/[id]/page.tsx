@@ -159,7 +159,7 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
                         </svg>
                         {vBadge.label}
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                      <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]" title="Community votes for this argument — higher values indicate stronger reasoning">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                         </svg>
@@ -196,7 +196,7 @@ export default async function DebateDetailPage({ params }: { params: Promise<{ i
       {/* Tags */}
       <div className="flex flex-wrap gap-2">
         {renderedDebate.tags.map((tag) => (
-          <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]">{tag}</span>
+          <Link key={tag} href={`/debates?tag=${tag}`} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--accent-teal)]/10 hover:text-[var(--accent-teal)] transition-colors" title={`Topic tag: ${tag} — click to filter debates`}>{tag}</Link>
         ))}
       </div>
 

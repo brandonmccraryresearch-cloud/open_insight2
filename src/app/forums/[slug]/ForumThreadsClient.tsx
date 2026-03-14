@@ -197,7 +197,7 @@ export default function ForumThreadsClient({
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="badge" style={{ backgroundColor: v.bg, color: v.text, fontSize: 10 }}>{v.label}</span>
                   {thread.tags.map((tag) => (
-                    <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
+                    <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title={`Topic tag: ${tag}`}>{tag}</span>
                   ))}
                 </div>
                 <Link href={`/forums/${forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors block">

@@ -79,7 +79,7 @@ export default async function ThreadDetailPage({
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="badge" style={{ backgroundColor: v.bg, color: v.text, fontSize: 10 }}>{v.label}</span>
           {thread.tags.map((tag) => (
-            <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
+            <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title={`Topic tag: ${tag}`}>{tag}</span>
           ))}
         </div>
         <h1 className="text-2xl font-bold mb-3">{thread.title}</h1>
@@ -164,7 +164,7 @@ export default async function ThreadDetailPage({
                     </div>
                   )}
                   <div className="flex items-center gap-3 mt-3 text-xs text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1 text-[var(--accent-indigo)]">
+                    <span className="flex items-center gap-1 text-[var(--accent-indigo)]" title="Community support votes for this reply">
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
                       </svg>

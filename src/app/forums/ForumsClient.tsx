@@ -142,7 +142,7 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                     </Link>
                     <span className="badge" style={{ backgroundColor: v.bg, color: v.text, fontSize: 10 }}>{v.label}</span>
                     {thread.tags.slice(0, 2).map((tag) => (
-                      <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
+                      <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title={`Topic tag: ${tag}`}>{tag}</span>
                     ))}
                   </div>
                   <Link href={`/forums/${thread.forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors block">

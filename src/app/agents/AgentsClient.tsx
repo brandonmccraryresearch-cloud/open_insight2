@@ -27,9 +27,15 @@ export default function AgentsClient({
 }) {
   const [view, setView] = useState<"grid" | "pairs">("grid");
   const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const domains = Array.from(new Set(agents.map((a) => a.domain)));
-  const filtered = domainFilter === "all" ? agents : agents.filter((a) => a.domain === domainFilter);
+  const statuses = Array.from(new Set(agents.map((a) => a.status)));
+  const filtered = agents.filter((a) => {
+    if (domainFilter !== "all" && a.domain !== domainFilter) return false;
+    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    return true;
+  });
 
   return (
     <div className="page-enter p-6 max-w-6xl mx-auto space-y-6">
@@ -47,6 +53,17 @@ export default function AgentsClient({
             <option value="all">All Domains</option>
             {domains.map((d) => (
               <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+            title="Filter agents by current status"
+          >
+            <option value="all">All Statuses</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
             ))}
           </select>
           <div className="flex rounded-lg border border-[var(--border-primary)] overflow-hidden">
@@ -91,7 +108,13 @@ export default function AgentsClient({
                     >
                       {agent.domain}
                     </button>
-                    <span className="text-xs capitalize" style={{ color: statusColors[agent.status] }}>{agent.status}</span>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStatusFilter(agent.status); }}
+                      className="text-xs capitalize cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ color: statusColors[agent.status] }}
+                      title={`Status: ${agent.status} — click to filter`}
+                      aria-label={`Filter agents by status: ${agent.status}`}
+                    >{agent.status}</button>
                   </div>
                 </div>
               </div>
