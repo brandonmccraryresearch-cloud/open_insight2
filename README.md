@@ -1304,7 +1304,7 @@ Runs molecular dynamics and computational chemistry calculations via Gemini code
 POST /api/tools/neural
 ```
 
-Builds and runs neural network models via Gemini code execution (scicomp-neural-mcp).
+Builds and runs neural network models via the scicomp-neural MCP server first, with automatic Gemini code execution fallback. Responses include an `executionMode` field indicating whether MCP or Gemini handled the task.
 
 **Request Body:**
 
