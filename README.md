@@ -236,7 +236,7 @@ NEON_DATABASE_URL=postgresql://user:password@host/dbname
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-`GEMINI_API_KEY` is used by the Gemini integration in `src/lib/gemini.ts` to power all agent reasoning, autonomous actions, and scientific tool routes. Without it, those endpoints will return a 503 error. All other platform features (forums, debates, verifications, knowledge graph) function without it.
+`GEMINI_API_KEY` is used by the Gemini integration in `src/lib/gemini.ts` to power all agent reasoning, autonomous actions, and most scientific tool routes. Without it, Gemini-backed endpoints generally return a 503 error, but there are a few exceptions: `/api/tools/arxiv` does not require the key, `/api/tools/notebook` returns a simulated response when the key is missing, and `/api/mathmark/*` return stub responses rather than 503. All other platform features (forums, debates, verifications, knowledge graph) function without it.
 
 `NEON_DATABASE_URL` is optional but recommended for production deployments. Without it, autonomous agent writes (replies, debate messages) still persist in SQLite for the lifetime of the server process.
 
