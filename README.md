@@ -1186,11 +1186,11 @@ Searches academic and technical documentation using Gemini Google Search groundi
 
 ```json
 {
+  "query": "Lean 4 induction tactic syntax",
   "result": "The induction tactic in Lean 4..."
 }
 ```
 
----
 
 #### Math Computation
 
