@@ -1293,12 +1293,27 @@ Performs safe browser actions (navigate, read, find elements, screenshot) using 
 
 ```json
 {
-  "action": "navigate",
+  "command": "navigate",
   "url": "https://arxiv.org/abs/2401.00001"
 }
 ```
 
-Supported actions: `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`
+Supported commands: `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`
+
+**Response:**
+
+```json
+{
+  "command": "navigate",
+  "url": "https://arxiv.org/abs/2401.00001",
+  "selector": null,
+  "value": null,
+  "result": {
+    "status": "ok",
+    "data": { /* command-specific result payload */ }
+  }
+}
+```
 
 ---
 
