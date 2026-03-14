@@ -1252,7 +1252,7 @@ Searches academic and technical documentation using Gemini Google Search groundi
 POST /api/tools/math
 ```
 
-Performs symbolic and numerical math computations via Gemini code execution (scicomp-math-mcp).
+Performs symbolic and numerical math computations using the `scicomp-math-mcp` tools. The API will first attempt to execute the request via the local MCP binary and will fall back to Gemini code execution if the MCP path is unavailable or fails. The `executionMode` field in the response indicates which path was used (`"mcp"` or `"gemini"`).
 
 **Request Body:**
 
@@ -1270,6 +1270,7 @@ Performs symbolic and numerical math computations via Gemini code execution (sci
   "tool": "scicomp-math-mcp",
   "operation": "linear_algebra.eigen_decomposition",
   "expression": "Pauli Z matrix",
+  "executionMode": "mcp",
   "result": "Eigenvalues: [1, -1]\nEigenvectors: [[1,0],[0,1]]"
 }
 ```
