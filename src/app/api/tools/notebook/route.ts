@@ -7,6 +7,13 @@ export const maxDuration = 120;
 const MAX_CODE_LENGTH = 50_000;
 const SUBPROCESS_TIMEOUT_MS = 30_000;
 
+// Admin-only protection for notebook execution in production.
+// When NODE_ENV === "production", requests must include a header
+//   x-admin-tool-token: <ADMIN_TOOL_TOKEN>
+// matching the ADMIN_TOOL_TOKEN environment variable. This prevents
+// arbitrary remote callers from executing Python on the server.
+const ADMIN_TOOL_TOKEN = process.env.ADMIN_TOOL_TOKEN;
+
 /**
  * Notebook execution route — execution priority:
  * 1. Real Python 3 subprocess (python3 -c "...") — always tried first
@@ -16,6 +23,27 @@ const SUBPROCESS_TIMEOUT_MS = 30_000;
  * Response includes `executionMode: "subprocess" | "gemini" | "simulated"`.
  */
 export async function POST(request: NextRequest) {
+  // In production, restrict this route to trusted/admin callers only.
+  if (process.env.NODE_ENV === "production") {
+    if (!ADMIN_TOOL_TOKEN) {
+      return NextResponse.json(
+        {
+          error:
+            "Notebook tool is disabled: ADMIN_TOOL_TOKEN is not configured on the server.",
+        },
+        { status: 503 },
+      );
+    }
+
+    const providedToken = request.headers.get("x-admin-tool-token");
+    if (!providedToken || providedToken !== ADMIN_TOOL_TOKEN) {
+      return NextResponse.json(
+        { error: "Unauthorized notebook access." },
+        { status: 403 },
+      );
+    }
+  }
+
   let body: { code?: string; kernel?: string };
   try {
     body = await request.json();
