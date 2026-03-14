@@ -127,6 +127,56 @@ Lean 4 is a core verification tool in the platform, providing formal mathematica
 
 ---
 
+## MCP Server Installation
+
+Open Insight uses real **Model Context Protocol (MCP)** server subprocesses for scientific computing tools. The servers run as persistent background processes that communicate over JSON-RPC 2.0 via stdin/stdout.
+
+### Quick install (all MCP servers)
+
+```bash
+npm run mcp:install
+```
+
+This installs:
+| Package | PyPI | Tools | Routes |
+|---|---|---|---|
+| `scicomp-math-mcp` | ✅ | 14 (symbolic algebra, SymPy) | `/api/tools/math` |
+| `scicomp-quantum-mcp` | ✅ | 12 (Schrödinger eq, wave packets) | `/api/tools/quantum` |
+| `scicomp-molecular-mcp` | ✅ | 15 (Lennard-Jones MD, RDF, MSD) | `/api/tools/molecular` |
+| `scicomp-neural-mcp` | ✅ | 14 (ResNet18/MobileNet/custom) | `/api/tools/neural` |
+| `particlephysics-mcp` | git only | 400+ particles (PDG offline) | `/api/tools/pdg` |
+
+### System requirements
+
+- Python 3.10+
+- `pip` (for PyPI installs) or `uvx` (`pip install uv`, for git-only packages)
+
+### Tool execution modes
+
+Each tool route reports its current execution mode in every response:
+
+| Mode | Description |
+|---|---|
+| `"mcp"` | Real native MCP server subprocess (best quality, real computation) |
+| `"gemini"` | Gemini AI code execution fallback (requires `GEMINI_API_KEY`) |
+| `"subprocess"` | Direct `python3` subprocess (notebook route only) |
+| `"direct-api"` | Real external API, no AI (arxiv route) |
+| `"simulated"` | Pattern-matching fallback (no key, no binary) |
+
+### Checking availability
+
+```bash
+curl http://localhost:3000/api/tools/status
+```
+
+Returns live status for all 12 tool routes including which execution mode is active.
+
+### Serverless deployment (Vercel)
+
+MCP subprocesses cannot run in Vercel serverless. All routes fall back gracefully to Gemini codeExecution when `GEMINI_API_KEY` is set. Install the MCP binaries only on dedicated server / Docker deployments.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -306,6 +356,9 @@ npm run lint
 | `db:reset` | `npm run db:reset` | Drop, recreate, and re-seed the database |
 | `lean4:install` | `npm run lean4:install` | Install Lean 4 via the bundled elan script (optional, Gemini fallback used otherwise) |
 | `playwright:install` | `npm run playwright:install` | Install Chromium binary for real browser automation (optional, Gemini fallback used otherwise) |
+| `mcp:install` | `npm run mcp:install` | Install all Python MCP server binaries (scicomp-math/quantum/molecular/neural + particlephysics). Requires `pip` / Python 3.10+. |
+| `mcp:install:math` | `npm run mcp:install:math` | Install the four scicomp-* MCP servers from PyPI (`pip install scicomp-math-mcp scicomp-quantum-mcp scicomp-molecular-mcp scicomp-neural-mcp`) |
+| `mcp:install:pdg` | `npm run mcp:install:pdg` | Install the ParticlePhysics MCP Server for offline PDG lookups (PyPI or git via uvx) |
 | `vercel-build` | `npm run vercel-build` | Vercel production build (lean4 + db:push + db:seed + build) |
 
 ---

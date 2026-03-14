@@ -548,6 +548,45 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 ### Tools
 
+All tool routes at `/api/tools/` report their current `executionMode` in every response. Tools with a real MCP binary run native computation; tools without fall back to Gemini AI.
+
+| Route | executionMode | Requires |
+|---|---|---|
+| `/api/tools/arxiv` | `direct-api` | nothing |
+| `/api/tools/browse` | `gemini-urlcontext` | `GEMINI_API_KEY` |
+| `/api/tools/docs` | `gemini-googlesearch` | `GEMINI_API_KEY` |
+| `/api/tools/lean4` | `native` → `gemini` → `503` | lean binary / `GEMINI_API_KEY` |
+| `/api/tools/playwright` | `playwright` → `gemini-urlcontext` | nothing (chromium binary optional) |
+| `/api/tools/notebook` | `subprocess` → `gemini` → `simulated` | python3 (always available) |
+| `/api/tools/math` | `mcp` → `gemini` | scicomp-math-mcp binary / `GEMINI_API_KEY` |
+| `/api/tools/quantum` | `mcp` → `gemini` | scicomp-quantum-mcp binary / `GEMINI_API_KEY` |
+| `/api/tools/molecular` | `mcp` → `gemini` | scicomp-molecular-mcp binary / `GEMINI_API_KEY` |
+| `/api/tools/neural` | `mcp` → `gemini` | scicomp-neural-mcp binary / `GEMINI_API_KEY` |
+| `/api/tools/pdg` | `mcp` → `gemini` | particlephysics-mcp binary / `GEMINI_API_KEY` |
+| `/api/tools/status` | N/A — status endpoint | nothing |
+
+**MCP client architecture** (`src/lib/mcpClient.ts`):
+- Spawns each MCP server as a persistent subprocess (lazy-initialized singleton per server ID)
+- Communicates via JSON-RPC 2.0 over stdin/stdout (MCP standard protocol, version 2024-11-05)
+- Handshake: `initialize` → `tools/list` (optional) → `tools/call`
+- Timeout: 30s per call; crash recovery: up to 3 restarts before permanent Gemini fallback
+- Binary resolution: checks `MCP_SERVERS_PATH` env → `~/.local/bin` → system `PATH`
+- Install: `npm run mcp:install` (requires Python 3.10+ and `pip`)
+
+**Multi-step workflows** (stateful MCP servers require sequential calls on the same process):
+- `/api/tools/quantum`: `create_gaussian_wavepacket` → `create_custom_potential` → `solve_schrodinger`
+- `/api/tools/molecular`: `create_particles` → `run_md` (or `run_nvt`) → optional `compute_rdf`/`compute_msd`
+- `/api/tools/neural`: `define_model` → `get_model_summary`
+
+**Environment variable**: `MCP_SERVERS_PATH` — colon-separated list of directories to prepend to PATH when looking for MCP server binaries. Useful for virtualenv/Docker deployments.
+
+**Serverless strategy**: On Vercel, MCP subprocesses cannot run. All routes fall back to Gemini automatically. Install binaries on dedicated servers / Docker containers using `npm run mcp:install`.
+
+#### `GET /api/tools/status`
+- **Response**: `{ timestamp, gemini, lean4, playwright, mcp: { [serverId]: { available, binaryFound, executionMode, description } }, routes: { [name]: { available, executionMode, requires } } }`
+- **Logic**: Checks all 5 MCP server binaries for availability, plus Playwright + Lean4. Runs all checks in parallel (via `isMcpServerAvailable()`). Operators and agents call this to know which tools are in MCP vs Gemini mode.
+- **No auth required** — safe for health monitoring
+
 #### `POST /api/tools/lean4`
 - **Body**: `{ code: string }`
 - **Response**: `{ status, goals, hypotheses, warnings, errors, checkTime, executionMode }`
@@ -558,8 +597,11 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/notebook`
 - **Body**: `{ code: string }`
-- **Response**: `{ output: string, status: "success" | "error", executionMode: "gemini" | "simulated" }`
-- **Logic**: Executes code via Gemini code execution (server-side); primary browser path uses Pyodide WASM
+- **Response**: `{ output: string, status: "success" | "error", executionMode: "subprocess" | "gemini" | "simulated" }`
+- **Logic** (priority order):
+  1. `python3 -` subprocess with code on stdin — real Python 3 execution (always tried first)
+  2. Gemini code execution fallback when Python3 unavailable
+  3. Simulated pattern matching as last resort
 - **Error**: `400` if code missing
 
 #### `POST /api/tools/arxiv`
@@ -583,28 +625,27 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Requires**: `GEMINI_API_KEY`
 
 #### `POST /api/tools/math`
-- **Body**: `{ task?: string, operation?: string, expression?: string }` (at least one of `task`, `operation`, or `expression` is required; prefer `task`, or `operation` + `expression`)
-- **Response**: `{ tool: "scicomp-math-mcp", operation?: string, expression?: string, result: string }`
-- **Logic**: Uses Gemini code execution (scicomp-math-mcp) for symbolic/numerical math
-- **Requires**: `GEMINI_API_KEY`
+- **Body**: `{ task?: string, operation?: string, expression?: string }` (at least one required; prefer `task`, or `operation` + `expression`)
+- **Response**: `{ tool: "scicomp-math-mcp", mcpTool?: string, operation?: string, expression?: string, result: string, executionMode: "mcp" | "gemini" }`
+- **Logic**: Calls real `scicomp-math-mcp` binary first (symbolic_integrate, symbolic_diff, symbolic_solve, symbolic_simplify, solve_linear_system, fft, find_roots, optimize_function). Falls back to Gemini codeExecution. Tool selection heuristic based on operation keyword.
+- **Install**: `pip install scicomp-math-mcp`
 
 #### `POST /api/tools/molecular`
 - **Body**: `{ task: string; systemType?: string }`
-- **Response**: `{ tool: string; task: string; systemType?: string; result: string }`
-- **Logic**: Uses Gemini code execution (scicomp-molecular-mcp) for molecular dynamics
-- **Requires**: `GEMINI_API_KEY`
+- **Response**: `{ tool: "scicomp-molecular-mcp", task, systemType, result, executionMode: "mcp" | "gemini" }`
+- **Logic** (MCP workflow): 1) `create_particles(n=64, box=8Å³, T=300K)` → `system_id`; 2) `run_md` or `run_nvt` (500 steps); 3) optional `compute_rdf`/`compute_msd`/`analyze_temperature`. Falls back to Gemini.
+- **Install**: `pip install scicomp-molecular-mcp`
 
 #### `POST /api/tools/neural`
 - **Body**: `{ task: string, architecture?: string }`
-- **Response**: `{ tool: string; task: string; architecture?: string; result: string }`
-- **Logic**: Uses Gemini code execution (scicomp-neural-mcp) for neural network models
-- **Requires**: `GEMINI_API_KEY`
+- **Response**: `{ tool: "scicomp-neural-mcp", architecture, task, result, executionMode: "mcp" | "gemini" }`
+- **Logic** (MCP workflow): 1) `define_model(architecture: "resnet18"|"mobilenet"|"custom", num_classes)`; 2) `get_model_summary`. Falls back to Gemini.
+- **Install**: `pip install scicomp-neural-mcp`
 
 #### `POST /api/tools/pdg`
-- **Body**: `{ query: string }`
-- **Response**: `{ tool: string; query: string; result: string; sources: string }`
-- **Logic**: Uses Gemini Google Search grounding for PDG particle data lookups
-- **Requires**: `GEMINI_API_KEY`
+- **Body**: `{ particle?: string, property?: string, query?: string }` (at least one required)
+- **Response**: `{ tool: "particlephysics-mcp", query, result, sources, executionMode: "mcp" | "gemini" }`
+- **Logic**: Calls `particlephysics-mcp` binary (`get_particle` tool) for offline PDG lookups. Falls back to Gemini Google Search grounding. Binary not on PyPI — install via `uvx --from git+https://github.com/uzerone/ParticlePhysics-MCP-Server.git particlephysics-mcp`.
 
 #### `POST /api/tools/playwright`
 - **Body**: `{ command: string, url: string, selector?: string, value?: string, description?: string }`
@@ -631,9 +672,9 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/quantum`
 - **Body**: `{ task: string, systemType?: string }`
-- **Response**: `{ tool: string; task: string; systemType?: string; result: string }`
-- **Logic**: Uses Gemini code execution (PsiAnimator-MCP + scicomp-quantum-mcp) for quantum simulation
-- **Requires**: `GEMINI_API_KEY`
+- **Response**: `{ tool: "psianimator-mcp / scicomp-quantum-mcp", task, systemType, result, executionMode: "mcp" | "gemini" }`
+- **Logic** (MCP workflow): 1) `create_gaussian_wavepacket(grid_size=[256], position=[0], momentum=[5], width=1)` → `wavefunction_id`; 2) `create_custom_potential("0.5*x**2")`; 3) `solve_schrodinger(initial_state, potential, time_steps=100)`. Falls back to Gemini.
+- **Install**: `pip install scicomp-quantum-mcp`
 
 ### MathMark
 
