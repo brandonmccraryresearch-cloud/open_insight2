@@ -1109,13 +1109,13 @@ Searches the arXiv preprint server via the public arXiv API.
 
 ```json
 {
-  "tool": "arxiv",
+  "tool": "arxiv-search-mcp",
   "resultCount": 1,
   "results": [
     {
       "title": "...",
       "authors": ["Author Name"],
-      "summary": "...",
+      "abstract": "...",
       "published": "2024-01-01",
       "categories": ["quant-ph"],
       "absLink": "https://arxiv.org/abs/2401.00001",
