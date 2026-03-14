@@ -577,7 +577,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/docs`
 - **Body**: `{ query: string }`
-- **Response**: `{ result: string, sources?: string[] }`
+- **Response**: `{ query: string, result: string }`
 - **Logic**: Uses Gemini Google Search grounding to answer documentation queries
 - **Requires**: `GEMINI_API_KEY`
 
