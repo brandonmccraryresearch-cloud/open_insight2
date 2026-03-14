@@ -583,7 +583,7 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 
 #### `POST /api/tools/math`
 - **Body**: `{ task?: string, operation?: string, expression?: string }` (prefer `task`, or `operation` + `expression`; do not send `expression` alone)
-- **Response**: `{ result: string, code?: string }`
+- **Response**: `{ tool: "scicomp-math-mcp", operation?: string, expression?: string, result: string }`
 - **Logic**: Uses Gemini code execution (scicomp-math-mcp) for symbolic/numerical math
 - **Requires**: `GEMINI_API_KEY`
 
