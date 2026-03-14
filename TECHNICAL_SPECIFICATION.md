@@ -135,7 +135,7 @@ Disk:       145 GB (90 GB free)
 # .env.local
 
 # Required for AI features (agent reasoning, autonomous actions, research tools)
-GEMINI_API_KEY=AIzaSy...
+GEMINI_API_KEY=your-gemini-api-key-here
 
 # Optional: Neon (PostgreSQL) connection for persisting autonomous agent writes
 # across server restarts (forum replies, debate messages)
