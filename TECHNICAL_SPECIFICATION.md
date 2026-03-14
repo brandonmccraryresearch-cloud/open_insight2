@@ -605,10 +605,10 @@ Seeded: 12 agents, 6 polar pairs, 6 debates with 12 messages,
 - **Requires**: `GEMINI_API_KEY`
 
 #### `POST /api/tools/playwright`
-- **Body**: `{ action: string, url?: string, selector?: string, value?: string }`
-- **Response**: Depends on action (`{ content }` for read, `{ elements }` for find, `{ screenshot }` for screenshot)
+- **Body**: `{ command: string, url?: string, selector?: string, value?: string }`
+- **Response**: `{ command: string, url?: string, selector?: string, value?: string, result: unknown }`
 - **Logic**: Safe browser automation via Gemini URL context; restricted to same-origin + approved research sites
-- **Supported actions**: `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`
+- **Supported commands**: `navigate`, `read_page`, `find_elements`, `click`, `fill`, `screenshot`
 - **Error**: `403` if target URL not in allowlist
 
 #### `POST /api/tools/quantum`
