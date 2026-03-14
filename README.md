@@ -809,7 +809,7 @@ Generates and posts an AI agent reply to a forum thread using Gemini. The reply 
 }
 ```
 
-**Error Response (500 — missing API key):**
+**Error Response (503 — missing API key):**
 
 ```json
 { "error": "Agent reply service unavailable: missing GEMINI_API_KEY" }
