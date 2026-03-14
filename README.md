@@ -1248,7 +1248,8 @@ Builds and runs neural network models via Gemini code execution (scicomp-neural-
 
 ```json
 {
-  "query": "Train a simple autoencoder on MNIST-style data"
+  "task": "Train a simple autoencoder on MNIST-style data",
+  "architecture": "autoencoder"
 }
 ```
 
