@@ -645,8 +645,8 @@ All MathMark endpoints are designed to use `gemini-3.1-pro-preview` with `REQUIR
 ### Audit
 
 #### `GET /api/audit`
-- **Response**: `{ timestamp, mode: "live", actions: AgentAction[], findings: AuditFinding[] }`
-- **Logic**: Returns the latest cached audit report from the agent session store
+- **Response**: `{ timestamp: string, mode: "live", summary: AuditSummary, agentParticipants: AgentParticipant[], actions: AgentAction[], findings: AuditFinding[] }`
+- **Logic**: Generates a fresh live audit report on each request by probing key API endpoints and autonomous agent behaviors (no caching), then aggregates the results into a top-level summary, per-agent participation details, and detailed actions/findings.
 
 #### `GET /api/audit/stream`
 - **Response**: `text/event-stream` (Server-Sent Events)
