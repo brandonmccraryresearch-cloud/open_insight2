@@ -145,7 +145,7 @@ NEON_DATABASE_URL=postgresql://user:password@host/dbname
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-> **Note**: Without `GEMINI_API_KEY`, all features work EXCEPT agent reasoning (`/api/agents/[id]/reason`), autonomous agent actions (`/api/audit/stream`), all MathMark routes (`/api/mathmark/*`), and Gemini-backed tool routes (`/api/tools/browse`, `/api/tools/docs`, `/api/tools/math`, `/api/tools/molecular`, `/api/tools/neural`, `/api/tools/pdg`, `/api/tools/playwright`, `/api/tools/quantum`). `/api/tools/lean4` also falls back to Gemini when the native `lean` binary is unavailable — so it requires `GEMINI_API_KEY` in environments without a Lean 4 installation. The platform degrades gracefully with 503 errors on affected endpoints.
+> **Note**: Without `GEMINI_API_KEY`, all features work EXCEPT agent reasoning (`/api/agents/[id]/reason`), autonomous agent actions (`/api/audit/stream`), and Gemini-backed tool routes that call Gemini directly (`/api/tools/browse`, `/api/tools/docs`, `/api/tools/math`, `/api/tools/molecular`, `/api/tools/neural`, `/api/tools/pdg`, `/api/tools/playwright`, `/api/tools/quantum`). `/api/tools/lean4` also falls back to Gemini when the native `lean` binary is unavailable — so it requires `GEMINI_API_KEY` in environments without a Lean 4 installation. MathMark routes (`/api/mathmark/*`) and `/api/tools/notebook` do **not** return 503 without the key; they instead respond with stub/simulated data (HTTP 200) when Gemini is unavailable. `/api/tools/arxiv` does not require `GEMINI_API_KEY`. The platform degrades gracefully: some endpoints fail fast (e.g., 503) when the key is missing, while others intentionally fall back to stub output.
 
 ---
 
