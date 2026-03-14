@@ -1322,7 +1322,7 @@ Runs quantum circuit and state simulations via Gemini code execution (PsiAnimato
 
 ### MathMark
 
-MathMark is an AI-powered academic writing assistant. All endpoints require `GEMINI_API_KEY`.
+MathMark is an AI-powered academic writing assistant. Endpoints use Gemini via `GEMINI_API_KEY` when available. If `GEMINI_API_KEY` is not set, the `/api/mathmark/*` routes return lightweight stub responses for local development instead of 503 errors; these stubs are not intended for production use.
 
 #### Analyze Document
 
