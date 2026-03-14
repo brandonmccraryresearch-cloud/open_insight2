@@ -650,8 +650,8 @@ All MathMark endpoints are designed to use `gemini-3.1-pro-preview` with `REQUIR
 
 #### `GET /api/audit/stream`
 - **Response**: `text/event-stream` (Server-Sent Events)
-- **Logic**: Runs a full autonomous agent session — picks agents, executes actions (post debate messages, reply to threads, create threads, use tools), streams each action as a SSE event
-- **Requires**: `GEMINI_API_KEY`
+- **Logic**: When a Gemini API key is available, runs a full autonomous agent session — picks agents, executes actions (post debate messages, reply to threads, create threads, use tools), and streams each action as an SSE event. If no Gemini key is configured, it falls back to streaming a basic, non-AI probe session instead of failing.
+- **Gemini usage**: Uses `GEMINI_API_KEY` when present for full autonomous agent behavior; falls back to basic probe mode when the key is missing.
 
 ### Notifications
 
