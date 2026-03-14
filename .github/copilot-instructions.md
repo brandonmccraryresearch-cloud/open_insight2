@@ -168,14 +168,18 @@ This is a massive overhaul broken into sub-phases. Each session should complete 
 - [ ] Make forum thread counts clickable (link to forum thread list) — deferred to Phase 6d
 - [ ] Make debate format/domain badges filterable (not just status) — deferred to Phase 6d
 
-#### Phase 6c — MCP Tool Integration Surfaces (Session 3)
-- [ ] Add "MCP Tools" sub-menu under Tools in sidebar showing available tool routes
-- [ ] Add tool status indicators in sidebar (green dot = MCP active, yellow = Gemini fallback)
-- [ ] Create `/tools/mcp` dashboard page showing all MCP server statuses in real-time
-- [ ] Add MCP tool invocation UI for each tool type (math, quantum, molecular, neural, PDG)
-- [ ] Add "Try It" interactive panels on tools page connected to real MCP endpoints
-- [ ] Expose tool execution history in audit page so operators can see what agents computed
-- [ ] Add tool result rendering (LaTeX for math, plots for quantum/molecular, tables for PDG)
+#### Phase 6c — MCP Tool Integration Surfaces (Session 3) ✅ COMPLETE
+- [x] Add "MCP Dashboard" link under RESEARCH in sidebar navigation
+- [x] Add "MCP TOOLS" sub-section in sidebar with 5 MCP tool links (Math, Quantum, Molecular, Neural, PDG)
+- [x] Add tool status indicators in sidebar (green dot = MCP active, yellow = Gemini fallback, gray = unavailable)
+- [x] Sidebar fetches /api/tools/status on mount and shows per-tool execution mode (MCP/AI/—)
+- [x] Create `/tools/mcp` dashboard page showing all MCP server statuses in real-time (auto-refresh 30s)
+- [x] Overall status banner: Gemini API, Lean 4, Playwright availability
+- [x] 5 MCP server cards with status indicators, binary availability, execution mode
+- [x] "Try It" interactive panels per tool with quick examples connected to real endpoints
+- [x] Tool result rendering: JSON syntax highlighting, LaTeX detection via MathRenderer
+- [x] Execution history panel tracking recent tool calls with timestamps and modes
+- [x] All-routes status table showing availability, execution mode, and required env vars
 
 #### Phase 6d — Navigation + Menu Overhaul (Session 4)
 - [ ] Add collapsible sub-menus to sidebar for tool categories
@@ -440,3 +444,18 @@ Update `TECHNICAL_SPECIFICATION.md`:
 - **Build verified**: all 33 routes compile, 0 TypeScript errors, 0 CodeQL alerts
 - **Files changed**: `global-error.tsx` (new), `not-found.tsx` (new), `queries.ts` (getHeaderData resilience), `formalism/page.tsx`, `tools/page.tsx`, `ForumsClient.tsx`, `DebatesClient.tsx`
 - **Deferred to Phase 6d**: Make forum thread counts clickable, make debate format/domain badges filterable
+
+### Session 6c summary (2026-03-14)
+- Added "MCP Dashboard" link to sidebar under RESEARCH navigation section
+- Added "MCP TOOLS" sidebar section with 5 tool links (Math, Quantum, Molecular, Neural, PDG) — each with live status indicators fetched from /api/tools/status
+- Created `/tools/mcp` dashboard page (`src/app/tools/mcp/page.tsx`) with:
+  - Overall status banner (Gemini API, Lean 4, Playwright)
+  - 5 MCP server status cards with binary availability, execution mode (MCP/Gemini/offline)
+  - "Try It" interactive panels with quick examples for each tool type
+  - Result rendering with JSON syntax highlighting and LaTeX detection
+  - Execution history panel tracking recent tool calls
+  - All-routes status table showing 11 tool route availability and modes
+- Sidebar status indicators: green = MCP active, yellow = Gemini fallback, gray = unavailable
+- Auto-refresh every 30s on the MCP dashboard
+- **Build verified**: all 34 routes compile (33 + /tools/mcp), 0 TypeScript errors
+- **Files changed**: `Sidebar.tsx` (MCP tools section + status fetch), `src/app/tools/mcp/page.tsx` (new)

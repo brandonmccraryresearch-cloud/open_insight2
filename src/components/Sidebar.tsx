@@ -115,7 +115,7 @@ export default function Sidebar() {
                   <Link
                     href={`/tools/mcp?tool=${tool.route}`}
                     className={`nav-item flex items-center gap-3 text-sm ${
-                      pathname === "/tools/mcp" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tool") === tool.route ? "active" : ""
+                      pathname === `/tools/mcp` ? "" : ""
                     }`}
                     title={`${tool.name}: ${isMcp ? "Real MCP server" : isAvailable ? "Gemini fallback" : "Unavailable"}`}
                   >

@@ -317,7 +317,7 @@ export default function McpDashboardPage() {
                   {typeof callResult.output === "string" ? (
                     (() => {
                       // Try to detect LaTeX in the output
-                      const latexMatch = typeof callResult.output === "string" && callResult.output.match(/\$\$(.*?)\$\$/s);
+                      const latexMatch = callResult.output.match(/\$\$(.*?)\$\$/s);
                       if (latexMatch) {
                         return (
                           <div className="space-y-2">
