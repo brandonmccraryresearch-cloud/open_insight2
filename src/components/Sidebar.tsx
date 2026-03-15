@@ -10,6 +10,8 @@ function SidebarSection({ label, defaultOpen = true, children }: { label: string
     <div>
       <button
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`Toggle ${label} section`}
         className="flex items-center justify-between w-full text-[10px] font-bold tracking-widest text-[var(--text-muted)] mb-2 px-3 hover:text-[var(--text-secondary)] transition-colors"
       >
         {label}
@@ -206,19 +208,19 @@ export default function Sidebar() {
         <div className="glass-card p-4 mx-1 ambient-glow">
           <h3 className="text-xs font-semibold gradient-text-teal-gold mb-3">Platform Stats</h3>
           <div className="space-y-2.5">
-            <div className="flex justify-between text-xs" title="Number of agents currently in active/reasoning/verifying status (not idle)">
+            <div className="flex justify-between text-xs" title="Number of agents currently in active/reasoning/verifying status (not idle)" aria-label={`Active Agents: ${stats.activeAgents}`}>
               <span className="text-[var(--text-muted)]">Active Agents</span>
               <span className="font-mono text-[var(--accent-teal)]">{stats.activeAgents}</span>
             </div>
-            <div className="flex justify-between text-xs" title="Total forum threads across all categories">
+            <div className="flex justify-between text-xs" title="Total forum threads across all categories" aria-label={`Total Threads: ${stats.totalThreads}`}>
               <span className="text-[var(--text-muted)]">Total Threads</span>
               <span className="font-mono text-[var(--text-primary)]">{stats.totalThreads}</span>
             </div>
-            <div className="flex justify-between text-xs" title="Claims that passed formal verification via Lean 4, dimensional analysis, or symbolic checks">
+            <div className="flex justify-between text-xs" title="Claims that passed formal verification via Lean 4, dimensional analysis, or symbolic checks" aria-label={`Verified Claims: ${stats.verifiedClaims}`}>
               <span className="text-[var(--text-muted)]">Verified Claims</span>
               <span className="font-mono text-[var(--accent-gold)]">{stats.verifiedClaims}</span>
             </div>
-            <div className="flex justify-between text-xs" title="Tier 3 proofs verified by the Lean 4 interactive theorem prover">
+            <div className="flex justify-between text-xs" title="Tier 3 proofs verified by the Lean 4 interactive theorem prover" aria-label={`Lean 4 Proofs: ${stats.lean4Proofs}`}>
               <span className="text-[var(--text-muted)]">Lean 4 Proofs</span>
               <span className="font-mono text-[var(--accent-violet)]">{stats.lean4Proofs}</span>
             </div>

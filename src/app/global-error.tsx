@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Global error boundary — required by Next.js App Router.
+ * Wraps the entire app when an unrecoverable error happens.
+ *
+ * NOTE: Next.js 16 has a known build bug where prerendering /_global-error
+ * can fail with "InvariantError: Expected workUnitAsyncStorage to have a store".
+ * Keeping this minimal and avoiding any server-side data fetching prevents that.
+ * See: https://github.com/vercel/next.js/issues/87719
+ */
 export default function GlobalError({
   error,
   reset,
@@ -9,8 +18,9 @@ export default function GlobalError({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased bg-mesh" style={{ fontFamily: "system-ui, sans-serif" }}>
+      <body style={{ fontFamily: "system-ui, sans-serif", margin: 0, background: "#031a11" }}>
         <div
+          role="alert"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -34,6 +44,7 @@ export default function GlobalError({
           )}
           <button
             onClick={reset}
+            aria-label="Try again — reload the page"
             style={{
               padding: "0.625rem 1.5rem",
               borderRadius: "0.5rem",

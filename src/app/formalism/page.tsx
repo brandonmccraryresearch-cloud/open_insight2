@@ -116,6 +116,9 @@ export default function FormalismPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                role="tab"
+                aria-selected={activeTab === tab.key}
+                aria-label={`View ${tab.label} tab`}
                 className={`px-3 py-2 text-xs font-medium transition-colors ${
                   activeTab === tab.key ? "tab-active" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 }`}

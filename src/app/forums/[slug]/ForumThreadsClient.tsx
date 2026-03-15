@@ -214,6 +214,7 @@ export default function ForumThreadsClient({
                     disabled={hasUpvoted}
                     className={`flex items-center gap-1 transition-colors ${hasUpvoted ? "text-[var(--accent-teal)]" : "hover:text-[var(--accent-teal)] cursor-pointer"}`}
                     title={hasUpvoted ? "You already upvoted this thread" : "Upvote this thread — one vote per visitor per thread"}
+                    aria-label={hasUpvoted ? `Already upvoted (${displayUpvotes} votes)` : "Upvote this thread"}
                   >
                     <svg className="w-3 h-3" fill={hasUpvoted ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />

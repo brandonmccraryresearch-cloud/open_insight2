@@ -363,9 +363,11 @@ body {
   transition: opacity 0.2s ease;
   border: 1px solid rgba(139, 92, 246, 0.15);
   backdrop-filter: blur(12px);
+  z-index: 50;
 }
 
-[data-tooltip]:hover::after {
+[data-tooltip]:hover::after,
+[data-tooltip]:focus::after {
   opacity: 1;
 }
 

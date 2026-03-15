@@ -161,6 +161,7 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                     disabled={upvotedIds.has(thread.id)}
                     className={`flex items-center gap-1 justify-end transition-colors ${upvotedIds.has(thread.id) ? "opacity-60" : "hover:text-[var(--accent-indigo)] cursor-pointer"}`}
                     title={upvotedIds.has(thread.id) ? "You already upvoted this thread" : "Upvote this thread — higher values indicate broadly supported arguments"}
+                    aria-label={upvotedIds.has(thread.id) ? `Already upvoted (${thread.upvotes + (localUpvotes[thread.id] ?? 0)} votes)` : "Upvote this thread"}
                   >
                     <svg className="w-3 h-3 text-[var(--accent-indigo)]" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
