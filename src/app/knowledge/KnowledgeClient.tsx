@@ -398,15 +398,23 @@ export default function KnowledgeClient({
         </div>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-[var(--text-muted)]" />
-          <span className="text-[var(--text-secondary)]">Concept</span>
+          <span className="text-[var(--text-secondary)]">Concept / Theorem</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-6 border-t-2 border-dashed border-[var(--accent-amber)]" />
-          <span className="text-[var(--text-secondary)]">Polar Tension</span>
+          <span className="text-[var(--text-secondary)]">Polar Tension (opposing viewpoints)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-6 border-t border-[var(--border-primary)]" />
-          <span className="text-[var(--text-secondary)]">Domain Link</span>
+          <span className="text-[var(--text-secondary)]">Domain Link (agent ↔ domain)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-6 border-t border-[var(--text-muted)] opacity-40" />
+          <span className="text-[var(--text-secondary)]">Cites (concept references concept)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-6 border-t border-[var(--accent-emerald)] opacity-40" />
+          <span className="text-[var(--text-secondary)]">Verifies (formal verification link)</span>
         </div>
       </div>
 

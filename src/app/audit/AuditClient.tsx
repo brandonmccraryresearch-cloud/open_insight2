@@ -278,8 +278,13 @@ export default function AuditClient() {
       return (
         <div
           key={a.idx}
+          role="button"
+          tabIndex={0}
+          aria-expanded={isExpanded}
+          aria-label={`${a.agentName} thought — click to ${isExpanded ? "collapse" : "expand"}`}
           className="px-3 py-2 rounded-lg text-xs bg-[var(--accent-gold)]/5 border-l-2 border-[var(--accent-gold)]/40 cursor-pointer hover:bg-[var(--accent-gold)]/10 transition-colors"
           onClick={() => setExpandedActionIdx(isExpanded ? null : a.idx)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedActionIdx(isExpanded ? null : a.idx); } }}
         >
           <div className="flex items-start gap-2">
             <span className="font-mono text-[10px] text-[var(--text-muted)] shrink-0">{a.timestamp}</span>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getAgentById, getPolarPairs, domainColors } from "@/lib/queries";
+import { getAgentById, getPolarPairs, domainColors, getComputedAgentStats } from "@/lib/queries";
 import AgentReasoningPanel from "./AgentReasoningPanel";
 
 const statusColors: Record<string, string> = {
@@ -29,6 +29,17 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
   const pair = polarPairs.find(
     (p) => p.agents.includes(agent.id) && (agent.polarPartner == null || p.agents.includes(agent.polarPartner))
   );
+
+  // Overlay computed stats from real DB activity
+  const computedStats = getComputedAgentStats();
+  const cs = computedStats[agent.id];
+  if (cs) {
+    agent.postCount = cs.postCount;
+    agent.debateWins = cs.debateWins;
+    agent.verificationsSubmitted = cs.verificationsSubmitted;
+    agent.verifiedClaims = cs.verifiedClaims;
+    agent.reputationScore = cs.reputationScore;
+  }
 
   return (
     <div className="page-enter p-6 max-w-5xl mx-auto space-y-6">
@@ -65,13 +76,13 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ i
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-[var(--border-primary)]">
           {[
-            { label: "Reputation", value: agent.reputationScore, color: "var(--accent-amber)" },
-            { label: "Posts", value: agent.postCount, color: "var(--text-primary)" },
-            { label: "Debate Wins", value: agent.debateWins, color: "var(--accent-indigo)" },
-            { label: "Verifications", value: agent.verificationsSubmitted, color: "var(--accent-cyan)" },
-            { label: "Verified Claims", value: agent.verifiedClaims, color: "var(--accent-emerald)" },
+            { label: "Reputation", value: agent.reputationScore, color: "var(--accent-amber)", tooltip: "Computed from posts, verified claims, and debate wins" },
+            { label: "Posts", value: agent.postCount, color: "var(--text-primary)", tooltip: "Total forum threads, replies, and debate messages authored" },
+            { label: "Debate Wins", value: agent.debateWins, color: "var(--accent-indigo)", tooltip: "Debates won based on message upvotes in completed debates" },
+            { label: "Verifications", value: agent.verificationsSubmitted, color: "var(--accent-cyan)", tooltip: "Total verification checks submitted by this agent" },
+            { label: "Verified Claims", value: agent.verifiedClaims, color: "var(--accent-emerald)", tooltip: "Claims that passed formal verification (Lean 4, dimensional analysis, or symbolic checks)" },
           ].map((s) => (
-            <div key={s.label} className="text-center">
+            <div key={s.label} className="text-center" title={s.tooltip}>
               <div className="text-xl font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
               <div className="text-xs text-[var(--text-muted)]">{s.label}</div>
             </div>

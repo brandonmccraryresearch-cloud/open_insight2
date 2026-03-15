@@ -13,10 +13,26 @@ const verificationColors: Record<string, { bg: string; text: string; label: stri
 export default function ForumsClient({ forums }: { forums: Forum[] }) {
   const [sortBy, setSortBy] = useState<"threads" | "active">("active");
   const [filter, setFilter] = useState("");
+  const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
+  const [localUpvotes, setLocalUpvotes] = useState<Record<string, number>>({});
 
   const allThreads = forums.flatMap((f) =>
     f.threads.map((t) => ({ ...t, forumSlug: f.slug, forumName: f.name, forumColor: f.color }))
   );
+
+  async function handleUpvote(forumSlug: string, threadId: string) {
+    if (upvotedIds.has(threadId)) return;
+    setUpvotedIds((prev) => new Set(prev).add(threadId));
+    setLocalUpvotes((prev) => ({ ...prev, [threadId]: (prev[threadId] ?? 0) + 1 }));
+    try {
+      const res = await fetch(`/api/forums/${forumSlug}/threads/${threadId}/upvote`, { method: "POST" });
+      if (!res.ok) throw new Error("Upvote failed");
+    } catch {
+      // Revert optimistic update on failure
+      setUpvotedIds((prev) => { const next = new Set(prev); next.delete(threadId); return next; });
+      setLocalUpvotes((prev) => ({ ...prev, [threadId]: (prev[threadId] ?? 1) - 1 }));
+    }
+  }
 
   const filteredForums = forums.filter(
     (f) => f.name.toLowerCase().includes(filter.toLowerCase()) || f.description.toLowerCase().includes(filter.toLowerCase())
@@ -72,8 +88,10 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
             </div>
 
             <div className="flex items-center gap-4 mb-4 text-xs text-[var(--text-muted)]">
-              <span>{forum.threadCount} threads</span>
-              <span className="flex items-center gap-1">
+              <Link href={`/forums/${forum.slug}`} className="hover:text-[var(--accent-indigo)] transition-colors underline decoration-dotted underline-offset-2" title="Total discussion threads in this forum category — click to view all threads" aria-label={`View all ${forum.threadCount} threads in ${forum.name}`} onClick={(e) => e.stopPropagation()}>
+                {forum.threadCount} threads
+              </Link>
+              <span className="flex items-center gap-1" title="Agents who have posted in this forum within recent sessions">
                 <span className="w-2 h-2 rounded-full bg-[var(--accent-emerald)]" />
                 {forum.activeAgents} agents active
               </span>
@@ -98,6 +116,17 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
         ))}
       </div>
 
+      {/* Verification Status Legend */}
+      <div className="glass-card p-3 flex flex-wrap items-center gap-4 text-xs">
+        <span className="text-[var(--text-muted)] font-medium">Thread status:</span>
+        {Object.entries(verificationColors).map(([key, v]) => (
+          <span key={key} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: v.text }} />
+            <span className="text-[var(--text-secondary)]">{v.label}</span>
+          </span>
+        ))}
+      </div>
+
       {/* All Threads View */}
       <section>
         <h2 className="text-lg font-semibold mb-4">All Recent Threads</h2>
@@ -113,7 +142,7 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                     </Link>
                     <span className="badge" style={{ backgroundColor: v.bg, color: v.text, fontSize: 10 }}>{v.label}</span>
                     {thread.tags.slice(0, 2).map((tag) => (
-                      <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
+                      <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title={`Topic tag: ${tag}`}>{tag}</span>
                     ))}
                   </div>
                   <Link href={`/forums/${thread.forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors block">
@@ -124,15 +153,21 @@ export default function ForumsClient({ forums }: { forums: Forum[] }) {
                 <div className="text-right shrink-0 space-y-1">
                   <div className="text-xs text-[var(--text-muted)]">{thread.timestamp}</div>
                   <div className="flex items-center gap-3 justify-end">
-                    <span className="text-xs text-[var(--text-secondary)]">{thread.replyCount} replies</span>
-                    <span className="text-xs text-[var(--text-muted)]">{thread.views.toLocaleString()} views</span>
+                    <Link href={`/forums/${thread.forumSlug}/threads/${thread.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent-indigo)] transition-colors" title="Number of agent responses to this thread">{thread.replyCount} replies</Link>
+                    <span className="text-xs text-[var(--text-muted)]" title="Total page views including agent and human visitors">{thread.views.toLocaleString()} views</span>
                   </div>
-                  <div className="flex items-center gap-1 justify-end">
+                  <button
+                    onClick={(e) => { e.preventDefault(); handleUpvote(thread.forumSlug, thread.id); }}
+                    disabled={upvotedIds.has(thread.id)}
+                    className={`flex items-center gap-1 justify-end transition-colors ${upvotedIds.has(thread.id) ? "opacity-60" : "hover:text-[var(--accent-indigo)] cursor-pointer"}`}
+                    title={upvotedIds.has(thread.id) ? "You already upvoted this thread" : "Upvote this thread — higher values indicate broadly supported arguments"}
+                    aria-label={upvotedIds.has(thread.id) ? `Already upvoted (${thread.upvotes + (localUpvotes[thread.id] ?? 0)} votes)` : "Upvote this thread"}
+                  >
                     <svg className="w-3 h-3 text-[var(--accent-indigo)]" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
                     </svg>
-                    <span className="text-xs text-[var(--text-muted)]">{thread.upvotes}</span>
-                  </div>
+                    <span className="text-xs text-[var(--text-muted)]">{thread.upvotes + (localUpvotes[thread.id] ?? 0)}</span>
+                  </button>
                 </div>
               </div>
             );

@@ -114,10 +114,26 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
       <div className="flex items-center justify-between px-6 h-16">
         <Link href="/" className="flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--accent-teal)] to-[var(--accent-gold)] flex items-center justify-center shadow-lg shadow-[rgba(20,184,166,0.2)]">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-              <path d="M2 12h20" />
+            <svg width="22" height="22" viewBox="0 0 256 256" fill="none">
+              {/* Atom nucleus */}
+              <circle cx="128" cy="128" r="18" fill="white" opacity="0.95"/>
+              <circle cx="128" cy="128" r="11" fill="none" stroke="white" strokeWidth="2" opacity="0.6"/>
+              {/* Electron orbits */}
+              <ellipse cx="128" cy="128" rx="80" ry="30" transform="rotate(-30 128 128)" stroke="white" strokeWidth="5" opacity="0.8" fill="none"/>
+              <ellipse cx="128" cy="128" rx="80" ry="30" transform="rotate(30 128 128)" stroke="white" strokeWidth="5" opacity="0.8" fill="none"/>
+              <ellipse cx="128" cy="128" rx="80" ry="30" transform="rotate(90 128 128)" stroke="white" strokeWidth="5" opacity="0.8" fill="none"/>
+              {/* Neural network nodes */}
+              <circle cx="128" cy="48" r="10" fill="white" opacity="0.9"/>
+              <circle cx="128" cy="208" r="10" fill="white" opacity="0.9"/>
+              <circle cx="62" cy="90" r="8" fill="white" opacity="0.8"/>
+              <circle cx="194" cy="90" r="8" fill="white" opacity="0.8"/>
+              <circle cx="68" cy="172" r="8" fill="white" opacity="0.8"/>
+              <circle cx="188" cy="172" r="8" fill="white" opacity="0.8"/>
+              {/* Neural connections */}
+              <line x1="128" y1="48" x2="68" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
+              <line x1="128" y1="48" x2="188" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
+              <line x1="62" y1="90" x2="188" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
+              <line x1="194" y1="90" x2="68" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
             </svg>
           </div>
           <div>
@@ -138,7 +154,7 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
             </svg>
           </button>
           {menuOpen && (
-            <div className="absolute left-0 top-full mt-2 w-72 glass-card shadow-2xl overflow-hidden z-50">
+            <div className="absolute left-0 top-full mt-2 w-80 glass-card shadow-2xl overflow-hidden z-50 max-h-[calc(100vh-80px)] overflow-y-auto">
               <div className="px-4 py-3 border-b border-[var(--border-primary)]">
                 <span className="text-xs font-bold tracking-widest text-[var(--text-muted)]">FEATURES &amp; TOOLS</span>
               </div>
@@ -162,6 +178,34 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
                   >
                     <svg className="w-4 h-4 text-[var(--accent-teal)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-[var(--text-primary)]">{item.label}</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">{item.desc}</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              <div className="px-4 py-3 border-t border-[var(--border-primary)]">
+                <span className="text-xs font-bold tracking-widest text-[var(--text-muted)]">MCP SCIENTIFIC TOOLS</span>
+              </div>
+              <div className="py-1">
+                {[
+                  { label: "MCP Dashboard", href: "/tools/mcp", desc: "Server status & interactive testing", color: "var(--accent-teal)" },
+                  { label: "Symbolic Math", href: "/tools/mcp?tool=math", desc: "SymPy integration, calculus, algebra", color: "#f59e0b" },
+                  { label: "Quantum Sim", href: "/tools/mcp?tool=quantum", desc: "Schrödinger equation, wave packets", color: "#8b5cf6" },
+                  { label: "Molecular Dynamics", href: "/tools/mcp?tool=molecular", desc: "Lennard-Jones MD, RDF, MSD", color: "#10b981" },
+                  { label: "Neural Networks", href: "/tools/mcp?tool=neural", desc: "Model training & evaluation", color: "#06b6d4" },
+                  { label: "Particle Data", href: "/tools/mcp?tool=pdg", desc: "PDG database — 400+ particles", color: "#ec4899" },
+                ].map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--bg-card-hover)] transition-colors"
+                  >
+                    <svg className="w-4 h-4 shrink-0" style={{ color: item.color }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
                     </svg>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-[var(--text-primary)]">{item.label}</div>

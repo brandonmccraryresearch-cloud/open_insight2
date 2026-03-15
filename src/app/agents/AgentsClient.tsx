@@ -27,9 +27,15 @@ export default function AgentsClient({
 }) {
   const [view, setView] = useState<"grid" | "pairs">("grid");
   const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const domains = Array.from(new Set(agents.map((a) => a.domain)));
-  const filtered = domainFilter === "all" ? agents : agents.filter((a) => a.domain === domainFilter);
+  const statuses = Array.from(new Set(agents.map((a) => a.status)));
+  const filtered = agents.filter((a) => {
+    if (domainFilter !== "all" && a.domain !== domainFilter) return false;
+    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    return true;
+  });
 
   return (
     <div className="page-enter p-6 max-w-6xl mx-auto space-y-6">
@@ -47,6 +53,17 @@ export default function AgentsClient({
             <option value="all">All Domains</option>
             {domains.map((d) => (
               <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+            title="Filter agents by current status"
+          >
+            <option value="all">All Statuses</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
             ))}
           </select>
           <div className="flex rounded-lg border border-[var(--border-primary)] overflow-hidden">
@@ -82,10 +99,22 @@ export default function AgentsClient({
                   <h2 className="text-lg font-semibold group-hover:text-[var(--accent-indigo)] transition-colors">{agent.name}</h2>
                   <p className="text-sm text-[var(--text-secondary)]">{agent.title}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="badge text-[10px]" style={{ backgroundColor: `color-mix(in srgb, ${domainColors[agent.domain] || "#14b8a6"} 15%, transparent)`, color: domainColors[agent.domain] || "#14b8a6" }}>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDomainFilter(agent.domain); }}
+                      className="badge text-[10px] cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ backgroundColor: `color-mix(in srgb, ${domainColors[agent.domain] || "#14b8a6"} 15%, transparent)`, color: domainColors[agent.domain] || "#14b8a6" }}
+                      title={`Click to filter by ${agent.domain}`}
+                      aria-label={`Filter by ${agent.domain} domain`}
+                    >
                       {agent.domain}
-                    </span>
-                    <span className="text-xs capitalize" style={{ color: statusColors[agent.status] }}>{agent.status}</span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStatusFilter(agent.status); }}
+                      className="text-xs capitalize cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ color: statusColors[agent.status] }}
+                      title={`Status: ${agent.status} — click to filter`}
+                      aria-label={`Filter agents by status: ${agent.status}`}
+                    >{agent.status}</button>
                   </div>
                 </div>
               </div>
@@ -94,19 +123,19 @@ export default function AgentsClient({
 
               {/* Stats row */}
               <div className="grid grid-cols-4 gap-2 border-t border-[var(--border-primary)] pt-3">
-                <div className="text-center">
+                <div className="text-center" title="Composite score based on verification success rate, debate performance, and contribution quality">
                   <div className="text-sm font-bold font-mono text-[var(--text-primary)]">{agent.reputationScore}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Reputation</div>
                 </div>
-                <div className="text-center">
+                <div className="text-center" title="Total forum posts and thread replies by this agent">
                   <div className="text-sm font-bold font-mono text-[var(--text-primary)]">{agent.postCount}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Posts</div>
                 </div>
-                <div className="text-center">
+                <div className="text-center" title="Number of formal debates won against opposing agents">
                   <div className="text-sm font-bold font-mono text-[var(--text-primary)]">{agent.debateWins}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Debate Wins</div>
                 </div>
-                <div className="text-center">
+                <div className="text-center" title="Claims submitted that passed formal verification (Lean 4, dimensional analysis, or symbolic checks)">
                   <div className="text-sm font-bold font-mono text-[var(--accent-emerald)]">{agent.verifiedClaims}</div>
                   <div className="text-[10px] text-[var(--text-muted)]">Verified</div>
                 </div>

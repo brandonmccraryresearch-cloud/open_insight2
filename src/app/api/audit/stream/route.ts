@@ -149,18 +149,22 @@ const PLATFORM_ACTIONS: PlatformAction[] = [
   { name: "test_mathmark_chat", description: "Test MathMark AI writing assistant", method: "POST", path: "/api/mathmark/chat", bodySchema: '{"message":"your question","documentContext":""}' },
   { name: "browse_web", description: "Browse a web page and get an AI-generated summary of its content", method: "POST", path: "/api/tools/browse", bodySchema: '{"url":"https://example.com","query":"what to look for on the page"}' },
   { name: "search_docs", description: "Search for the latest documentation on any library, framework, or tool using Google Search", method: "POST", path: "/api/tools/docs", bodySchema: '{"query":"search query for documentation"}' },
-  // Playwright browser interaction
-  { name: "page_navigate", description: "Navigate to a page and get a structured description of its layout and content (allowlisted URLs only)", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"navigate","url":"https://..."}' },
-  { name: "page_read", description: "Read and extract all text content from a page, organized by sections", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"read_page","url":"https://...","description":"focus area"}' },
-  { name: "page_find_elements", description: "Find interactive elements (buttons, links, forms) on a page", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"find_elements","url":"https://...","selector":"submit buttons"}' },
-  { name: "page_screenshot", description: "Get a detailed visual description of a page as if viewing a screenshot", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"screenshot","url":"https://..."}' },
+  // Playwright real browser interaction (uses actual Chromium when available, Gemini URL-context fallback otherwise)
+  { name: "page_snapshot", description: "Get the full accessibility tree + text content of a page using a real browser. Best for understanding page structure. Use the app URL to navigate Open Insight pages directly.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"snapshot","url":"http://localhost:3000/"}' },
+  { name: "page_navigate", description: "Navigate to a page with a real browser and get structured content (accessibility tree + text). Preferred over page_snapshot for clarity.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"navigate","url":"http://localhost:3000/forums"}' },
+  { name: "page_read", description: "Read and extract all text content from a page using a real browser, organized by sections", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"read_page","url":"http://localhost:3000/debates","description":"focus area"}' },
+  { name: "page_find_elements", description: "Find interactive elements (buttons, links, forms) on a page using a real browser. Use selector to filter.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"find_elements","url":"http://localhost:3000/","selector":"navigation links"}' },
+  { name: "page_click", description: "Click an element on a page using a real browser — triggers real navigation/state change. Use text content or aria-label as selector.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"click","url":"http://localhost:3000/","selector":"Debates"}' },
+  { name: "page_fill", description: "Fill a form field on a page using a real browser. Use label text, placeholder, field name, or CSS selector. Provide 'value' with the text to enter. Replace example URL/selector with actual page and field.", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"fill","url":"http://localhost:3000/forums/conjecture-workshop","selector":"Title","value":"My research finding on quantum decoherence"}' },
+  { name: "page_screenshot", description: "Capture a real screenshot of a page (base64 PNG) or get a visual description via Gemini fallback", method: "POST", path: "/api/tools/playwright", bodySchema: '{"command":"screenshot","url":"http://localhost:3000/"}' },
   // Scientific & Research MCP Server Tools
-  { name: "search_arxiv", description: "Search arXiv for scientific papers by query and/or category (arxiv-search-mcp)", method: "POST", path: "/api/tools/arxiv", bodySchema: '{"query":"search terms","category":"cs.AI","maxResults":5}' },
-  { name: "lookup_particle_data", description: "Look up particle physics data from PDG — masses, lifetimes, decay modes, quantum numbers (particlephysics-mcp)", method: "POST", path: "/api/tools/pdg", bodySchema: '{"particle":"Higgs boson","property":"mass","query":""}' },
-  { name: "run_quantum_simulation", description: "Run quantum physics simulations — state evolution, measurements, entanglement (psianimator-mcp / scicomp-quantum-mcp)", method: "POST", path: "/api/tools/quantum", bodySchema: '{"task":"simulate a 2-qubit Bell state and compute entanglement entropy","systemType":"qubit"}' },
-  { name: "run_symbolic_math", description: "Perform symbolic algebra and numerical computing — differentiation, integration, solving (scicomp-math-mcp)", method: "POST", path: "/api/tools/math", bodySchema: '{"operation":"integrate","expression":"sin(x)*exp(-x)","task":""}' },
-  { name: "run_molecular_dynamics", description: "Run molecular dynamics simulations — particle systems, potentials, thermodynamics (scicomp-molecular-mcp)", method: "POST", path: "/api/tools/molecular", bodySchema: '{"task":"simulate 100 particles with Lennard-Jones potential at T=1.0","systemType":"LJ fluid"}' },
-  { name: "run_neural_network", description: "Neural network training, evaluation, and analysis (scicomp-neural-mcp)", method: "POST", path: "/api/tools/neural", bodySchema: '{"task":"train a simple classifier on XOR data","architecture":"feedforward"}' },
+  { name: "search_arxiv", description: "Search arXiv for scientific papers by query and/or category (arxiv-search-mcp — real arXiv API, no Gemini needed)", method: "POST", path: "/api/tools/arxiv", bodySchema: '{"query":"search terms","category":"cs.AI","maxResults":5}' },
+  { name: "lookup_particle_data", description: "Look up particle physics data from PDG — masses, lifetimes, decay modes, quantum numbers (particlephysics-mcp / Gemini fallback)", method: "POST", path: "/api/tools/pdg", bodySchema: '{"particle":"Higgs boson","property":"mass","query":""}' },
+  { name: "run_quantum_simulation", description: "Run real quantum physics simulations via scicomp-quantum-mcp (Gaussian wavepacket → Schrödinger evolution, 12 tools) or Gemini fallback", method: "POST", path: "/api/tools/quantum", bodySchema: '{"task":"simulate a Gaussian wave packet evolving in harmonic potential","systemType":"1D"}' },
+  { name: "run_symbolic_math", description: "Real symbolic algebra via scicomp-math-mcp (symbolic_integrate, symbolic_diff, symbolic_solve, 14 tools) or Gemini fallback", method: "POST", path: "/api/tools/math", bodySchema: '{"operation":"integrate","expression":"sin(x)*exp(-x)","task":""}' },
+  { name: "run_molecular_dynamics", description: "Real MD simulation via scicomp-molecular-mcp (create_particles → run_md/run_nvt, RDF, MSD, 15 tools) or Gemini fallback", method: "POST", path: "/api/tools/molecular", bodySchema: '{"task":"simulate Lennard-Jones fluid and compute RDF","systemType":"LJ fluid"}' },
+  { name: "run_neural_network", description: "Real neural network definition via scicomp-neural-mcp (define_model: resnet18/mobilenet/custom, 14 tools) or Gemini fallback", method: "POST", path: "/api/tools/neural", bodySchema: '{"task":"define a ResNet18 model for 10-class classification","architecture":"resnet18"}' },
+  { name: "check_tool_status", description: "Check which tools are available and their executionMode (mcp/gemini/subprocess/direct-api). Always check this first if unsure whether MCP or Gemini is running.", method: "GET", path: "/api/tools/status", bodySchema: "" },
 ];
 
 function buildActionListForPrompt(): string {
@@ -213,19 +217,29 @@ You are actively exploring and using the Open Insight research platform as a rea
 - Use run_notebook for computational experiments.
 - Use run_lean4 for formal proof verification.
 
-**Playwright Browser Interaction** (page_navigate / page_read / page_find_elements / page_screenshot):
-- Use page_navigate to visit a URL and get a structured overview of the page layout and content (restricted to the platform and approved research sites).
-- Use page_read to extract and read all text content from a page, organized by sections.
-- Use page_find_elements to identify interactive elements (buttons, links, forms) on a page.
-- Use page_screenshot to get a detailed visual description of a page.
+**Playwright Real Browser Interaction** (page_snapshot / page_navigate / page_read / page_find_elements / page_click / page_fill / page_screenshot):
+- These actions use a REAL Chromium browser (via Playwright) to interact with pages — not a simulation. You see the actual rendered page state.
+- Use page_snapshot to get the full accessibility tree + text content of any app page. This is the most powerful action for understanding what's on a page.
+  Example: {"command":"snapshot","url":"http://localhost:3000/forums"} gives you the real forum page structure.
+- Use page_navigate to navigate to any app page and get structured content (same as snapshot).
+- Use page_read to extract text content section by section.
+- Use page_find_elements to find all interactive elements (buttons, links, inputs) on a page, optionally filtered.
+- Use page_click to ACTUALLY CLICK an element on a page — this causes real navigation or state changes. Use text content or aria-label as the selector.
+  Example: {"command":"click","url":"http://localhost:3000/","selector":"Debates"} clicks the Debates nav link.
+- Use page_fill to ACTUALLY FILL a form field — type text into an input. Provide "selector" (label, placeholder, name, or CSS) and "value" (the text to enter).
+  Example: {"command":"fill","url":"http://localhost:3000/forums/conjecture-workshop","selector":"Title","value":"Quantum decoherence timescales"} fills a form's title field.
+- Use page_screenshot to capture a real PNG screenshot (base64 encoded) of any app page.
+- App URLs: use http://localhost:3000/ as the base when exploring your own platform. All app pages (/forums, /debates, /agents, /tools, /knowledge, /verification, /audit, /mathmark) are accessible.
+- External research sites also accessible: arxiv.org, en.wikipedia.org, pdg.lbl.gov, etc.
 
-**Scientific & Research MCP Tools** (search_arxiv / lookup_particle_data / run_quantum_simulation / run_symbolic_math / run_molecular_dynamics / run_neural_network):
-- search_arxiv: Search arXiv.org for scientific papers by keyword or category. Returns titles, authors, abstracts, PDF links. Based on arxiv-search-mcp.
-- lookup_particle_data: Query particle physics properties (mass, lifetime, decay modes, quantum numbers) from the Particle Data Group. Based on ParticlePhysics MCP Server.
-- run_quantum_simulation: Simulate quantum systems — state evolution, measurements, entanglement entropy, gate operations. Based on PsiAnimator-MCP and scicomp-quantum-mcp.
-- run_symbolic_math: Perform symbolic algebra (SymPy) and numerical computing — differentiation, integration, equation solving, series expansion, matrix ops. Based on scicomp-math-mcp (14 tools).
-- run_molecular_dynamics: Run classical molecular dynamics simulations — particle systems, Lennard-Jones potentials, RDF, MSD, thermodynamics. Based on scicomp-molecular-mcp (15 tools).
-- run_neural_network: Train and evaluate neural networks — architecture definition, training loops, gradient analysis, model evaluation. Based on scicomp-neural-mcp (16 tools).
+**Scientific & Research MCP Tools** (search_arxiv / lookup_particle_data / run_quantum_simulation / run_symbolic_math / run_molecular_dynamics / run_neural_network / check_tool_status):
+- check_tool_status: [GET /api/tools/status] Returns per-server availability and executionMode. Check this first — tools marked [MCP] use real native computation; tools marked [Gemini] use AI code execution.
+- search_arxiv: [MCP — real arXiv API] Search arXiv.org for scientific papers. Returns titles, authors, abstracts, PDF links.
+- lookup_particle_data: [Gemini fallback — install particlephysics-mcp for offline PDG] Query particle properties (mass, lifetime, decay modes, quantum numbers) from the Particle Data Group.
+- run_quantum_simulation: [MCP — scicomp-quantum-mcp] Real quantum simulation: Gaussian wave packets, Schrödinger equation solver, wavefunction analysis (12 tools). When unavailable, falls back to Gemini codeExecution.
+- run_symbolic_math: [MCP — scicomp-math-mcp] Real symbolic algebra via SymPy: symbolic_integrate, symbolic_diff, symbolic_solve, symbolic_simplify, matrix ops (14 tools). Falls back to Gemini.
+- run_molecular_dynamics: [MCP — scicomp-molecular-mcp] Real MD simulations: create_particles → run_md/run_nvt, RDF, MSD, thermodynamic analysis (15 tools). Falls back to Gemini.
+- run_neural_network: [MCP — scicomp-neural-mcp] Real neural network definition: resnet18, mobilenet, or custom architectures; model summary, training workflow (14 tools). Falls back to Gemini.
 
 **MathMark** (test_mathmark_chat / test_mathmark_detect / test_mathmark_analyze / test_mathmark_humanize / test_mathmark_figure):
 - Use MathMark tools for document analysis, AI-content detection, figure generation, and writing assistance.

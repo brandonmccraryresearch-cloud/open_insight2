@@ -48,6 +48,9 @@ export default function DebatesClient({
   stats: Stats;
 }) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [formatFilter, setFormatFilter] = useState<string>("all");
+  const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [localDebates, setLocalDebates] = useState<DebateListItem[]>([]);
   const router = useRouter();
@@ -55,7 +58,19 @@ export default function DebatesClient({
   const initialDebateIds = new Set(initialDebates.map((d) => d.id));
   const debates = [...localDebates.filter((ld) => !initialDebateIds.has(ld.id)), ...initialDebates];
   const agentMap = new Map(agents.map((a) => [a.id, a]));
-  const filtered = statusFilter === "all" ? debates : debates.filter((d) => d.status === statusFilter);
+
+  // Collect unique formats, domains, and tags for filter options
+  const allFormats = Array.from(new Set(debates.map((d) => d.format)));
+  const allDomains = Array.from(new Set(debates.map((d) => d.domain)));
+  const allTags = Array.from(new Set(debates.flatMap((d) => d.tags))).sort();
+
+  const filtered = debates.filter((d) => {
+    if (statusFilter !== "all" && d.status !== statusFilter) return false;
+    if (formatFilter !== "all" && d.format !== formatFilter) return false;
+    if (domainFilter !== "all" && d.domain !== domainFilter) return false;
+    if (tagFilter !== "all" && !d.tags.includes(tagFilter)) return false;
+    return true;
+  });
 
   const statusBadge = (status: string) => {
     const map: Record<string, { bg: string; text: string }> = {
@@ -87,13 +102,13 @@ export default function DebatesClient({
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {[
-          { label: "Total Debates", value: stats.totalDebates, color: "var(--text-primary)" },
-          { label: "Live Now", value: stats.liveDebates, color: "var(--accent-rose)" },
-          { label: "Total Rounds", value: stats.totalRounds, color: "var(--accent-indigo)" },
-          { label: "Verifications", value: stats.totalVerifications, color: "var(--accent-emerald)" },
-          { label: "Avg Spectators", value: stats.averageSpectators, color: "var(--accent-amber)" },
+          { label: "Total Debates", value: stats.totalDebates, color: "var(--text-primary)", tooltip: "Total number of structured debates (live, scheduled, and concluded)" },
+          { label: "Live Now", value: stats.liveDebates, color: "var(--accent-rose)", tooltip: "Debates currently in progress with active agent exchanges" },
+          { label: "Total Rounds", value: stats.totalRounds, color: "var(--accent-indigo)", tooltip: "Sum of all debate rounds across all debates (each round = one exchange per side)" },
+          { label: "Verifications", value: stats.totalVerifications, color: "var(--accent-emerald)", tooltip: "Claims within debates that have been formally verified" },
+          { label: "Avg Spectators", value: stats.averageSpectators, color: "var(--accent-amber)", tooltip: "Average number of agent observers across all live debates" },
         ].map((s) => (
-          <div key={s.label} className="glass-card p-4 text-center">
+          <div key={s.label} className="glass-card p-4 text-center" title={s.tooltip}>
             <div className="text-xl font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
             <div className="text-xs text-[var(--text-muted)]">{s.label}</div>
           </div>
@@ -101,19 +116,59 @@ export default function DebatesClient({
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2 border-b border-[var(--border-primary)] pb-1">
-        {["all", "live", "scheduled", "concluded"].map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`px-4 py-2 text-sm capitalize transition-colors ${
-              statusFilter === s ? "text-[var(--accent-indigo)] tab-active font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            }`}
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-primary)] pb-2">
+        <div className="flex gap-1">
+          {["all", "live", "scheduled", "concluded"].map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1.5 text-sm capitalize transition-colors rounded-md ${
+                statusFilter === s ? "text-[var(--accent-indigo)] bg-[var(--accent-indigo)]/10 font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              }`}
+            >
+              {s === "all" ? "All" : s}
+              {s === "live" && <span className="ml-1.5 w-2 h-2 rounded-full bg-[var(--accent-rose)] inline-block status-pulse" />}
+            </button>
+          ))}
+        </div>
+        <span className="hidden sm:inline text-[var(--border-primary)]">│</span>
+        <select
+          value={formatFilter}
+          onChange={(e) => setFormatFilter(e.target.value)}
+          className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-md px-2 py-1 text-xs text-[var(--text-primary)] outline-none"
+          title="Filter by debate format"
+        >
+          <option value="all">All Formats</option>
+          {allFormats.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select
+          value={domainFilter}
+          onChange={(e) => setDomainFilter(e.target.value)}
+          className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-md px-2 py-1 text-xs text-[var(--text-primary)] outline-none"
+          title="Filter by academic domain"
+        >
+          <option value="all">All Domains</option>
+          {allDomains.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        {allTags.length > 0 && (
+          <select
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
+            className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-md px-2 py-1 text-xs text-[var(--text-primary)] outline-none"
+            title="Filter by topic tag"
           >
-            {s === "all" ? "All Debates" : s}
-            {s === "live" && <span className="ml-1.5 w-2 h-2 rounded-full bg-[var(--accent-rose)] inline-block status-pulse" />}
+            <option value="all">All Tags</option>
+            {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
+        {(formatFilter !== "all" || domainFilter !== "all" || tagFilter !== "all") && (
+          <button
+            onClick={() => { setFormatFilter("all"); setDomainFilter("all"); setTagFilter("all"); }}
+            className="text-[10px] text-[var(--accent-rose)] hover:underline"
+          >
+            Clear filters
           </button>
-        ))}
+        )}
       </div>
 
       {/* Debate list */}
@@ -129,10 +184,10 @@ export default function DebatesClient({
                     <span className="badge uppercase tracking-wider" style={{ backgroundColor: badge.bg, color: badge.text, fontSize: 10 }}>
                       {debate.status}
                     </span>
-                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{debate.format}</span>
-                    <span className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{debate.domain}</span>
+                    <button onClick={(e) => { e.preventDefault(); setFormatFilter(debate.format); }} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-pointer hover:bg-[var(--accent-indigo)]/10 hover:text-[var(--accent-indigo)] transition-colors" style={{ fontSize: 10 }} title={`Debate format: ${debate.format} — click to filter`} aria-label={`Filter debates by format: ${debate.format}`}>{debate.format}</button>
+                    <button onClick={(e) => { e.preventDefault(); setDomainFilter(debate.domain); }} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-pointer hover:bg-[var(--accent-teal)]/10 hover:text-[var(--accent-teal)] transition-colors" style={{ fontSize: 10 }} title={`Domain: ${debate.domain} — click to filter`} aria-label={`Filter debates by domain: ${debate.domain}`}>{debate.domain}</button>
                     {debate.status === "live" && (
-                      <span className="text-xs text-[var(--text-muted)]">Round {debate.currentRound}/{debate.rounds}</span>
+                      <span className="text-xs text-[var(--text-muted)]" title="Current round / total rounds — each round is one complete exchange cycle where all participants respond">Round {debate.currentRound}/{debate.rounds}</span>
                     )}
                   </div>
                   <h3 className="text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-indigo)] transition-colors mb-1">
@@ -140,7 +195,7 @@ export default function DebatesClient({
                   </h3>
                   <p className="text-sm text-[var(--text-secondary)]">{debate.summary}</p>
                   {debate.verdict && (
-                    <p className="text-xs text-[var(--accent-amber)] mt-2 italic">{debate.verdict}</p>
+                    <p className="text-xs text-[var(--accent-amber)] mt-2 italic" title="Verdict determined by AI analysis of argument quality, evidence strength, and logical consistency">{debate.verdict}</p>
                   )}
                 </div>
               </div>
@@ -156,8 +211,8 @@ export default function DebatesClient({
                   ))}
                 </div>
                 <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
-                  {debate.spectators > 0 && <span>{debate.spectators.toLocaleString()} spectators</span>}
-                  <span>{debate.messageCount} messages</span>
+                  {debate.spectators > 0 && <span title="Number of agent observers following this debate">{debate.spectators.toLocaleString()} spectators</span>}
+                  <span title="Total messages exchanged in this debate">{debate.messageCount} messages</span>
                   <span>{debate.startTime}</span>
                 </div>
               </div>
@@ -171,7 +226,7 @@ export default function DebatesClient({
               {/* Tags */}
               <div className="flex flex-wrap gap-1 mt-3">
                 {debate.tags.map((tag) => (
-                  <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
+                  <button key={tag} onClick={(e) => { e.preventDefault(); setTagFilter(tag); }} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-pointer hover:bg-[var(--accent-teal)]/10 hover:text-[var(--accent-teal)] transition-colors" style={{ fontSize: 10 }} title={`Topic tag: ${tag} — click to filter`} aria-label={`Filter debates by tag: ${tag}`}>{tag}</button>
                 ))}
               </div>
             </Link>

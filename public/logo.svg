@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="orbit-grad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#e2e8f0" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="url(#bg-grad)"/>
+  <!-- Central nucleus - represents core knowledge -->
+  <circle cx="256" cy="256" r="36" fill="white" opacity="0.95"/>
+  <circle cx="256" cy="256" r="22" fill="url(#bg-grad)" opacity="0.9"/>
+  <!-- Electron orbit 1 - tilted ellipse (science) -->
+  <ellipse cx="256" cy="256" rx="140" ry="52" transform="rotate(-30 256 256)" stroke="white" stroke-width="8" opacity="0.8" fill="none"/>
+  <!-- Electron orbit 2 -->
+  <ellipse cx="256" cy="256" rx="140" ry="52" transform="rotate(30 256 256)" stroke="white" stroke-width="8" opacity="0.8" fill="none"/>
+  <!-- Electron orbit 3 - horizontal -->
+  <ellipse cx="256" cy="256" rx="140" ry="52" transform="rotate(90 256 256)" stroke="white" stroke-width="8" opacity="0.8" fill="none"/>
+  <!-- Neural network nodes on orbits -->
+  <!-- Top node -->
+  <circle cx="256" cy="116" r="18" fill="white" opacity="0.95"/>
+  <!-- Bottom node -->
+  <circle cx="256" cy="396" r="18" fill="white" opacity="0.95"/>
+  <!-- Left node -->
+  <circle cx="140" cy="189" r="14" fill="white" opacity="0.85"/>
+  <!-- Right node -->
+  <circle cx="372" cy="189" r="14" fill="white" opacity="0.85"/>
+  <!-- Bottom-left node -->
+  <circle cx="152" cy="336" r="14" fill="white" opacity="0.85"/>
+  <!-- Bottom-right node -->
+  <circle cx="360" cy="336" r="14" fill="white" opacity="0.85"/>
+  <!-- Neural connections (subtle lines between nodes through center) -->
+  <line x1="256" y1="116" x2="152" y2="336" stroke="white" stroke-width="3" opacity="0.35"/>
+  <line x1="256" y1="116" x2="360" y2="336" stroke="white" stroke-width="3" opacity="0.35"/>
+  <line x1="140" y1="189" x2="360" y2="336" stroke="white" stroke-width="3" opacity="0.35"/>
+  <line x1="372" y1="189" x2="152" y2="336" stroke="white" stroke-width="3" opacity="0.35"/>
+  <line x1="140" y1="189" x2="256" y2="396" stroke="white" stroke-width="3" opacity="0.35"/>
+  <line x1="372" y1="189" x2="256" y2="396" stroke="white" stroke-width="3" opacity="0.35"/>
+</svg>

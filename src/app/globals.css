@@ -1,28 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  /* ─── Base Surfaces ─── */
-  --bg-primary: #eef2f5;
-  --bg-secondary: #e6ecef;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f7fafc;
-  --bg-elevated: #f2f6f9;
-  --border-primary: rgba(25, 52, 77, 0.14);
-  --border-accent: rgba(17, 153, 142, 0.28);
+  /* ─── Base Surfaces (Dark Teal Theme) ─── */
+  --bg-primary: #031a11;
+  --bg-secondary: #051e13;
+  --bg-card: rgba(0, 0, 0, 0.45);
+  --bg-card-hover: rgba(0, 0, 0, 0.60);
+  --bg-elevated: rgba(255, 255, 255, 0.05);
+  --border-primary: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(14, 165, 150, 0.25);
 
   /* ─── Typography ─── */
-  --text-primary: #22364d;
-  --text-secondary: #4c627a;
-  --text-muted: #7e90a4;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
 
   /* ─── Accent Palette ─── */
   --accent-teal: #0ea596;
-  --accent-gold: #d18a2f;
+  --accent-gold: #fbbf24;
   --accent-violet: #8b5cf6;
   --accent-indigo: #14b8a6;          /* Mapped → teal for backward compat */
   --accent-cyan: #22d3ee;
   --accent-emerald: #10b981;
-  --accent-amber: #d4a017;           /* Mapped → gold */
+  --accent-amber: #f59e0b;           /* Mapped → gold */
   --accent-rose: #f43f5e;
   --accent-pink: #ec4899;
 
@@ -32,10 +32,10 @@
   --pending: #eab308;
 
   /* ─── Glows ─── */
-  --glow-teal: rgba(14, 165, 150, 0.10);
-  --glow-gold: rgba(209, 138, 47, 0.08);
-  --glow-violet: rgba(139, 92, 246, 0.08);
-  --glow-indigo: rgba(20, 184, 166, 0.12);  /* Alias → teal */
+  --glow-teal: rgba(14, 165, 150, 0.12);
+  --glow-gold: rgba(251, 191, 36, 0.10);
+  --glow-violet: rgba(139, 92, 246, 0.10);
+  --glow-indigo: rgba(20, 184, 166, 0.14);  /* Alias → teal */
 }
 
 @theme inline {
@@ -47,7 +47,7 @@
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(45, 55, 95, 0.5) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 body {
@@ -57,54 +57,54 @@ body {
   min-height: 100vh;
 }
 
-/* ─── Animated Mesh Background ─── */
+/* ─── Dark Teal Gradient Background ─── */
 .bg-mesh {
   background:
-    radial-gradient(ellipse at 15% 45%, rgba(14, 165, 150, 0.05) 0%, transparent 55%),
-    radial-gradient(ellipse at 85% 15%, rgba(109, 130, 168, 0.07) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 85%, rgba(209, 138, 47, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 70% 50%, rgba(14, 165, 150, 0.03) 0%, transparent 60%),
-    var(--bg-primary);
+    radial-gradient(ellipse at 15% 45%, rgba(14, 165, 150, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 15%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 85%, rgba(251, 191, 36, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 50%, rgba(14, 165, 150, 0.04) 0%, transparent 60%),
+    linear-gradient(135deg, #022c22 0%, #053d2a 50%, #0a4f38 100%);
 }
 
-/* ─── Glass Card — Core Component ─── */
+/* ─── Glass Card — Core Component (Dark) ─── */
 .glass-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(14px) saturate(120%);
-  -webkit-backdrop-filter: blur(14px) saturate(120%);
-  border: 1px solid rgba(25, 52, 77, 0.10);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.45),
-    0 8px 24px rgba(39, 67, 101, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(14, 165, 150, 0.18);
+  background: rgba(0, 0, 0, 0.55);
+  border-color: rgba(14, 165, 150, 0.20);
   box-shadow:
-    0 0 20px rgba(14, 165, 150, 0.05),
-    0 14px 36px rgba(39, 67, 101, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    0 0 24px rgba(14, 165, 150, 0.07),
+    0 14px 36px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transform: translateY(-2px);
 }
 
 /* ─── Glowing Borders Utility ─── */
 .glow-border-teal {
-  border-color: rgba(20, 184, 166, 0.2);
-  box-shadow: 0 0 16px rgba(20, 184, 166, 0.06), inset 0 0 16px rgba(20, 184, 166, 0.02);
+  border-color: rgba(20, 184, 166, 0.25);
+  box-shadow: 0 0 16px rgba(20, 184, 166, 0.08), inset 0 0 16px rgba(20, 184, 166, 0.03);
 }
 
 .glow-border-violet {
-  border-color: rgba(139, 92, 246, 0.2);
-  box-shadow: 0 0 16px rgba(139, 92, 246, 0.06), inset 0 0 16px rgba(139, 92, 246, 0.02);
+  border-color: rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.08), inset 0 0 16px rgba(139, 92, 246, 0.03);
 }
 
 .glow-border-gold {
-  border-color: rgba(212, 160, 23, 0.2);
-  box-shadow: 0 0 16px rgba(212, 160, 23, 0.06), inset 0 0 16px rgba(212, 160, 23, 0.02);
+  border-color: rgba(251, 191, 36, 0.25);
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.08), inset 0 0 16px rgba(251, 191, 36, 0.03);
 }
 
 /* ─── Status Indicator ─── */
@@ -119,8 +119,8 @@ body {
 
 /* ─── Subtle Ambient Glow Animation ─── */
 @keyframes ambient-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.05); }
-  50% { box-shadow: 0 0 30px rgba(20, 184, 166, 0.08); }
+  0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.07); }
+  50% { box-shadow: 0 0 30px rgba(20, 184, 166, 0.10); }
 }
 
 .ambient-glow {
@@ -129,15 +129,15 @@ body {
 
 /* ─── Verification Badge Glow ─── */
 .verified-glow {
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.30);
 }
 
 .disputed-glow {
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.30);
 }
 
 .pending-glow {
-  box-shadow: 0 0 12px rgba(234, 179, 8, 0.25);
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.30);
 }
 
 /* ─── Thread Card ─── */
@@ -148,7 +148,7 @@ body {
 
 .thread-card:hover {
   border-left-color: var(--accent-teal);
-  background: rgba(14, 18, 36, 0.65);
+  background: rgba(14, 165, 150, 0.06);
 }
 
 /* ─── Debate Message ─── */
@@ -214,15 +214,15 @@ body {
 }
 
 .nav-item:hover {
-  background: rgba(20, 184, 166, 0.06);
+  background: rgba(14, 165, 150, 0.10);
   color: var(--text-primary);
 }
 
 .nav-item.active {
-  background: var(--glow-teal);
+  background: rgba(14, 165, 150, 0.15);
   color: var(--accent-teal);
   font-weight: 500;
-  box-shadow: inset 0 0 12px rgba(20, 184, 166, 0.04);
+  box-shadow: inset 0 0 12px rgba(14, 165, 150, 0.06);
 }
 
 /* ─── Forum Icon ─── */
@@ -249,7 +249,7 @@ body {
   font-size: 18px;
   color: white;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .agent-avatar-lg {
@@ -260,7 +260,7 @@ body {
 
 /* ─── Search Bar ─── */
 .search-input {
-  background: rgba(10, 14, 28, 0.6);
+  background: rgba(0, 0, 0, 0.40);
   border: 1px solid var(--border-primary);
   border-radius: 12px;
   padding: 10px 16px 10px 44px;
@@ -273,7 +273,7 @@ body {
 
 .search-input:focus {
   border-color: var(--accent-teal);
-  box-shadow: 0 0 0 3px var(--glow-teal), 0 0 20px rgba(20, 184, 166, 0.08);
+  box-shadow: 0 0 0 3px var(--glow-teal), 0 0 20px rgba(14, 165, 150, 0.10);
 }
 
 .search-input::placeholder {
@@ -284,7 +284,7 @@ body {
 .progress-bar {
   height: 4px;
   border-radius: 2px;
-  background: rgba(22, 26, 48, 0.8);
+  background: rgba(0, 0, 0, 0.50);
   overflow: hidden;
 }
 
@@ -312,7 +312,7 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, rgba(10,14,28,0.6) 25%, rgba(22,26,48,0.8) 50%, rgba(10,14,28,0.6) 75%);
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 8px;
@@ -330,7 +330,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(20, 184, 166, 0.35);
+  box-shadow: 0 8px 24px rgba(14, 165, 150, 0.40);
   cursor: pointer;
   transition: all 0.3s ease;
   z-index: 50;
@@ -338,7 +338,7 @@ body {
 
 .fab:hover {
   transform: scale(1.1);
-  box-shadow: 0 12px 32px rgba(20, 184, 166, 0.45);
+  box-shadow: 0 12px 32px rgba(14, 165, 150, 0.50);
 }
 
 /* ─── Tooltip ─── */
@@ -353,7 +353,7 @@ body {
   left: 50%;
   transform: translateX(-50%);
   padding: 4px 12px;
-  background: var(--bg-elevated);
+  background: rgba(0, 0, 0, 0.80);
   color: var(--text-primary);
   font-size: 12px;
   border-radius: 8px;
@@ -361,21 +361,23 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
-  border: 1px solid rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.15);
   backdrop-filter: blur(12px);
+  z-index: 50;
 }
 
-[data-tooltip]:hover::after {
+[data-tooltip]:hover::after,
+[data-tooltip]:focus::after {
   opacity: 1;
 }
 
 /* ─── Markdown Content ─── */
-.content-body h1 { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.5rem; }
-.content-body h2 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.5rem; }
+.content-body h1 { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.5rem; color: var(--text-primary); }
+.content-body h2 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.5rem; color: var(--text-primary); }
 .content-body p { margin: 0.5rem 0; line-height: 1.7; color: var(--text-secondary); }
 .content-body strong { color: var(--text-primary); font-weight: 600; }
 .content-body code {
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(139, 92, 246, 0.12);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.875em;
@@ -417,7 +419,7 @@ body {
 
 /* ─── Primary Button ─── */
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-teal), rgba(20, 184, 166, 0.8));
+  background: linear-gradient(135deg, var(--accent-teal), rgba(14, 165, 150, 0.80));
   color: white;
   border: none;
   border-radius: 10px;
@@ -426,11 +428,11 @@ body {
   font-size: 14px;
   cursor: pointer;
   transition: all 0.25s ease;
-  box-shadow: 0 4px 16px rgba(20, 184, 166, 0.25);
+  box-shadow: 0 4px 16px rgba(14, 165, 150, 0.30);
 }
 
 .btn-primary:hover {
-  box-shadow: 0 6px 24px rgba(20, 184, 166, 0.35);
+  box-shadow: 0 6px 24px rgba(14, 165, 150, 0.40);
   transform: translateY(-1px);
 }
 
@@ -448,6 +450,7 @@ body {
 }
 
 .btn-secondary:hover {
-  background: rgba(20, 184, 166, 0.06);
+  background: rgba(14, 165, 150, 0.08);
   border-color: var(--accent-teal);
 }
+

@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { getHeaderData } from "@/lib/queries";
 
 const geistSans = localFont({
@@ -25,6 +26,17 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Open Insight | Academic Agent Research Platform",
   description: "A multi-agent academic reasoning platform where PhD-level AI agents debate, verify, and advance knowledge across physics, mathematics, and philosophy.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/logo.svg",
+  },
+  openGraph: {
+    title: "Open Insight | Academic Agent Research Platform",
+    description: "PhD-level AI agents debate, verify, and advance knowledge across physics, mathematics, and philosophy.",
+    images: [{ url: "/logo.svg", width: 512, height: 512, alt: "Open Insight Logo" }],
+  },
 };
 
 export default function RootLayout({
@@ -42,6 +54,7 @@ export default function RootLayout({
         <div className="flex">
           <Sidebar />
           <main className="flex-1 min-h-[calc(100vh-64px)] overflow-x-hidden">
+            <Breadcrumbs />
             {children}
           </main>
         </div>

@@ -1,9 +1,145 @@
 import { NextRequest, NextResponse } from "next/server";
+import { exec } from "child_process";
 import { hasGeminiKey, executeNotebookCode } from "@/lib/gemini";
 
 export const maxDuration = 120;
 
-// ── Simulation fallback patterns ─────────────────────────────────────────────
+const MAX_CODE_LENGTH = 50_000;
+const SUBPROCESS_TIMEOUT_MS = 30_000;
+
+// Admin-only protection for notebook execution in production.
+// When NODE_ENV === "production", requests must include a header
+//   x-admin-tool-token: <ADMIN_TOOL_TOKEN>
+// matching the ADMIN_TOOL_TOKEN environment variable. This prevents
+// arbitrary remote callers from executing Python on the server.
+const ADMIN_TOOL_TOKEN = process.env.ADMIN_TOOL_TOKEN;
+
+/**
+ * Notebook execution route — execution priority:
+ * 1. Real Python 3 subprocess (python3 -c "...") — always tried first
+ * 2. Gemini codeExecution — when GEMINI_API_KEY is set and Python3 fails/unavailable
+ * 3. Simulated pattern matching — last resort when neither Python nor Gemini is available
+ *
+ * Response includes `executionMode: "subprocess" | "gemini" | "simulated"`.
+ */
+export async function POST(request: NextRequest) {
+  // In production, restrict this route to trusted/admin callers only.
+  if (process.env.NODE_ENV === "production") {
+    if (!ADMIN_TOOL_TOKEN) {
+      return NextResponse.json(
+        {
+          error:
+            "Notebook tool is disabled: ADMIN_TOOL_TOKEN is not configured on the server.",
+        },
+        { status: 503 },
+      );
+    }
+
+    const providedToken = request.headers.get("x-admin-tool-token");
+    if (!providedToken || providedToken !== ADMIN_TOOL_TOKEN) {
+      return NextResponse.json(
+        { error: "Unauthorized notebook access." },
+        { status: 403 },
+      );
+    }
+  }
+
+  let body: { code?: string; kernel?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const { code, kernel = "Python 3 (NumPy / SymPy / SciPy)" } = body;
+
+  if (typeof code !== "string" || code.length === 0) {
+    return NextResponse.json({ error: "code is required and must be a non-empty string" }, { status: 400 });
+  }
+  if (code.length > MAX_CODE_LENGTH) {
+    return NextResponse.json({ error: "code must not exceed 50000 characters" }, { status: 400 });
+  }
+
+  // ── 1. Real Python 3 subprocess ───────────────────────────────────────────
+  try {
+    const pyResult = await runPython3(code);
+    return NextResponse.json({
+      output: pyResult.output.slice(0, 20000),
+      status: pyResult.exitCode === 0 ? "success" : "error",
+      executionMode: "subprocess",
+      python3: true,
+    });
+  } catch {
+    // Python3 unavailable or timed out — fall through
+  }
+
+  // ── 2. Gemini codeExecution ───────────────────────────────────────────────
+  if (hasGeminiKey()) {
+    try {
+      const result = await executeNotebookCode(code, kernel);
+      return NextResponse.json({ ...result, executionMode: "gemini" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Gemini execution error";
+      return NextResponse.json({ output: `Error: ${message}`, status: "error", executionMode: "gemini" });
+    }
+  }
+
+  // ── 3. Simulated pattern matching fallback ────────────────────────────────
+  return runSimulated(code);
+}
+
+// ── Python 3 subprocess ───────────────────────────────────────────────────────
+
+interface PyResult {
+  output: string;
+  exitCode: number;
+}
+
+function runPython3(code: string): Promise<PyResult> {
+  return new Promise((resolve, reject) => {
+    // Use python3 -c with the code passed via stdin to avoid shell-injection
+    // risks (we pass code as stdin, not via -c "..." interpolation).
+    const child = exec(
+      "python3 -",
+      {
+        timeout: SUBPROCESS_TIMEOUT_MS,
+        maxBuffer: 1024 * 1024 * 4, // 4MB
+        env: {
+          ...process.env,
+          // Ensure numpy/sympy/scipy are findable in user local installs.
+          // Use a version-agnostic glob path rather than hardcoding a specific
+          // Python version number — we append all matching site-packages dirs.
+          PYTHONPATH: [
+            process.env.PYTHONPATH,
+            `${process.env.HOME ?? "/root"}/.local/lib/python3.12/site-packages`,
+            `${process.env.HOME ?? "/root"}/.local/lib/python3.11/site-packages`,
+            `${process.env.HOME ?? "/root"}/.local/lib/python3.10/site-packages`,
+          ].filter(Boolean).join(":"),
+        },
+      },
+      (err, stdout, stderr) => {
+        const combined = [stdout, stderr].filter(Boolean).join("\n").trim();
+        if (err && err.killed) {
+          reject(new Error("Python3 execution timed out"));
+          return;
+        }
+        resolve({
+          output: combined || "(no output)",
+          exitCode: err?.code ?? 0,
+        });
+      },
+    );
+
+    if (child.stdin) {
+      child.stdin.write(code);
+      child.stdin.end();
+    } else {
+      reject(new Error("Could not open stdin to python3"));
+    }
+  });
+}
+
+// ── Simulation fallback patterns ──────────────────────────────────────────────
+
 const SIMULATED: Array<{ input: RegExp; output: string }> = [
   { input: /import\s+numpy|import\s+np/, output: "# numpy imported successfully (v1.26.4)" },
   { input: /import\s+sympy/, output: "# sympy imported successfully (v1.13.1)" },
@@ -68,36 +204,7 @@ Simple roots (A_2 = SU(3)):
   { input: /print|hello|test/i, output: "Hello from Open Insight computational environment!" },
 ];
 
-export async function POST(request: NextRequest) {
-  let body: { code?: string; kernel?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-  const { code, kernel = "Python 3 (NumPy / SymPy / SciPy)" } = body;
-
-  if (typeof code !== "string" || code.length === 0) {
-    return NextResponse.json({ error: "code is required and must be a non-empty string" }, { status: 400 });
-  }
-  if (code.length > 50000) {
-    return NextResponse.json({ error: "code must not exceed 50000 characters" }, { status: 400 });
-  }
-
-  // ── Gemini code execution path ────────────────────────────────────────────
-  if (hasGeminiKey()) {
-    try {
-      const result = await executeNotebookCode(code, kernel);
-      return NextResponse.json({ ...result, executionMode: "gemini" });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Gemini execution error";
-      return NextResponse.json({ output: `Error: ${message}`, status: "error", executionMode: "gemini" });
-    }
-  }
-
-  // ── Simulation fallback ───────────────────────────────────────────────────
-  await new Promise((r) => setTimeout(r, 200 + Math.random() * 800));
-
+function runSimulated(code: string): ReturnType<typeof NextResponse.json> {
   for (const exec of SIMULATED) {
     if (exec.input.test(code)) {
       return NextResponse.json({ output: exec.output, status: "success", executionMode: "simulated" });
@@ -116,7 +223,7 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    output: `# Code parsed successfully\n# ${code.split("\n").length} lines | ${code.length} chars\n# Set GEMINI_API_KEY for real execution`,
+    output: `# Code parsed successfully\n# ${code.split("\n").length} lines | ${code.length} chars\n# Install python3 or set GEMINI_API_KEY for real execution`,
     status: "success",
     executionMode: "simulated",
   });

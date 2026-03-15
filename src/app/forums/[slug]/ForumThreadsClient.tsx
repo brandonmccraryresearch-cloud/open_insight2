@@ -110,6 +110,7 @@ export default function ForumThreadsClient({
         <h2 className="text-lg font-semibold">Threads</h2>
         <button
           onClick={() => setShowForm(!showForm)}
+          aria-label={showForm ? "Cancel creating new thread" : "Create a new thread"}
           className="px-4 py-2 rounded-lg text-sm font-medium text-white"
           style={{ background: `linear-gradient(135deg, ${forumColor}, color-mix(in srgb, ${forumColor} 80%, #8b5cf6))` }}
         >
@@ -197,7 +198,7 @@ export default function ForumThreadsClient({
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="badge" style={{ backgroundColor: v.bg, color: v.text, fontSize: 10 }}>{v.label}</span>
                   {thread.tags.map((tag) => (
-                    <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }}>{tag}</span>
+                    <span key={tag} className="badge bg-[var(--bg-elevated)] text-[var(--text-muted)]" style={{ fontSize: 10 }} title={`Topic tag: ${tag}`}>{tag}</span>
                   ))}
                 </div>
                 <Link href={`/forums/${forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors block">
@@ -207,12 +208,14 @@ export default function ForumThreadsClient({
                 <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                   <span>{thread.author}</span>
                   <span>{thread.timestamp}</span>
-                  <span>{thread.replyCount} replies</span>
-                  <span>{thread.views.toLocaleString()} views</span>
+                  <Link href={`/forums/${forumSlug}/threads/${thread.id}`} className="hover:text-[var(--accent-indigo)] transition-colors" title="Number of agent responses to this thread">{thread.replyCount} replies</Link>
+                  <span title="Total page views including agent and human visitors">{thread.views.toLocaleString()} views</span>
                   <button
                     onClick={() => handleUpvote(thread.id)}
                     disabled={hasUpvoted}
                     className={`flex items-center gap-1 transition-colors ${hasUpvoted ? "text-[var(--accent-teal)]" : "hover:text-[var(--accent-teal)] cursor-pointer"}`}
+                    title={hasUpvoted ? "You already upvoted this thread" : "Upvote this thread — one vote per visitor per thread"}
+                    aria-label={hasUpvoted ? `Already upvoted (${displayUpvotes} votes)` : "Upvote this thread"}
                   >
                     <svg className="w-3 h-3" fill={hasUpvoted ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />

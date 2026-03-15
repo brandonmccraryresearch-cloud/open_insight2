@@ -208,15 +208,15 @@ export default function VerificationClient({
       {/* Overall stats */}
       <div className="glass-card p-4 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-6">
-          <div>
+          <div title="Percentage of completed verifications that passed (passed ÷ total completed checks)">
             <span className="text-2xl font-bold font-mono text-[var(--accent-emerald)]">{passRate}%</span>
             <span className="text-xs text-[var(--text-muted)] ml-2">Pass Rate</span>
           </div>
-          <div>
+          <div title="Total number of verification checks across all tiers and statuses">
             <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">{verifications.length}</span>
             <span className="text-xs text-[var(--text-muted)] ml-2">Total Checks</span>
           </div>
-          <div>
+          <div title="Tier 3 verifications that passed — these use the Lean 4 interactive theorem prover for formal mathematical proof">
             <span className="text-2xl font-bold font-mono text-[var(--accent-indigo)]">{verifications.filter((v) => v.tier === "Tier 3" && v.status === "passed").length}</span>
             <span className="text-xs text-[var(--text-muted)] ml-2">Lean 4 Proofs</span>
           </div>
@@ -252,15 +252,15 @@ export default function VerificationClient({
                 <div className="agent-avatar" style={{ backgroundColor: agent.color, width: 36, height: 36, fontSize: 14 }}>{agent.avatar}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="badge" style={{ backgroundColor: `color-mix(in srgb, ${tier.color} 15%, transparent)`, color: tier.color, fontSize: 10 }}>{v.tier}</span>
-                    <span className="badge" style={{ backgroundColor: st.bg, color: st.text, fontSize: 10 }}>
+                    <button onClick={() => setTierFilter(v.tier)} className="badge cursor-pointer hover:opacity-80 transition-opacity" style={{ backgroundColor: `color-mix(in srgb, ${tier.color} 15%, transparent)`, color: tier.color, fontSize: 10 }} title={`${v.tier}: ${tier.label} — click to filter`} aria-label={`Filter by ${v.tier}`}>{v.tier}</button>
+                    <button onClick={() => setStatusFilterVal(v.status)} className="badge cursor-pointer hover:opacity-80 transition-opacity" style={{ backgroundColor: st.bg, color: st.text, fontSize: 10 }} title={`Status: ${st.label} — click to filter`} aria-label={`Filter by status: ${v.status}`}>
                       {v.status === "running" && <span className="w-1.5 h-1.5 rounded-full inline-block mr-1 status-pulse" style={{ backgroundColor: st.text }} />}
                       {st.label}
-                    </span>
+                    </button>
                     <span className="text-xs text-[var(--text-muted)]">{v.tool}</span>
-                    <span className="text-xs text-[var(--text-muted)]">{v.duration}</span>
+                    <span className="text-xs text-[var(--text-muted)]" title="Time taken to complete the verification check">{v.duration}</span>
                     {v.confidence !== undefined && (
-                      <span className="text-xs font-mono" style={{ color: v.confidence >= 90 ? "#10b981" : v.confidence >= 70 ? "#f59e0b" : "#ef4444" }}>
+                      <span className="text-xs font-mono" style={{ color: v.confidence >= 90 ? "#10b981" : v.confidence >= 70 ? "#f59e0b" : "#ef4444" }} title={`Confidence score: ${v.confidence >= 90 ? "High (≥90%)" : v.confidence >= 70 ? "Medium (70-89%)" : "Low (<70%)"} — based on proof completeness, axiom coverage, and tool reliability`}>
                         {v.confidence}% confidence
                       </span>
                     )}

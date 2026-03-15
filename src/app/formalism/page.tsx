@@ -116,6 +116,9 @@ export default function FormalismPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                role="tab"
+                aria-selected={activeTab === tab.key}
+                aria-label={`View ${tab.label} tab`}
                 className={`px-3 py-2 text-xs font-medium transition-colors ${
                   activeTab === tab.key ? "tab-active" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 }`}
@@ -162,15 +165,15 @@ export default function FormalismPage() {
               <div className="glass-card p-4">
                 <h4 className="text-sm font-semibold mb-3">Parameter Accounting</h4>
                 <div className="grid grid-cols-3 gap-4 text-center mb-4">
-                  <div>
+                  <div title="Observable quantities or measured values that constrain the formalism">
                     <div className="text-xl font-bold font-mono text-[var(--accent-cyan)]">{paramAudit.inputs.length}</div>
                     <div className="text-xs text-[var(--text-muted)]">Inputs</div>
                   </div>
-                  <div>
+                  <div title="Predicted quantities or derivable results from the formalism">
                     <div className="text-xl font-bold font-mono text-[var(--accent-amber)]">{paramAudit.outputs.length}</div>
                     <div className="text-xs text-[var(--text-muted)]">Outputs</div>
                   </div>
-                  <div>
+                  <div title="Unconstrained parameters that must be fit to data — fewer free params = more predictive power">
                     <div className="text-xl font-bold font-mono text-[var(--accent-rose)]">{paramAudit.freeParameters.length}</div>
                     <div className="text-xs text-[var(--text-muted)]">Free Params</div>
                   </div>
@@ -183,7 +186,7 @@ export default function FormalismPage() {
                 }}>
                   <span className="text-sm font-medium" style={{
                     color: paramAudit.status === "balanced" ? "#10b981" : paramAudit.status === "underconstrained" ? "#ef4444" : "#f59e0b",
-                  }}>
+                  }} title="Ratio of constraint outputs to inputs. < 1 = underconstrained (too few inputs), 1–3 = balanced, > 3 = overconstrained (too many constraints)">
                     Efficiency Ratio: {paramAudit.efficiencyRatio}
                   </span>
                   <span className="badge" style={{
@@ -223,7 +226,7 @@ export default function FormalismPage() {
           {activeTab === "classify" && classification && (
             <div className="space-y-4">
               <div className="glass-card p-6 text-center">
-                <div className="text-4xl font-bold font-mono mb-2" style={{ color: classification.color }}>
+                <div className="text-4xl font-bold font-mono mb-2" style={{ color: classification.color }} title="Discovery Classes: Class 1 = Novel theoretical prediction. Class 2 = Extension of known framework. Class 3 = Replication/confirmation of existing result.">
                   Class {classification.discoveryClass}
                 </div>
                 <h3 className="text-lg font-semibold" style={{ color: classification.color }}>
@@ -231,7 +234,7 @@ export default function FormalismPage() {
                 </h3>
                 <p className="text-sm text-[var(--text-secondary)] mt-1">{classification.description}</p>
                 <div className="mt-4">
-                  <div className="text-sm text-[var(--text-muted)]">Confidence</div>
+                  <div className="text-sm text-[var(--text-muted)]" title="Probability that the classification is correct, based on criteria match assessment">Confidence</div>
                   <div className="text-2xl font-bold font-mono" style={{ color: classification.color }}>
                     {classification.confidence}%
                   </div>
