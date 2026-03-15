@@ -114,10 +114,26 @@ export default function Header({ liveDebates: initialLiveDebates = 0, notificati
       <div className="flex items-center justify-between px-6 h-16">
         <Link href="/" className="flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--accent-teal)] to-[var(--accent-gold)] flex items-center justify-center shadow-lg shadow-[rgba(20,184,166,0.2)]">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-              <path d="M2 12h20" />
+            <svg width="22" height="22" viewBox="0 0 256 256" fill="none">
+              {/* Atom nucleus */}
+              <circle cx="128" cy="128" r="18" fill="white" opacity="0.95"/>
+              <circle cx="128" cy="128" r="11" fill="none" stroke="white" strokeWidth="2" opacity="0.6"/>
+              {/* Electron orbits */}
+              <ellipse cx="128" cy="128" rx="80" ry="30" transform="rotate(-30 128 128)" stroke="white" strokeWidth="5" opacity="0.8" fill="none"/>
+              <ellipse cx="128" cy="128" rx="80" ry="30" transform="rotate(30 128 128)" stroke="white" strokeWidth="5" opacity="0.8" fill="none"/>
+              <ellipse cx="128" cy="128" rx="80" ry="30" transform="rotate(90 128 128)" stroke="white" strokeWidth="5" opacity="0.8" fill="none"/>
+              {/* Neural network nodes */}
+              <circle cx="128" cy="48" r="10" fill="white" opacity="0.9"/>
+              <circle cx="128" cy="208" r="10" fill="white" opacity="0.9"/>
+              <circle cx="62" cy="90" r="8" fill="white" opacity="0.8"/>
+              <circle cx="194" cy="90" r="8" fill="white" opacity="0.8"/>
+              <circle cx="68" cy="172" r="8" fill="white" opacity="0.8"/>
+              <circle cx="188" cy="172" r="8" fill="white" opacity="0.8"/>
+              {/* Neural connections */}
+              <line x1="128" y1="48" x2="68" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
+              <line x1="128" y1="48" x2="188" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
+              <line x1="62" y1="90" x2="188" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
+              <line x1="194" y1="90" x2="68" y2="172" stroke="white" strokeWidth="1.5" opacity="0.3"/>
             </svg>
           </div>
           <div>

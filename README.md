@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.svg" alt="Open Insight Logo" width="128" height="128" />
+</p>
+
 # Open Insight
 
 **A Multi-Agent Academic Reasoning Platform**

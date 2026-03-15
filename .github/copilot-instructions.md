@@ -212,12 +212,12 @@ This is a massive overhaul broken into sub-phases. Each session should complete 
 - [ ] Add real-time spectator tracking for debates (WebSocket or polling) — deferred to Phase 6g
 - [ ] Replace hardcoded paper database with real OpenAlex/Semantic Scholar API — deferred to Phase 6g
 
-#### Phase 6f — Logo Redesign + Branding (Session 6)
-- [ ] Replace globe icon with atom/neural-network motif SVG logo
-- [ ] Logo should represent "Open Insight" as scientific + AI research platform
-- [ ] Update favicon, apple-touch-icon, og:image with new logo
-- [ ] Update README header with new logo
-- [ ] Ensure logo works in dark teal theme and on light backgrounds
+#### Phase 6f — Logo Redesign + Branding (Session 6) ✅ COMPLETE
+- [x] Replace globe icon with atom/neural-network motif SVG logo
+- [x] Logo should represent "Open Insight" as scientific + AI research platform
+- [x] Update favicon, apple-touch-icon, og:image with new logo
+- [x] Update README header with new logo
+- [x] Ensure logo works in dark teal theme and on light backgrounds
 
 #### Phase 6g — Integration Testing + Polish (Session 7)
 - [ ] End-to-end test: agent invokes MCP tool → result displays in UI → notification appears
@@ -512,3 +512,19 @@ Update `TECHNICAL_SPECIFICATION.md`:
 - **Debate detail tags**: Have tooltips explaining topic tags
 - **Build verified**: all 34 routes compile, 0 TypeScript errors
 - **Files changed**: `page.tsx` (home), `DebatesClient.tsx`, `debates/[id]/page.tsx`, `ForumsClient.tsx`, `ForumThreadsClient.tsx`, `threads/[threadId]/page.tsx`, `VerificationClient.tsx`, `AgentsClient.tsx`, `formalism/page.tsx`, `copilot-instructions.md`
+
+### Session 6f summary (2026-03-15)
+- **Logo redesign**: Replaced globe icon with atom/neural-network motif SVG logo
+  - Three intersecting electron orbits (ellipses at -30°, +30°, 90°) represent scientific rigor
+  - Six neural network nodes positioned on orbits with subtle cross-connections represent AI reasoning
+  - Central nucleus with gradient fill represents core knowledge synthesis
+- **New assets created**:
+  - `public/logo.svg` — 512×512 full logo with teal→gold gradient background, rounded corners
+  - `public/logo-icon.svg` — 256×256 white-only icon version for use on colored backgrounds
+  - `public/favicon.svg` — 32×32 compact favicon version with gradient background
+- **Header.tsx updated**: Replaced globe SVG with inline atom/neural-network motif (22×22 viewBox)
+- **layout.tsx updated**: Added favicon, apple-touch-icon, and OpenGraph image metadata
+- **README.md updated**: Added centered logo image at top of file
+- **Logo verified**: Works on dark teal theme background AND light/white backgrounds
+- **Build verified**: all 34 routes compile, 0 TypeScript errors
+- **Files changed**: `Header.tsx`, `layout.tsx`, `README.md`, `public/logo.svg`, `public/logo-icon.svg`, `public/favicon.svg`, `copilot-instructions.md`
