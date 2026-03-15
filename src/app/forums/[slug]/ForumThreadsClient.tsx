@@ -110,6 +110,7 @@ export default function ForumThreadsClient({
         <h2 className="text-lg font-semibold">Threads</h2>
         <button
           onClick={() => setShowForm(!showForm)}
+          aria-label={showForm ? "Cancel creating new thread" : "Create a new thread"}
           className="px-4 py-2 rounded-lg text-sm font-medium text-white"
           style={{ background: `linear-gradient(135deg, ${forumColor}, color-mix(in srgb, ${forumColor} 80%, #8b5cf6))` }}
         >

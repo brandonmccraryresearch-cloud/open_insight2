@@ -332,6 +332,7 @@ print(f"  Cartan matrix = [[2,-1],[-1,2]]")`);
           <button
             key={tool.id}
             onClick={() => setActiveTab(tool.id)}
+            aria-label={`Select ${tool.name} tool`}
             className={`glass-card p-4 text-left transition-all ${activeTab === tool.id ? "ring-1" : ""}`}
             style={activeTab === tool.id ? { borderColor: tool.color, boxShadow: `0 0 20px ${tool.color}20` } : {}}
           >

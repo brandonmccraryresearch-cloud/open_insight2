@@ -234,6 +234,7 @@ export default function McpDashboardPage() {
             <button
               key={tool.id}
               onClick={() => { setSelectedTool(tool.id); setCallResult(null); }}
+              aria-label={`Select ${tool.name} tool — ${isMcp ? "Real MCP server" : isAvailable ? "Gemini fallback" : "offline"}`}
               className={`glass-card p-4 text-left transition-all ${isSelected ? "ring-1" : ""}`}
               style={isSelected ? { borderColor: tool.color, boxShadow: `0 0 20px ${tool.color}20` } : {}}
             >
